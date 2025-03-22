@@ -104,7 +104,7 @@ sequenceDiagram
 7. **Refresh token stored**: The refresh token is stored in the database for future use (to handle token refresh operations).
 8. **Response to Client**: The `AuthController` sets the `refreshToken` in the client's cookies and returns the `user` object (excluding the password) along with the `accessToken` to the client.
 
-### Sign-In Flow:
+### Login Flow:
 
 ```mermaid
 sequenceDiagram
@@ -145,6 +145,33 @@ sequenceDiagram
 6. **Tokens stored**: The refresh token is stored in the database.
 7. **Response to Client**: The `AuthController` returns the user data along with the access token to the client and sets the refresh token in a cookie.
 
+### Logout Flow:
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant AuthController
+    participant AuthService
+    participant TokenService
+    participant Database
+
+    Client->>AuthController: POST /auth/logout
+    AuthController->>AuthService: Calls logout() with tokens
+    AuthService->>TokenService: Revoke refresh token
+    TokenService->>Database: Delete refresh token
+    AuthService->>TokenService: Blacklist access token
+    TokenService->>Database: Store blacklisted access token
+    AuthController->>Client: Clear refresh token cookie
+    AuthController->>Client: Return logout success message
 ```
 
-```
+### Diagram Explanation:
+
+1. **Client to AuthController**: The client sends a `POST` request to `/auth/logout`.
+2. **AuthController to AuthService**: The `AuthController` calls the `logout()` method in `AuthService` with the tokens.
+3. **Revoking Refresh Token**: The `AuthService` calls `TokenService` to revoke the refresh token.
+4. **Deleting Refresh Token**: The `TokenService` deletes the refresh token from the database.
+5. **Blacklisting Access Token**: The `AuthService` requests `TokenService` to blacklist the access token.
+6. **Storing Blacklisted Token**: The `TokenService` stores the blacklisted token in the database.
+7. **Clearing Token Cookie**: The `AuthController` clears the refresh token cookie from the client.
+8. **Response to Client**: The `AuthController` returns a success message to confirm the logout process.
