@@ -129,6 +129,7 @@ sequenceDiagram
     AuthService-->>AuthController: { user, tokens }
     AuthController->>Client: 200 OK (user, accessToken)
     Note right of Client: Set refreshToken cookie & return user data with accessToken
+  end
 ```
 
 ### Diagram Explanation:
