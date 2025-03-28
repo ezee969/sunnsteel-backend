@@ -88,6 +88,7 @@ sequenceDiagram
     TokenService-->>AuthService: Access & Refresh tokens
     AuthService-->>AuthController: { user, tokens }
     AuthController->>Client: 201 Created (user, accessToken)
+  end
 ```
 
 ### Diagram Explanation:
