@@ -88,7 +88,6 @@ sequenceDiagram
     TokenService-->>AuthService: Access & Refresh tokens
     AuthService-->>AuthController: { user, tokens }
     AuthController->>Client: 201 Created (user, accessToken)
-  end
 ```
 
 ### Diagram Explanation:
@@ -130,7 +129,6 @@ sequenceDiagram
     AuthService-->>AuthController: { user, tokens }
     AuthController->>Client: 200 OK (user, accessToken)
     Note right of Client: Set refreshToken cookie & return user data with accessToken
-  end
 ```
 
 ### Diagram Explanation:
@@ -163,7 +161,6 @@ sequenceDiagram
     TokenService->>Database: Store blacklisted access token
     AuthController->>Client: Clear refresh token cookie
     AuthController->>Client: Return logout success message
-  end
 ```
 
 ### Diagram Explanation:
@@ -243,7 +240,6 @@ sequenceDiagram
     TokenService-->>AuthService: {accessToken, refreshToken}
     AuthService-->>AuthController: {tokens}
     AuthController->>Client: Set refreshToken cookie & return {accessToken}
-  end
 ```
 
 ### Diagram Explanation:
@@ -290,7 +286,6 @@ graph TD
 
         Guards --> Strategies[Passport Strategies]
         Strategies --> AuthS
-    end
 
     classDef controllers fill:#f96,stroke:#333,stroke-width:2px
     classDef services fill:#9cf,stroke:#333,stroke-width:2px
