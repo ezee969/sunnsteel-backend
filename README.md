@@ -290,10 +290,10 @@ graph TD
         Strategies --> AuthS
     end
 
-    classDef controllers fill:#f96,stroke:#black,stroke-width:2px
-    classDef services fill:#9cf,stroke:#black,stroke-width:2px
-    classDef database fill:#fcf,stroke:#black,stroke-width:2px
-    classDef middleware fill:#ff9,stroke:#black,stroke-width:2px
+    classDef controllers fill:#f96,stroke:#333,stroke-width:2px,font-weight:bold
+    classDef services fill:#9cf,stroke:#333,stroke-width:2px,font-weight:bold
+    classDef database fill:#fcf,stroke:#333,stroke-width:2px,font-weight:bold
+    classDef middleware fill:#ff9,stroke:#333,stroke-width:2px,font-weight:bold
 
     class AuthC,UserC controllers
     class AuthS,UserS,TokenS services
