@@ -288,6 +288,7 @@ graph TD
 
         Guards --> Strategies[Passport Strategies]
         Strategies --> AuthS
+    end
 
     classDef controllers fill:#f96,stroke:#333,stroke-width:2px
     classDef services fill:#9cf,stroke:#333,stroke-width:2px
