@@ -290,10 +290,10 @@ graph TD
         Strategies --> AuthS
     end
 
-    classDef controllers fill:#f96,stroke:#111,stroke-width:2px,font-weight:bold
-    classDef services fill:#9cf,stroke:#111,stroke-width:2px,font-weight:bold
-    classDef database fill:#fcf,stroke:#111,stroke-width:2px,font-weight:bold
-    classDef middleware fill:#ff9,stroke:#111,stroke-width:2px,font-weight:bold
+    classDef controllers fill:#f96,stroke:#333,stroke-width:2px,font-weight:bold
+    classDef services fill:#9cf,stroke:#333,stroke-width:2px,font-weight:bold
+    classDef database fill:#fcf,stroke:#333,stroke-width:2px,font-weight:bold
+    classDef middleware fill:#ff9,stroke:#333,stroke-width:2px,font-weight:bold
 
     class AuthC,UserC controllers
     class AuthS,UserS,TokenS services
@@ -301,3 +301,186 @@ graph TD
     class Guards,Strategies middleware
 
 ```
+
+# Sunnsteel Workspace
+
+Este es el workspace completo para Sunnsteel, una aplicación de fitness y entrenamiento con backend y frontend separados.
+
+## 🏗️ Estructura del Proyecto
+
+```
+sunnsteel/
+├── backend/                    # API NestJS + PostgreSQL
+│   ├── .cursor/rules/         # Reglas de desarrollo backend
+│   ├── scripts/               # Scripts de documentación
+│   └── src/                   # Código fuente backend
+├── frontend/                   # App Next.js + React
+│   ├── .cursor/rules/         # Reglas de desarrollo frontend
+│   ├── scripts/               # Scripts de documentación
+│   └── app/                   # Código fuente frontend
+└── scripts/                    # Scripts del workspace
+```
+
+## 🚀 Inicio Rápido
+
+### Backend
+
+```bash
+cd backend
+npm install
+npm run start:dev
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+### Ambos Proyectos
+
+```bash
+# En el frontend
+npm run dev:all
+```
+
+## 📚 Sistema de Documentación Automática
+
+### ¿Por qué este sistema?
+
+Para evitar la tediosa tarea de mantener manualmente la documentación actualizada, hemos implementado un sistema automático que:
+
+1. **Detecta cambios** en la estructura del proyecto
+2. **Recuerda actualizar** la documentación
+3. **Mantiene consistencia** entre código y docs
+4. **Mejora la productividad** del desarrollo
+
+### Archivos de Reglas
+
+#### Backend (`.cursor/rules/`)
+
+- **`backenddev.mdc`**: Mejora mi capacidad de desarrollo backend
+- **`sunnsteel-backend.mdc`**: Contexto específico del proyecto backend
+- **`auto-documentation.mdc`**: Reglas para mantener documentación actualizada
+
+#### Frontend (`.cursor/rules/`)
+
+- **`frontenddev.mdc`**: Mejora mi capacidad de desarrollo frontend
+- **`sunnsteel-project.mdc`**: Contexto específico del proyecto frontend
+- **`auto-documentation.mdc`**: Reglas para mantener documentación actualizada
+
+### Scripts de Documentación
+
+#### Individual (por proyecto)
+
+```bash
+# Backend
+cd backend
+npm run docs:check
+
+# Frontend
+cd frontend
+npm run docs:check
+```
+
+#### Workspace (ambos proyectos)
+
+```bash
+# Desde el root del workspace
+./scripts/update-all-docs.sh
+```
+
+### ¿Qué detectan los scripts?
+
+#### Backend
+
+- ✅ Nuevos endpoints en controllers
+- ✅ Nuevos módulos en `src/`
+- ✅ Cambios en esquema de Prisma
+- ✅ Nuevos DTOs y guards
+- ✅ Cambios en `package.json`
+
+#### Frontend
+
+- ✅ Nuevas páginas en `app/`
+- ✅ Nuevos componentes en `components/`
+- ✅ Nuevos hooks en `hooks/`
+- ✅ Nuevos servicios en `lib/api/`
+- ✅ Nuevos schemas de validación
+- ✅ Cambios en `package.json`
+
+## 🔧 Uso del Sistema
+
+### 1. Desarrollo Normal
+
+- Trabaja normalmente en tu código
+- Los archivos de reglas te dan contexto automático
+
+### 2. Después de Cambios Significativos
+
+```bash
+# Verificar qué necesita documentación
+npm run docs:check
+
+# O para todo el workspace
+./scripts/update-all-docs.sh
+```
+
+### 3. Actualizar Documentación
+
+- Basándote en los cambios detectados
+- Actualiza los archivos de reglas correspondientes
+- Actualiza README.md si es necesario
+
+## 📋 Archivos a Mantener
+
+### Backend
+
+- `backend/.cursor/rules/backenddev.mdc`
+- `backend/.cursor/rules/sunnsteel-backend.mdc`
+- `backend/.cursor/rules/auto-documentation.mdc`
+- `backend/README.md`
+
+### Frontend
+
+- `frontend/.cursor/rules/frontenddev.mdc`
+- `frontend/.cursor/rules/sunnsteel-project.mdc`
+- `frontend/.cursor/rules/auto-documentation.mdc`
+- `frontend/README.md`
+
+## 🎯 Beneficios
+
+### Para el Desarrollador
+
+- ✅ **Contexto automático** en cada proyecto
+- ✅ **Detección automática** de cambios
+- ✅ **Recordatorios** para actualizar documentación
+- ✅ **Consistencia** entre código y docs
+
+### Para el Proyecto
+
+- ✅ **Documentación siempre actualizada**
+- ✅ **Patrones consistentes**
+- ✅ **Onboarding más fácil** para nuevos desarrolladores
+- ✅ **Mantenimiento simplificado**
+
+## 🚨 Recordatorio Importante
+
+**La documentación desactualizada es peor que la falta de documentación.**
+
+- Ejecuta `npm run docs:check` después de cambios significativos
+- Mantén los archivos de reglas actualizados
+- Actualiza README.md cuando cambie la estructura del proyecto
+
+## 🔗 Enlaces Útiles
+
+- [Backend README](./backend/README.md)
+- [Frontend README](./frontend/README.md)
+- [Documentación de NestJS](https://nestjs.com/)
+- [Documentación de Next.js](https://nextjs.org/docs)
+
+---
+
+**¡Mantén la documentación actualizada y el desarrollo será mucho más eficiente!** 🚀

@@ -2,6 +2,7 @@ import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ExecutionContext } from '@nestjs/common';
 import { TokenService } from 'src/token/token.service';
+import { Request } from 'express';
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
@@ -29,11 +30,9 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
   }
 
   private extractTokenFromHeader(request: Request): string | undefined {
-    const headers = Object.fromEntries(request.headers.entries()) as Record<
-      string,
-      string | undefined
-    >;
-    const authorizationHeader = headers.authorization;
+    console.log('request.headers', request.headers);
+    // Access authorization header directly instead of using entries()
+    const authorizationHeader = request.headers.authorization;
 
     if (!authorizationHeader) {
       return undefined;
