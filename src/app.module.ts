@@ -8,6 +8,8 @@ import { ConfigModule } from '@nestjs/config';
 import { UsersModule } from './users/users.module';
 import { TokenModule } from './token/token.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ExercisesModule } from './exercises/exercises.module';
+import { RoutinesModule } from './routines/routines.module';
 
 @Module({
   imports: [
@@ -27,6 +29,8 @@ import { ScheduleModule } from '@nestjs/schedule';
     UsersModule,
     TokenModule,
     ScheduleModule.forRoot(),
+    ExercisesModule,
+    RoutinesModule,
   ],
   providers: [
     {

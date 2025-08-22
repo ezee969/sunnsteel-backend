@@ -10,8 +10,8 @@ generator client {
 
 // prisma/schema.prisma
 datasource db {
-  provider  = "postgresql"
-  url  	    = env("DATABASE_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
   // uncomment next line if you use Prisma <5.10
   // directUrl = env("DATABASE_URL_UNPOOLED")
 }
@@ -24,6 +24,8 @@ model User {
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   refreshTokens RefreshToken[]
+  weightUnit    WeightUnit     @default(KG)
+  routines      Routine[]
 }
 
 model BlacklistedToken {
@@ -42,3 +44,68 @@ model RefreshToken {
   expiresAt DateTime
 }
 
+// Weight unit preference per user
+enum WeightUnit {
+  KG
+  LB
+}
+
+// Catalog of exercises selectable when building routines
+model Exercise {
+  id               String            @id @default(uuid())
+  name             String            @unique
+  primaryMuscle    String            // e.g., "chest", "back", "legs"
+  equipment        String            // e.g., "barbell", "dumbbell", "bodyweight"
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  routineExercises RoutineExercise[]
+}
+
+// A training routine owned by a single user (non-shareable for now)
+model Routine {
+  id           String       @id @default(uuid())
+  userId       String
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  description  String?
+  isPeriodized Boolean      @default(false)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  days         RoutineDay[]
+}
+
+// A training day configuration inside a routine
+model RoutineDay {
+  id        String            @id @default(uuid())
+  routineId String
+  routine   Routine           @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  dayOfWeek Int // 0=Sun .. 6=Sat
+  order     Int               @default(0)
+  exercises RoutineExercise[]
+
+  @@unique([routineId, dayOfWeek])
+}
+
+// One exercise entry in a routine day
+model RoutineExercise {
+  id           String               @id @default(uuid())
+  routineDayId String
+  routineDay   RoutineDay           @relation(fields: [routineDayId], references: [id], onDelete: Cascade)
+  exerciseId   String
+  exercise     Exercise             @relation(fields: [exerciseId], references: [id])
+  order        Int                  @default(0)
+  restSeconds  Int                  @default(60)
+  sets         RoutineExerciseSet[]
+}
+
+// Set configuration for a routine exercise
+model RoutineExerciseSet {
+  id                String          @id @default(uuid())
+  routineExerciseId String
+  routineExercise   RoutineExercise @relation(fields: [routineExerciseId], references: [id], onDelete: Cascade)
+  setNumber         Int
+  reps              Int
+  weight            Float?
+
+  @@unique([routineExerciseId, setNumber])
+}
