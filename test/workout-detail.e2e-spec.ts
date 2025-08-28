@@ -1,0 +1,326 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { INestApplication } from '@nestjs/common';
+import * as request from 'supertest';
+import { AppModule } from './../src/app.module';
+import { DatabaseService } from '../src/database/database.service';
+
+describe('Workout Detail (e2e)', () => {
+  let app: INestApplication;
+  let prisma: DatabaseService;
+  let accessToken: string;
+  let userId: string;
+  let routineId: string;
+  let routineDayId: string;
+  let sessionId: string;
+  let exerciseId: string;
+  let routineExerciseId: string;
+
+  beforeAll(async () => {
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
+
+    app = moduleFixture.createNestApplication();
+    prisma = moduleFixture.get<DatabaseService>(DatabaseService);
+    await app.init();
+
+    // Create test user and login
+    const registerResponse = await request(app.getHttpServer())
+      .post('/api/auth/register')
+      .send({
+        email: 'workout-detail-test@example.com',
+        password: 'password123',
+        name: 'Workout Detail Test User',
+      });
+
+    const loginResponse = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({
+        email: 'workout-detail-test@example.com',
+        password: 'password123',
+      });
+
+    accessToken = loginResponse.body.accessToken;
+    userId = loginResponse.body.user.id;
+
+    // Create test exercise
+    const exercise = await prisma.exercise.create({
+      data: {
+        name: 'Bench Press',
+        primaryMuscle: 'CHEST',
+        equipment: 'BARBELL',
+      },
+    });
+    exerciseId = exercise.id;
+
+    // Create test routine with day and exercises
+    const routine = await prisma.routine.create({
+      data: {
+        name: 'Push Day',
+        description: 'Upper body push workout',
+        userId,
+        days: {
+          create: {
+            dayOfWeek: 1,
+            exercises: {
+              create: {
+                exerciseId,
+                order: 1,
+                restSeconds: 180,
+                sets: {
+                  create: [
+                    {
+                      setNumber: 1,
+                      repType: 'FIXED',
+                      reps: 8,
+                      weight: 80,
+                    },
+                    {
+                      setNumber: 2,
+                      repType: 'RANGE',
+                      minReps: 6,
+                      maxReps: 10,
+                      weight: 85,
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      },
+      include: {
+        days: {
+          include: {
+            exercises: true,
+          },
+        },
+      },
+    });
+
+    routineId = routine.id;
+    routineDayId = routine.days[0].id;
+    routineExerciseId = routine.days[0].exercises[0].id;
+
+    // Create test workout session
+    const session = await prisma.workoutSession.create({
+      data: {
+        userId,
+        routineId,
+        routineDayId,
+        status: 'COMPLETED',
+        startedAt: new Date('2024-01-15T10:00:00Z'),
+        endedAt: new Date('2024-01-15T11:30:00Z'),
+        durationSec: 5400, // 90 minutes
+        notes: 'Great workout today!',
+      },
+    });
+    sessionId = session.id;
+
+    // Create test set logs
+    await prisma.setLog.createMany({
+      data: [
+        {
+          sessionId,
+          routineExerciseId,
+          exerciseId,
+          setNumber: 1,
+          reps: 8,
+          weight: 80,
+          rpe: 8,
+          isCompleted: true,
+          completedAt: new Date('2024-01-15T10:15:00Z'),
+        },
+        {
+          sessionId,
+          routineExerciseId,
+          exerciseId,
+          setNumber: 2,
+          reps: 9,
+          weight: 85,
+          rpe: 9,
+          isCompleted: true,
+          completedAt: new Date('2024-01-15T10:20:00Z'),
+        },
+      ],
+    });
+  });
+
+  afterAll(async () => {
+    // Clean up test data
+    await prisma.setLog.deleteMany({ where: { sessionId } });
+    await prisma.workoutSession.deleteMany({ where: { userId } });
+    await prisma.routineExerciseSet.deleteMany({});
+    await prisma.routineExercise.deleteMany({});
+    await prisma.routineDay.deleteMany({});
+    await prisma.routine.deleteMany({ where: { userId } });
+    await prisma.exercise.deleteMany({ where: { id: exerciseId } });
+    await prisma.user.deleteMany({
+      where: { email: 'workout-detail-test@example.com' },
+    });
+
+    await app.close();
+  });
+
+  describe('GET /api/workouts/sessions/:id', () => {
+    it('should return detailed workout session with exercises and set logs', async () => {
+      const response = await request(app.getHttpServer())
+        .get(`/api/workouts/sessions/${sessionId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(200);
+
+      const session = response.body;
+
+      // Basic session properties
+      expect(session.id).toBe(sessionId);
+      expect(session.userId).toBe(userId);
+      expect(session.routineId).toBe(routineId);
+      expect(session.routineDayId).toBe(routineDayId);
+      expect(session.status).toBe('COMPLETED');
+      expect(session.startedAt).toBe('2024-01-15T10:00:00.000Z');
+      expect(session.endedAt).toBe('2024-01-15T11:30:00.000Z');
+      expect(session.durationSec).toBe(5400);
+      expect(session.notes).toBe('Great workout today!');
+
+      // Routine details
+      expect(session.routine).toBeDefined();
+      expect(session.routine.id).toBe(routineId);
+      expect(session.routine.name).toBe('Push Day');
+      expect(session.routine.description).toBe('Upper body push workout');
+
+      // Routine day details
+      expect(session.routineDay).toBeDefined();
+      expect(session.routineDay.id).toBe(routineDayId);
+      expect(session.routineDay.dayOfWeek).toBe(1);
+
+      // Exercises
+      expect(session.routineDay.exercises).toHaveLength(1);
+      const exercise = session.routineDay.exercises[0];
+      expect(exercise.id).toBe(routineExerciseId);
+      expect(exercise.order).toBe(1);
+      expect(exercise.restSeconds).toBe(180);
+
+      // Exercise details
+      expect(exercise.exercise.id).toBe(exerciseId);
+      expect(exercise.exercise.name).toBe('Bench Press');
+      expect(exercise.exercise.primaryMuscle).toBe('CHEST');
+      expect(exercise.exercise.equipment).toBe('BARBELL');
+
+      // Planned sets
+      expect(exercise.sets).toHaveLength(2);
+      const fixedSet = exercise.sets.find((s) => s.setNumber === 1);
+      const rangeSet = exercise.sets.find((s) => s.setNumber === 2);
+
+      expect(fixedSet.repType).toBe('FIXED');
+      expect(fixedSet.reps).toBe(8);
+      expect(fixedSet.weight).toBe(80);
+      expect(fixedSet.minReps).toBeNull();
+      expect(fixedSet.maxReps).toBeNull();
+
+      expect(rangeSet.repType).toBe('RANGE');
+      expect(rangeSet.reps).toBeNull();
+      expect(rangeSet.minReps).toBe(6);
+      expect(rangeSet.maxReps).toBe(10);
+      expect(rangeSet.weight).toBe(85);
+
+      // Set logs
+      expect(session.setLogs).toHaveLength(2);
+      const setLog1 = session.setLogs.find((log) => log.setNumber === 1);
+      const setLog2 = session.setLogs.find((log) => log.setNumber === 2);
+
+      expect(setLog1.routineExerciseId).toBe(routineExerciseId);
+      expect(setLog1.exerciseId).toBe(exerciseId);
+      expect(setLog1.reps).toBe(8);
+      expect(setLog1.weight).toBe(80);
+      expect(setLog1.rpe).toBe(8);
+      expect(setLog1.isCompleted).toBe(true);
+      expect(setLog1.completedAt).toBe('2024-01-15T10:15:00.000Z');
+
+      expect(setLog2.setNumber).toBe(2);
+      expect(setLog2.reps).toBe(9);
+      expect(setLog2.weight).toBe(85);
+      expect(setLog2.rpe).toBe(9);
+      expect(setLog2.isCompleted).toBe(true);
+      expect(setLog2.completedAt).toBe('2024-01-15T10:20:00.000Z');
+
+      // Set logs should include exercise details
+      expect(setLog1.exercise.id).toBe(exerciseId);
+      expect(setLog1.exercise.name).toBe('Bench Press');
+      expect(setLog1.exercise.primaryMuscle).toBe('CHEST');
+      expect(setLog1.exercise.equipment).toBe('BARBELL');
+    });
+
+    it('should return 404 for non-existent session', async () => {
+      const nonExistentId = '00000000-0000-0000-0000-000000000000';
+      
+      await request(app.getHttpServer())
+        .get(`/api/workouts/sessions/${nonExistentId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(404);
+    });
+
+    it('should return 401 without authentication', async () => {
+      await request(app.getHttpServer())
+        .get(`/api/workouts/sessions/${sessionId}`)
+        .expect(401);
+    });
+
+    it('should return 403 for session belonging to another user', async () => {
+      // Create another user
+      await request(app.getHttpServer())
+        .post('/api/auth/register')
+        .send({
+          email: 'other-user@example.com',
+          password: 'password123',
+          name: 'Other User',
+        });
+
+      const otherLoginResponse = await request(app.getHttpServer())
+        .post('/api/auth/login')
+        .send({
+          email: 'other-user@example.com',
+          password: 'password123',
+        });
+
+      const otherAccessToken = otherLoginResponse.body.accessToken;
+
+      await request(app.getHttpServer())
+        .get(`/api/workouts/sessions/${sessionId}`)
+        .set('Authorization', `Bearer ${otherAccessToken}`)
+        .expect(403);
+
+      // Clean up other user
+      await prisma.user.deleteMany({
+        where: { email: 'other-user@example.com' },
+      });
+    });
+
+    it('should handle session without set logs', async () => {
+      // Create session without set logs
+      const emptySession = await prisma.workoutSession.create({
+        data: {
+          userId,
+          routineId,
+          routineDayId,
+          status: 'IN_PROGRESS',
+          startedAt: new Date(),
+        },
+      });
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/workouts/sessions/${emptySession.id}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(200);
+
+      expect(response.body.setLogs).toEqual([]);
+      expect(response.body.status).toBe('IN_PROGRESS');
+      expect(response.body.endedAt).toBeNull();
+      expect(response.body.durationSec).toBeNull();
+
+      // Clean up
+      await prisma.workoutSession.delete({
+        where: { id: emptySession.id },
+      });
+    });
+  });
+});

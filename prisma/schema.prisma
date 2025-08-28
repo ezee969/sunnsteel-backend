@@ -26,6 +26,7 @@ model User {
   refreshTokens RefreshToken[]
   weightUnit    WeightUnit     @default(KG)
   routines      Routine[]
+  workoutSessions WorkoutSession[]
 }
 
 model BlacklistedToken {
@@ -59,6 +60,7 @@ model Exercise {
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   routineExercises RoutineExercise[]
+  setLogs          SetLog[]
 }
 
 // A training routine owned by a single user (non-shareable for now)
@@ -69,9 +71,15 @@ model Routine {
   name         String
   description  String?
   isPeriodized Boolean      @default(false)
+  isFavorite   Boolean      @default(false)
+  isCompleted  Boolean      @default(false)
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
   days         RoutineDay[]
+  workoutSessions WorkoutSession[]
+
+  @@index([userId, isFavorite])
+  @@index([userId, isCompleted])
 }
 
 // A training day configuration inside a routine
@@ -82,6 +90,7 @@ model RoutineDay {
   dayOfWeek Int // 0=Sun .. 6=Sat
   order     Int               @default(0)
   exercises RoutineExercise[]
+  workoutSessions WorkoutSession[]
 
   @@unique([routineId, dayOfWeek])
 }
@@ -96,6 +105,7 @@ model RoutineExercise {
   order        Int                  @default(0)
   restSeconds  Int                  @default(60)
   sets         RoutineExerciseSet[]
+  setLogs      SetLog[]
 }
 
 // Set configuration for a routine exercise
@@ -104,8 +114,69 @@ model RoutineExerciseSet {
   routineExerciseId String
   routineExercise   RoutineExercise @relation(fields: [routineExerciseId], references: [id], onDelete: Cascade)
   setNumber         Int
-  reps              Int
+  // Rep prescription can be a fixed amount or a range
+  repType           RepType         @default(FIXED)
+  reps              Int?
+  minReps           Int?
+  maxReps           Int?
   weight            Float?
 
   @@unique([routineExerciseId, setNumber])
+}
+
+// How reps are prescribed for a set
+enum RepType {
+  FIXED
+  RANGE
+}
+
+// Tracking a user's execution of a specific RoutineDay
+enum WorkoutSessionStatus {
+  IN_PROGRESS
+  COMPLETED
+  ABORTED
+}
+
+model WorkoutSession {
+  id            String                @id @default(uuid())
+  userId        String
+  user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  routineId     String
+  routine       Routine               @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  routineDayId  String
+  routineDay    RoutineDay            @relation(fields: [routineDayId], references: [id], onDelete: Cascade)
+  status        WorkoutSessionStatus  @default(IN_PROGRESS)
+  startedAt     DateTime              @default(now())
+  endedAt       DateTime?
+  durationSec   Int?
+  notes         String?
+  setLogs       SetLog[]
+
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  @@index([userId, status, startedAt])
+}
+
+// A log of an executed set during a workout session
+model SetLog {
+  id                String          @id @default(uuid())
+  sessionId         String
+  session           WorkoutSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  routineExerciseId String
+  routineExercise   RoutineExercise @relation(fields: [routineExerciseId], references: [id])
+  exerciseId        String
+  exercise          Exercise        @relation(fields: [exerciseId], references: [id])
+  setNumber         Int
+  reps              Int?
+  weight            Float?
+  rpe               Float?
+  isCompleted       Boolean         @default(false)
+  completedAt       DateTime?
+
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@unique([sessionId, routineExerciseId, setNumber])
+  @@index([sessionId])
 }

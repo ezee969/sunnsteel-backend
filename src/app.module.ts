@@ -10,6 +10,7 @@ import { TokenModule } from './token/token.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ExercisesModule } from './exercises/exercises.module';
 import { RoutinesModule } from './routines/routines.module';
+import { WorkoutsModule } from './workouts/workouts.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { RoutinesModule } from './routines/routines.module';
     ScheduleModule.forRoot(),
     ExercisesModule,
     RoutinesModule,
+    WorkoutsModule,
   ],
   providers: [
     {

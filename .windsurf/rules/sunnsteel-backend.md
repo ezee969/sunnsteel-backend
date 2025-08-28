@@ -1,3 +1,7 @@
+---
+trigger: always_on
+---
+
 # Sunnsteel Backend - Fitness API
 
 Este es el proyecto backend para Sunnsteel, una API de fitness y entrenamiento.
@@ -58,7 +62,7 @@ Este es el proyecto backend para Sunnsteel, una API de fitness y entrenamiento.
 
 - **JWT Strategy**: Passport JWT para validación de tokens
 - **Local Strategy**: Passport Local para login con email/password
-- **Guards**: 
+- **Guards**:
   - `passport-jwt.guard.ts`: Guard para validación JWT
   - `passport-local.guard.ts`: Guard para autenticación local
 - **Token Management**: Access tokens + refresh tokens
@@ -140,6 +144,22 @@ Este es el proyecto backend para Sunnsteel, una API de fitness y entrenamiento.
 - **Logging**: Para debugging y monitoreo
 
 ## Contexto para el Agente
+
+### Workouts — Sessions List
+
+- `GET /api/workouts/sessions` — Listado de sesiones (historial) con filtros, orden y paginación por cursor
+  - Auth: protegido por JWT (usuario autenticado)
+  - Query:
+    - `status?`: `IN_PROGRESS|COMPLETED|ABORTED`
+    - `routineId?`: string
+    - `from?`, `to?`: `YYYY-MM-DD`
+    - `q?`: string (busca en notas)
+    - `cursor?`: string
+    - `limit?`: number
+    - `sort?`: `finishedAt:desc|finishedAt:asc|startedAt:desc|startedAt:asc`
+  - Respuesta:
+    - `items`: array de sesiones resumidas (id, status, startedAt, endedAt, durationSec, totalVolume, totalSets, notes, routine)
+    - `nextCursor`: string | undefined
 
 Cuando implementes funcionalidades:
 

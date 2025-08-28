@@ -244,6 +244,63 @@ sequenceDiagram
     AuthController->>Client: Set refreshToken cookie & return {accessToken}
 ```
 
+## Routine Structure & Rep Prescription
+
+Routines contain days, each with exercises and their prescribed sets. Sets now support two rep prescription modes via `repType`:
+
+- `FIXED`: requires `reps`
+- `RANGE`: requires `minReps` and `maxReps` (with `minReps <= maxReps`)
+
+Relevant Prisma models:
+
+```prisma
+model RoutineExercise {
+  id           String               @id @default(uuid())
+  routineDayId String
+  routineDay   RoutineDay           @relation(fields: [routineDayId], references: [id], onDelete: Cascade)
+  exerciseId   String
+  exercise     Exercise             @relation(fields: [exerciseId], references: [id])
+  order        Int                  @default(0)
+  restSeconds  Int                  @default(60)
+  sets         RoutineExerciseSet[]
+}
+
+model RoutineExerciseSet {
+  id                String          @id @default(uuid())
+  routineExerciseId String
+  routineExercise   RoutineExercise @relation(fields: [routineExerciseId], references: [id], onDelete: Cascade)
+  setNumber         Int
+  repType           RepType         @default(FIXED)
+  reps              Int?
+  minReps           Int?
+  maxReps           Int?
+  weight            Float?
+
+  @@unique([routineExerciseId, setNumber])
+}
+
+enum RepType {
+  FIXED
+  RANGE
+}
+```
+
+### API Response Shape
+
+Selectors for routines endpoints include set fields: `setNumber`, `repType`, `reps`, `minReps`, `maxReps`, `weight`.
+
+### Validation
+
+- When creating/updating sets:
+  - `FIXED` → `reps` required
+  - `RANGE` → `minReps` and `maxReps` required and `minReps <= maxReps`
+
+### Notes
+
+- Ensure Prisma client is regenerated after schema changes:
+  - `npx prisma generate`
+  - then `npm run build`
+
 ### Diagram Explanation:
 
 1. **Client to AuthController**: The client sends a `POST` request to `/api/auth/refresh` with the `refresh_token` cookie.
@@ -300,6 +357,144 @@ graph TD
     class DB database
     class Guards,Strategies middleware
 
+```
+
+# Routines - Favorites & Completed
+
+The Routines module supports marking routines as favorites and completed per user, and allows filtering by these flags.
+
+## Endpoints
+
+- GET `/api/routines` — List user's routines (supports query filters)
+  - Query params: `isFavorite=true|false`, `isCompleted=true|false`
+- GET `/api/routines/favorites` — List user's favorite routines
+- GET `/api/routines/completed` — List user's completed routines
+- GET `/api/routines/:id` — Get a routine by id
+- POST `/api/routines` — Create routine
+- PATCH `/api/routines/:id` — Update routine (full replace of days/exercises/sets)
+- PATCH `/api/routines/:id/favorite` — Toggle favorite status
+- PATCH `/api/routines/:id/completed` — Toggle completed status
+
+Request body for favorite toggle:
+
+```json
+{ "isFavorite": true }
+```
+
+Request body for completed toggle:
+
+```json
+{ "isCompleted": true }
+```
+
+## Prisma Schema
+
+Model `Routine` includes boolean flags with default false:
+
+```prisma
+model Routine {
+  id           String       @id @default(uuid())
+  userId       String
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  description  String?
+  isPeriodized Boolean      @default(false)
+  isFavorite   Boolean      @default(false)
+  isCompleted  Boolean      @default(false)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  days         RoutineDay[]
+
+  @@index([userId, isFavorite])
+  @@index([userId, isCompleted])
+}
+```
+
+# Workouts - Session Tracking
+
+The Workouts module enables tracking workout sessions tied to routine days and logging individual set performance.
+
+## Endpoints
+
+- POST `/api/workouts/sessions/start` — Start a new workout session for a routine day
+  - Body: `{ routineId: string, routineDayId: string, notes?: string }`
+- PATCH `/api/workouts/sessions/:id/finish` — Finish an in-progress session
+  - Body: `{ status: "COMPLETED" | "ABORTED", notes?: string }`
+  - GET `/api/workouts/sessions/active` — Get the current in-progress session (if any)
+  - GET `/api/workouts/sessions` — List workout sessions (history) with filtering, sorting and cursor pagination
+  - Query params (all optional):
+    - `status`: `IN_PROGRESS | COMPLETED | ABORTED`
+    - `routineId`: string (UUID)
+    - `from`: ISO date (YYYY-MM-DD)
+    - `to`: ISO date (YYYY-MM-DD)
+    - `q`: free text search over notes
+    - `cursor`: pagination cursor (UUID)
+    - `limit`: page size (default 20, min 1, max 50)
+    - `sort`: `finishedAt:desc|finishedAt:asc|startedAt:desc|startedAt:asc`
+  - Validation & coercion (ListSessionsDto):
+    - `status` validated as enum `WorkoutSessionStatus`
+    - `routineId`, `cursor` validated as UUID
+    - `from`, `to` validated as ISO8601 dates
+    - `limit` coerced to number via `class-transformer` and validated as int `1..50`
+    - `sort` validated against allowed values only
+  - GET `/api/workouts/sessions/:id` — Get a session by id, including set logs
+  - PUT `/api/workouts/sessions/:id/set-logs` — Upsert a set log during a session
+  - Body: `{ routineExerciseId: string, exerciseId: string, setNumber: number, reps?: number, weight?: number, rpe?: number, isCompleted?: boolean }`
+ - DELETE `/api/workouts/sessions/:id/set-logs/:routineExerciseId/:setNumber` — Delete a set log during a session
+
+All endpoints are protected with JWT.
+
+## Prisma Schema (summary)
+
+```prisma
+enum WorkoutSessionStatus {
+  IN_PROGRESS
+  COMPLETED
+  ABORTED
+}
+
+model WorkoutSession {
+  id           String               @id @default(uuid())
+  userId       String
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  routineId    String
+  routine      Routine              @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  routineDayId String
+  routineDay   RoutineDay           @relation(fields: [routineDayId], references: [id], onDelete: Cascade)
+  status       WorkoutSessionStatus @default(IN_PROGRESS)
+  startedAt    DateTime             @default(now())
+  endedAt      DateTime?
+  durationSec  Int?
+  notes        String?
+  setLogs      SetLog[]
+
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  @@index([userId, status, startedAt])
+}
+
+model SetLog {
+  id                String          @id @default(uuid())
+  sessionId         String
+  session           WorkoutSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  routineExerciseId String
+  routineExercise   RoutineExercise @relation(fields: [routineExerciseId], references: [id])
+  exerciseId        String
+  exercise          Exercise        @relation(fields: [exerciseId], references: [id])
+  setNumber         Int
+  reps              Int?
+  weight            Float?
+  rpe               Float?
+  isCompleted       Boolean         @default(false)
+  completedAt       DateTime?
+
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@unique([sessionId, routineExerciseId, setNumber])
+  @@index([sessionId])
+}
 ```
 
 # Sunnsteel Workspace

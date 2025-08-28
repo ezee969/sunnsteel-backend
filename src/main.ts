@@ -7,7 +7,12 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   app.use(cookieParser());
-  app.useGlobalPipes(new ValidationPipe());
+  app.useGlobalPipes(
+    new ValidationPipe({
+      transform: true,
+      transformOptions: { enableImplicitConversion: true },
+    }),
+  );
   app.setGlobalPrefix('api');
   app.enableCors({
     origin: process.env.FRONTEND_URL || 'http://localhost:3000',
@@ -17,4 +22,4 @@ async function bootstrap() {
   await app.listen(process.env.PORT ?? 4000);
 }
 
-bootstrap();
+void bootstrap();

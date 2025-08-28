@@ -2,14 +2,21 @@ import { Type } from 'class-transformer';
 import {
   IsArray,
   IsBoolean,
+  IsEnum,
   IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
   Max,
   Min,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
+
+export enum RepTypeDto {
+  FIXED = 'FIXED',
+  RANGE = 'RANGE',
+}
 
 export class CreateRoutineExerciseSetDto {
   @IsInt()
@@ -17,10 +24,29 @@ export class CreateRoutineExerciseSetDto {
   @Max(10)
   setNumber: number;
 
+  // Rep prescription type
+  @IsEnum(RepTypeDto)
+  repType: RepTypeDto;
+
+  // When repType is FIXED, reps must be provided
+  @ValidateIf((o) => o.repType === RepTypeDto.FIXED)
   @IsInt()
   @Min(1)
   @Max(50)
-  reps: number;
+  reps?: number;
+
+  // When repType is RANGE, minReps/maxReps must be provided
+  @ValidateIf((o) => o.repType === RepTypeDto.RANGE)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  minReps?: number;
+
+  @ValidateIf((o) => o.repType === RepTypeDto.RANGE)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  maxReps?: number;
 
   @IsOptional()
   weight?: number;
