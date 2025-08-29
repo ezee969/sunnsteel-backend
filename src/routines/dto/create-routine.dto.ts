@@ -5,6 +5,7 @@ import {
   IsEnum,
   IsInt,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
   Max,
@@ -65,6 +66,29 @@ export class CreateRoutineExerciseDto {
   @Min(0)
   @Max(600)
   restSeconds: number;
+
+  // Progression configuration per exercise
+  @IsOptional()
+  @IsEnum(
+    {
+      NONE: 'NONE',
+      DOUBLE_PROGRESSION: 'DOUBLE_PROGRESSION',
+      DYNAMIC_DOUBLE_PROGRESSION: 'DYNAMIC_DOUBLE_PROGRESSION',
+    } as const,
+    {
+      message:
+        'progressionScheme must be NONE, DOUBLE_PROGRESSION, or DYNAMIC_DOUBLE_PROGRESSION',
+    },
+  )
+  progressionScheme?:
+    | 'NONE'
+    | 'DOUBLE_PROGRESSION'
+    | 'DYNAMIC_DOUBLE_PROGRESSION';
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0.1)
+  minWeightIncrement?: number; // defaults to 2.5 if omitted
 
   @IsArray()
   @ValidateNested({ each: true })

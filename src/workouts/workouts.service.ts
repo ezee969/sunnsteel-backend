@@ -78,7 +78,7 @@ export class WorkoutsService {
   async finishSession(userId: string, id: string, dto: FinishWorkoutDto) {
     const session = await this.db.workoutSession.findFirst({
       where: { id, userId },
-      select: { id: true, startedAt: true, status: true },
+      select: { id: true, startedAt: true, status: true, routineDayId: true },
     });
     if (!session) {
       throw new NotFoundException('Workout session not found');
@@ -101,6 +101,156 @@ export class WorkoutsService {
       dto.status === FinishStatusDto.ABORTED
         ? WorkoutSessionStatus.ABORTED
         : WorkoutSessionStatus.COMPLETED;
+
+    // Apply progression only when completed
+    if (status === WorkoutSessionStatus.COMPLETED) {
+      try {
+        // Fetch routine configuration for this day
+        const routineDay = await this.db.routineDay.findFirst({
+          where: { id: session.routineDayId },
+          select: {
+            id: true,
+            exercises: {
+              select: {
+                id: true,
+                progressionScheme: true,
+                minWeightIncrement: true,
+                sets: {
+                  select: {
+                    setNumber: true,
+                    repType: true,
+                    reps: true,
+                    minReps: true,
+                    maxReps: true,
+                    weight: true,
+                  },
+                  orderBy: { setNumber: 'asc' },
+                },
+              },
+            },
+          },
+        });
+
+        // Fetch performed set logs for this session
+        const logs = await this.db.setLog.findMany({
+          where: { sessionId: session.id },
+          select: {
+            routineExerciseId: true,
+            setNumber: true,
+            reps: true,
+            isCompleted: true,
+          },
+        });
+
+        const logKey = (reId: string, setNumber: number) =>
+          `${reId}#${setNumber}`;
+        const logMap = new Map<
+          string,
+          { reps: number | null; isCompleted: boolean }
+        >();
+        for (const l of logs) {
+          logMap.set(logKey(l.routineExerciseId, l.setNumber), {
+            reps: l.reps ?? null,
+            isCompleted: l.isCompleted,
+          });
+        }
+
+        const updates: Array<{
+          routineExerciseId: string;
+          setNumber: number;
+          newWeight: number;
+        }> = [];
+
+        const targetFor = (set: {
+          repType: 'FIXED' | 'RANGE';
+          reps: number | null;
+          minReps: number | null;
+          maxReps: number | null;
+        }) => {
+          if (set.repType === 'RANGE') return set.maxReps ?? null;
+          return set.reps ?? null;
+        };
+
+        for (const ex of routineDay?.exercises ?? []) {
+          const scheme = ex.progressionScheme;
+          const inc = ex.minWeightIncrement ?? 2.5;
+
+          if (scheme === 'DOUBLE_PROGRESSION') {
+            // progress if ALL sets hit or exceed target
+            let allHit = true;
+            for (const s of ex.sets) {
+              const log = logMap.get(logKey(ex.id, s.setNumber));
+              const target = targetFor({
+                repType: s.repType as any,
+                reps: (s as any).reps ?? null,
+                minReps: (s as any).minReps ?? null,
+                maxReps: (s as any).maxReps ?? null,
+              });
+              const reps = log?.reps ?? null;
+              const hit =
+                typeof target === 'number' &&
+                typeof reps === 'number' &&
+                reps >= target;
+              if (!hit) {
+                allHit = false;
+                break;
+              }
+            }
+            if (allHit) {
+              for (const s of ex.sets) {
+                const current = typeof s.weight === 'number' ? s.weight : 0;
+                updates.push({
+                  routineExerciseId: ex.id,
+                  setNumber: s.setNumber,
+                  newWeight: current + inc,
+                });
+              }
+            }
+          } else if (scheme === 'DYNAMIC_DOUBLE_PROGRESSION') {
+            for (const s of ex.sets) {
+              const log = logMap.get(logKey(ex.id, s.setNumber));
+              const target = targetFor({
+                repType: s.repType as any,
+                reps: (s as any).reps ?? null,
+                minReps: (s as any).minReps ?? null,
+                maxReps: (s as any).maxReps ?? null,
+              });
+              const reps = log?.reps ?? null;
+              const hit =
+                typeof target === 'number' &&
+                typeof reps === 'number' &&
+                reps >= target;
+              if (hit) {
+                const current = typeof s.weight === 'number' ? s.weight : 0;
+                updates.push({
+                  routineExerciseId: ex.id,
+                  setNumber: s.setNumber,
+                  newWeight: current + inc,
+                });
+              }
+            }
+          }
+        }
+
+        // Apply updates
+        await Promise.all(
+          updates.map((u) =>
+            this.db.routineExerciseSet.update({
+              where: {
+                routineExerciseId_setNumber: {
+                  routineExerciseId: u.routineExerciseId,
+                  setNumber: u.setNumber,
+                },
+              },
+              data: { weight: u.newWeight },
+              select: { id: true },
+            }),
+          ),
+        );
+      } catch {
+        // Fail-safe: do not block finishing if progression cannot be computed
+      }
+    }
 
     return this.db.workoutSession.update({
       where: { id },
@@ -388,6 +538,8 @@ export class WorkoutsService {
               id: true,
               order: true,
               restSeconds: true,
+              progressionScheme: true,
+              minWeightIncrement: true,
               exercise: {
                 select: {
                   id: true,

@@ -24,6 +24,8 @@ Este es el proyecto backend para Sunnsteel, una API de fitness y entrenamiento.
 - **TokenModule**: Servicios de JWT y refresh tokens
 - **DatabaseModule**: Configuración de Prisma y conexión a PostgreSQL
 - **ConfigsModule**: Configuraciones del sistema
+- **WorkoutsModule**: Sesiones de entrenamiento (iniciar/finalizar), logs de sets, y progresión automática de ejercicios
+- **ExercisesModule**: Catálogo de ejercicios disponibles
 
 ### Endpoints Disponibles
 
@@ -33,11 +35,113 @@ Este es el proyecto backend para Sunnsteel, una API de fitness y entrenamiento.
 - **POST /api/auth/refresh**: Renovación de tokens
 - **GET /api/users/profile**: Obtener perfil de usuario (protegido)
 
+#### Routines
+
+- **GET /api/routines**: Listar rutinas del usuario. Filtros opcionales vía query: `isFavorite=true|false`, `isCompleted=true|false`
+- **GET /api/routines/favorites**: Listar rutinas favoritas
+- **GET /api/routines/completed**: Listar rutinas completadas
+- **GET /api/routines/:id**: Obtener una rutina por id
+- **POST /api/routines**: Crear rutina
+- **PATCH /api/routines/:id**: Actualizar rutina (reemplazo total de días/ejercicios/sets)
+- **PATCH /api/routines/:id/favorite**: Marcar/Desmarcar rutina como favorita `{ isFavorite: boolean }`
+- **PATCH /api/routines/:id/completed**: Marcar/Desmarcar rutina como completada `{ isCompleted: boolean }`
+- **DELETE /api/routines/:id**: Eliminar rutina
+
+#### Workout Sessions
+
+- **GET /api/workouts/sessions**: Listado de sesiones (historial) con filtros, orden y paginación por cursor
+  - Query params: `status`, `routineId`, `from`, `to`, `q`, `cursor`, `limit`, `sort`
+- **POST /api/workouts/sessions/start**: Iniciar nueva sesión de entrenamiento
+- **PATCH /api/workouts/sessions/:id/finish**: Finalizar sesión (aplica progresión automática)
+- **GET /api/workouts/sessions/active**: Obtener sesión activa del usuario
+- **GET /api/workouts/sessions/:id**: Obtener detalles de sesión específica
+- **POST /api/workouts/sessions/:id/sets**: Crear/actualizar log de set
+- **DELETE /api/workouts/sessions/:id/sets**: Eliminar log de set
+
+#### Exercises
+
+- **GET /api/exercises**: Listar ejercicios disponibles
+
+## Progresión de Ejercicios
+
+### Esquemas de Progresión
+
+- **DYNAMIC**: Progresión cuando TODOS los sets alcanzan el objetivo de reps
+  - Si todos los sets de un ejercicio logran >= reps objetivo, se aumenta el peso en todos los sets
+- **DYNAMIC_DOUBLE**: Progresión individual por set
+  - Cada set progresa independientemente cuando alcanza el objetivo de reps
+- **Configuración por ejercicio**:
+  - `progressionScheme`: `DYNAMIC` | `DYNAMIC_DOUBLE` (default: `DYNAMIC`)
+  - `minWeightIncrement`: incremento mínimo de peso (default: `2.5`)
+
+### Aplicación Automática
+
+- Se ejecuta al finalizar una sesión (`PATCH /api/workouts/sessions/:id/finish`)
+- Solo para sesiones con status `COMPLETED`
+- Actualiza pesos en `RoutineExerciseSet` para próximas sesiones
+- Basado en logs de sets (`SetLog`) de la sesión actual
+
+##### Estructura de Sets y Prescripción de Reps
+
+- Soporte de prescripción mediante `repType`:
+  - `FIXED` → requiere `reps`
+  - `RANGE` → requiere `minReps` y `maxReps` (`minReps <= maxReps`)
+- Campos expuestos en selectores de endpoints de rutinas para cada set:
+  - `setNumber`, `repType`, `reps`, `minReps`, `maxReps`, `weight`
+- Validación en creación/actualización de rutinas asegura consistencia entre `repType` y sus campos asociados.
+
+#### Workouts
+
+- **POST /api/workouts/sessions/start**: Iniciar sesión de entrenamiento para un día de rutina
+  - Body: `{ routineId: string, routineDayId: string, notes?: string }`
+- **PATCH /api/workouts/sessions/:id/finish**: Finalizar sesión en progreso
+  - Body: `{ status: "COMPLETED" | "ABORTED", notes?: string }`
+- **GET /api/workouts/sessions/active**: Obtener sesión activa (si existe)
+- **GET /api/workouts/sessions**: Listar sesiones (historial) con filtros y paginación por cursor
+  - Query: `status?`, `routineId?`, `from?`, `to?`, `q?`, `cursor?`, `limit?`, `sort?`
+    - `sort`: `finishedAt:desc|finishedAt:asc|startedAt:desc|startedAt:asc`
+    - Validación & coerción (ListSessionsDto):
+      - `status` → enum `WorkoutSessionStatus`
+      - `routineId`, `cursor` → `@IsUUID()`
+      - `from`, `to` → `@IsISO8601()`
+      - `limit` → `@Type(() => Number)` + `@IsInt()` + `@Min(1)` + `@Max(50)`
+      - `sort` → restringido a valores permitidos con `@IsIn([...])`
+- **GET /api/workouts/sessions/:id**: Obtener sesión por id (incluye set logs)
+- **PUT /api/workouts/sessions/:id/set-logs**: Upsert de logs de sets durante una sesión
+  - Body: `{ routineExerciseId, exerciseId, setNumber, reps?, weight?, rpe?, isCompleted? }`
+- **DELETE /api/workouts/sessions/:id/set-logs/:routineExerciseId/:setNumber**: Eliminar un set log específico de la sesión (solo si `IN_PROGRESS`)
+
 ### Base de Datos
 
 - **User**: Usuarios con email, password, name
 - **RefreshToken**: Tokens de renovación vinculados a usuarios
 - **BlacklistedToken**: Tokens de acceso invalidados
+- **Routine**: Rutinas de entrenamiento (`isFavorite: Boolean @default(false)`, `isCompleted: Boolean @default(false)`, `isPeriodized`, relación con `RoutineDay`)
+- **WorkoutSession**: Sesión de entrenamiento por usuario y día de rutina (`status: IN_PROGRESS|COMPLETED|ABORTED`, `startedAt`, `endedAt`, `durationSec`, `notes`)
+- **SetLog**: Registro de sets ejecutados dentro de una sesión (`reps?`, `weight?`, `rpe?`, `isCompleted`, `completedAt`), único por `(sessionId, routineExerciseId, setNumber)`
+
+##### Modelos Prisma relevantes
+
+```prisma
+enum RepType {
+  FIXED
+  RANGE
+}
+
+model RoutineExerciseSet {
+  id                String          @id @default(uuid())
+  routineExerciseId String
+  routineExercise   RoutineExercise @relation(fields: [routineExerciseId], references: [id], onDelete: Cascade)
+  setNumber         Int
+  repType           RepType         @default(FIXED)
+  reps              Int?
+  minReps           Int?
+  maxReps           Int?
+  weight            Float?
+
+  @@unique([routineExerciseId, setNumber])
+}
+```
 
 ## Configuración
 
@@ -145,22 +249,6 @@ Este es el proyecto backend para Sunnsteel, una API de fitness y entrenamiento.
 
 ## Contexto para el Agente
 
-### Workouts — Sessions List
-
-- `GET /api/workouts/sessions` — Listado de sesiones (historial) con filtros, orden y paginación por cursor
-  - Auth: protegido por JWT (usuario autenticado)
-  - Query:
-    - `status?`: `IN_PROGRESS|COMPLETED|ABORTED`
-    - `routineId?`: string
-    - `from?`, `to?`: `YYYY-MM-DD`
-    - `q?`: string (busca en notas)
-    - `cursor?`: string
-    - `limit?`: number
-    - `sort?`: `finishedAt:desc|finishedAt:asc|startedAt:desc|startedAt:asc`
-  - Respuesta:
-    - `items`: array de sesiones resumidas (id, status, startedAt, endedAt, durationSec, totalVolume, totalSets, notes, routine)
-    - `nextCursor`: string | undefined
-
 Cuando implementes funcionalidades:
 
 - Usa decoradores de NestJS (@Controller, @Service, @Injectable)
@@ -172,8 +260,5 @@ Cuando implementes funcionalidades:
 - Usa TypeScript con tipos estrictos
 - Sigue convenciones REST para APIs
 - Integra con el frontend de forma segura
-  description:
-  globs:
-  alwaysApply: false
 
 ---

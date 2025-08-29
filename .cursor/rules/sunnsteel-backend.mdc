@@ -20,7 +20,8 @@ Este es el proyecto backend para Sunnsteel, una API de fitness y entrenamiento.
 - **TokenModule**: Servicios de JWT y refresh tokens
 - **DatabaseModule**: Configuración de Prisma y conexión a PostgreSQL
 - **ConfigsModule**: Configuraciones del sistema
-- **WorkoutsModule**: Sesiones de entrenamiento (iniciar/finalizar) y logs de sets
+- **WorkoutsModule**: Sesiones de entrenamiento (iniciar/finalizar), logs de sets, y progresión automática de ejercicios
+- **ExercisesModule**: Catálogo de ejercicios disponibles
 
 ### Endpoints Disponibles
 
@@ -41,6 +42,40 @@ Este es el proyecto backend para Sunnsteel, una API de fitness y entrenamiento.
 - **PATCH /api/routines/:id/favorite**: Marcar/Desmarcar rutina como favorita `{ isFavorite: boolean }`
 - **PATCH /api/routines/:id/completed**: Marcar/Desmarcar rutina como completada `{ isCompleted: boolean }`
 - **DELETE /api/routines/:id**: Eliminar rutina
+
+#### Workout Sessions
+
+- **GET /api/workouts/sessions**: Listado de sesiones (historial) con filtros, orden y paginación por cursor
+  - Query params: `status`, `routineId`, `from`, `to`, `q`, `cursor`, `limit`, `sort`
+- **POST /api/workouts/sessions/start**: Iniciar nueva sesión de entrenamiento
+- **PATCH /api/workouts/sessions/:id/finish**: Finalizar sesión (aplica progresión automática)
+- **GET /api/workouts/sessions/active**: Obtener sesión activa del usuario
+- **GET /api/workouts/sessions/:id**: Obtener detalles de sesión específica
+- **POST /api/workouts/sessions/:id/sets**: Crear/actualizar log de set
+- **DELETE /api/workouts/sessions/:id/sets**: Eliminar log de set
+
+#### Exercises
+
+- **GET /api/exercises**: Listar ejercicios disponibles
+
+## Progresión de Ejercicios
+
+### Esquemas de Progresión
+
+- **DYNAMIC**: Progresión cuando TODOS los sets alcanzan el objetivo de reps
+  - Si todos los sets de un ejercicio logran >= reps objetivo, se aumenta el peso en todos los sets
+- **DYNAMIC_DOUBLE**: Progresión individual por set
+  - Cada set progresa independientemente cuando alcanza el objetivo de reps
+- **Configuración por ejercicio**:
+  - `progressionScheme`: `DYNAMIC` | `DYNAMIC_DOUBLE` (default: `DYNAMIC`)
+  - `minWeightIncrement`: incremento mínimo de peso (default: `2.5`)
+
+### Aplicación Automática
+
+- Se ejecuta al finalizar una sesión (`PATCH /api/workouts/sessions/:id/finish`)
+- Solo para sesiones con status `COMPLETED`
+- Actualiza pesos en `RoutineExerciseSet` para próximas sesiones
+- Basado en logs de sets (`SetLog`) de la sesión actual
 
 ##### Estructura de Sets y Prescripción de Reps
 

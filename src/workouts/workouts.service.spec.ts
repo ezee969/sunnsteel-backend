@@ -19,6 +19,10 @@ const dbMock = {
   },
   setLog: {
     upsert: jest.fn(),
+    findMany: jest.fn(),
+  },
+  routineExerciseSet: {
+    update: jest.fn(),
   },
 } as unknown as jest.Mocked<DatabaseService>;
 
@@ -402,6 +406,165 @@ describe('WorkoutsService', () => {
       const args = (dbMock.setLog.upsert as any).mock.calls[0][0];
       expect(args.create.isCompleted).toBe(false);
       expect(args.create.completedAt).toBeUndefined();
+    });
+  });
+
+  describe('finishSession progression', () => {
+    const startedAt = new Date(Date.now() - 10_000);
+
+    beforeEach(() => {
+      // default session in progress
+      (dbMock.workoutSession.findFirst as any).mockResolvedValue({
+        id: 's1',
+        startedAt,
+        status: WorkoutSessionStatus.IN_PROGRESS,
+        routineDayId: 'day1',
+      });
+      // default update result
+      (dbMock.workoutSession.update as any).mockResolvedValue({ id: 's1' });
+      // reset mocks for progression-related calls
+      (dbMock.routineDay.findFirst as any).mockReset();
+      (dbMock.setLog.findMany as any).mockReset();
+      (dbMock.routineExerciseSet.update as any).mockReset();
+      (dbMock.routineExerciseSet.update as any).mockResolvedValue({
+        id: 'any',
+      });
+    });
+
+    it('applies DOUBLE_PROGRESSION only when all sets hit target', async () => {
+      // Routine day with one exercise and two sets
+      (dbMock.routineDay.findFirst as any).mockResolvedValue({
+        id: 'day1',
+        exercises: [
+          {
+            id: 're1',
+            progressionScheme: 'DOUBLE_PROGRESSION',
+            minWeightIncrement: 2.5,
+            sets: [
+              {
+                setNumber: 1,
+                repType: 'FIXED',
+                reps: 8,
+                minReps: null,
+                maxReps: null,
+                weight: 100,
+              },
+              {
+                setNumber: 2,
+                repType: 'RANGE',
+                reps: null,
+                minReps: 6,
+                maxReps: 10,
+                weight: 110,
+              },
+            ],
+          },
+        ],
+      });
+
+      // All sets hit target: set1 reps=8/8, set2 reps=10/10
+      (dbMock.setLog.findMany as any).mockResolvedValue([
+        { routineExerciseId: 're1', setNumber: 1, reps: 8, isCompleted: true },
+        { routineExerciseId: 're1', setNumber: 2, reps: 10, isCompleted: true },
+      ]);
+
+      await service.finishSession('u1', 's1', {
+        status: FinishStatusDto.COMPLETED,
+      } as any);
+
+      // Expect both sets to be updated with +2.5 increment
+      const calls = (dbMock.routineExerciseSet.update as any).mock.calls;
+      expect(calls.length).toBe(2);
+      expect(calls[0][0]).toEqual(
+        expect.objectContaining({
+          where: {
+            routineExerciseId_setNumber: {
+              routineExerciseId: 're1',
+              setNumber: 1,
+            },
+          },
+          data: { weight: 102.5 },
+        }),
+      );
+      expect(calls[1][0]).toEqual(
+        expect.objectContaining({
+          where: {
+            routineExerciseId_setNumber: {
+              routineExerciseId: 're1',
+              setNumber: 2,
+            },
+          },
+          data: { weight: 112.5 },
+        }),
+      );
+
+      // Now simulate a miss on one set => no updates
+      (dbMock.setLog.findMany as any).mockResolvedValue([
+        { routineExerciseId: 're1', setNumber: 1, reps: 8, isCompleted: true },
+        { routineExerciseId: 're1', setNumber: 2, reps: 9, isCompleted: true }, // target max 10 not hit
+      ]);
+      (dbMock.routineExerciseSet.update as any).mockClear();
+
+      await service.finishSession('u1', 's1', {
+        status: FinishStatusDto.COMPLETED,
+      } as any);
+
+      expect(dbMock.routineExerciseSet.update).not.toHaveBeenCalled();
+    });
+
+    it('applies DYNAMIC_DOUBLE_PROGRESSION per set', async () => {
+      (dbMock.routineDay.findFirst as any).mockResolvedValue({
+        id: 'day1',
+        exercises: [
+          {
+            id: 're1',
+            progressionScheme: 'DYNAMIC_DOUBLE_PROGRESSION',
+            minWeightIncrement: 2.5,
+            sets: [
+              {
+                setNumber: 1,
+                repType: 'FIXED',
+                reps: 8,
+                minReps: null,
+                maxReps: null,
+                weight: 100,
+              },
+              {
+                setNumber: 2,
+                repType: 'RANGE',
+                reps: null,
+                minReps: 6,
+                maxReps: 10,
+                weight: 110,
+              },
+            ],
+          },
+        ],
+      });
+
+      // Only first set hits (8/8); second misses (9/10)
+      (dbMock.setLog.findMany as any).mockResolvedValue([
+        { routineExerciseId: 're1', setNumber: 1, reps: 8, isCompleted: true },
+        { routineExerciseId: 're1', setNumber: 2, reps: 9, isCompleted: true },
+      ]);
+
+      await service.finishSession('u1', 's1', {
+        status: FinishStatusDto.COMPLETED,
+      } as any);
+
+      const calls = (dbMock.routineExerciseSet.update as any).mock.calls;
+      expect(calls.length).toBe(1);
+      expect(calls[0][0]).toEqual(
+        expect.objectContaining({
+          where: {
+            routineExerciseId_setNumber: {
+              routineExerciseId: 're1',
+              setNumber: 1,
+            },
+          },
+          data: { weight: 102.5 },
+        }),
+      );
     });
   });
 });

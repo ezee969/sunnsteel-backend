@@ -14,10 +14,16 @@ const makeDbMock = () => {
   const routineDay = {
     deleteMany: jest.fn(),
   };
+  const setLog = {
+    deleteMany: jest.fn(),
+  };
   const db = {
     routine,
     routineDay,
-    $transaction: jest.fn(async (cb: any) => cb({ routine, routineDay })),
+    setLog,
+    $transaction: jest.fn(async (cb: any) =>
+      cb({ routine, routineDay, setLog }),
+    ),
   } as unknown as jest.Mocked<DatabaseService>;
 
   return db;

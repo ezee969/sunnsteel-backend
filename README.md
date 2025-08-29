@@ -24,7 +24,41 @@
 
 ## Description
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+Sunnsteel Backend - A fitness API built with NestJS featuring workout tracking, routines management, and intelligent exercise progression systems.
+
+## Features
+
+### Exercise Progression Schemes
+
+- **NONE**: No progression applied (default option)
+- **DOUBLE_PROGRESSION**: Progresión cuando TODOS los sets alcanzan el objetivo de reps
+  - Si todos los sets de un ejercicio logran >= reps objetivo, se aumenta el peso en todos los sets
+- **DYNAMIC_DOUBLE_PROGRESSION**: Progresión individual por set
+  - Cada set progresa independientemente cuando alcanza el objetivo de reps target
+- Configurable minimum weight increment per exercise (default: 2.5kg)
+- Automatic progression calculation on session completion
+- Support for both fixed reps and rep ranges (min/max)
+
+### Authentication & Security
+
+- JWT-based authentication with access and refresh tokens
+- Secure password hashing with bcrypt
+- Token blacklisting for logout functionality
+- Rate limiting for security
+
+### Workout Management
+
+- Workout session tracking (start, finish, abort)
+- Set logging with reps, weight, RPE
+- Session history with filtering and pagination
+- Progression calculations applied automatically on session completion
+
+### Routines Management
+
+- Create and manage workout routines
+- Multi-day routine support
+- Exercise configuration per routine day
+- Favorites and completion tracking
 
 ## Project setup
 
@@ -440,7 +474,7 @@ The Workouts module enables tracking workout sessions tied to routine days and l
   - GET `/api/workouts/sessions/:id` — Get a session by id, including set logs
   - PUT `/api/workouts/sessions/:id/set-logs` — Upsert a set log during a session
   - Body: `{ routineExerciseId: string, exerciseId: string, setNumber: number, reps?: number, weight?: number, rpe?: number, isCompleted?: boolean }`
- - DELETE `/api/workouts/sessions/:id/set-logs/:routineExerciseId/:setNumber` — Delete a set log during a session
+- DELETE `/api/workouts/sessions/:id/set-logs/:routineExerciseId/:setNumber` — Delete a set log during a session
 
 All endpoints are protected with JWT.
 
@@ -554,6 +588,8 @@ Para evitar la tediosa tarea de mantener manualmente la documentación actualiza
 
 ### Archivos de Reglas
 
+#### Cursor
+
 #### Backend (`.cursor/rules/`)
 
 - **`backenddev.mdc`**: Mejora mi capacidad de desarrollo backend
@@ -564,6 +600,21 @@ Para evitar la tediosa tarea de mantener manualmente la documentación actualiza
 
 - **`frontenddev.mdc`**: Mejora mi capacidad de desarrollo frontend
 - **`sunnsteel-project.mdc`**: Contexto específico del proyecto frontend
+- **`auto-documentation.mdc`**: Reglas para mantener documentación actualizada
+
+#### Windsurf
+
+#### Backend (`.windsurf/rules/`)
+
+- **`backenddev.mdc`**: Mejora mi capacidad de desarrollo backend
+- **`sunnsteel-backend.mdc`**: Contexto específico del proyecto backend
+- **`auto-documentation.mdc`**: Reglas para mantener documentación actualizada
+
+#### Frontend (`.windsurf/rules/`)
+
+- **`frontenddev.mdc`**: Mejora mi capacidad de desarrollo frontend
+- **`sunnsteel-project-part-1.mdc`**: Contexto específico del proyecto frontend
+- **`sunnsteel-project-part-2.mdc`**: Contexto específico del proyecto frontend
 - **`auto-documentation.mdc`**: Reglas para mantener documentación actualizada
 
 ### Scripts de Documentación

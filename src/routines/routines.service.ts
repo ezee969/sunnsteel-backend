@@ -30,6 +30,8 @@ export class RoutinesService {
                 exercise: { connect: { id: e.exerciseId } },
                 order: e.order ?? 0,
                 restSeconds: e.restSeconds,
+                progressionScheme: e.progressionScheme ?? 'NONE',
+                minWeightIncrement: e.minWeightIncrement ?? 2.5,
                 sets: {
                   create: e.sets.map((s) => {
                     if (s.repType === RepTypeDto.RANGE) {
@@ -96,6 +98,8 @@ export class RoutinesService {
                 id: true,
                 order: true,
                 restSeconds: true,
+                progressionScheme: true,
+                minWeightIncrement: true,
                 exercise: { select: { id: true, name: true } },
                 sets: {
                   select: {
@@ -150,6 +154,8 @@ export class RoutinesService {
                 id: true,
                 order: true,
                 restSeconds: true,
+                progressionScheme: true,
+                minWeightIncrement: true,
                 exercise: { select: { id: true, name: true } },
                 sets: {
                   select: {
@@ -263,6 +269,8 @@ export class RoutinesService {
                   exercise: { connect: { id: e.exerciseId } },
                   order: e.order ?? 0,
                   restSeconds: e.restSeconds,
+                  progressionScheme: e.progressionScheme ?? 'NONE',
+                  minWeightIncrement: e.minWeightIncrement ?? 2.5,
                   sets: {
                     create: e.sets.map((s) => {
                       if (s.repType === RepTypeDto.RANGE) {
@@ -329,6 +337,8 @@ export class RoutinesService {
                   id: true,
                   order: true,
                   restSeconds: true,
+                  progressionScheme: true,
+                  minWeightIncrement: true,
                   exercise: { select: { id: true, name: true } },
                   sets: {
                     select: {
@@ -403,6 +413,8 @@ export class RoutinesService {
                 id: true,
                 order: true,
                 restSeconds: true,
+                progressionScheme: true,
+                minWeightIncrement: true,
                 exercise: { select: { id: true, name: true } },
                 sets: {
                   select: {
@@ -474,6 +486,8 @@ export class RoutinesService {
                 id: true,
                 order: true,
                 restSeconds: true,
+                progressionScheme: true,
+                minWeightIncrement: true,
                 exercise: { select: { id: true, name: true } },
                 sets: {
                   select: {
