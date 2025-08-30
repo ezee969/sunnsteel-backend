@@ -60,13 +60,13 @@ Sunnsteel Backend - A fitness API built with NestJS featuring workout tracking, 
 - Exercise configuration per routine day
 - Favorites and completion tracking
 
-## Project setup
+## Installation
 
 ```bash
 $ npm install
 ```
 
-## Compile and run the project
+## Running the app
 
 ```bash
 # development
@@ -79,11 +79,23 @@ $ npm run start:dev
 $ npm run start:prod
 ```
 
-## Run tests
+## Testing
+
+### Test Architecture
+
+- **Unit Tests**: Jest-based tests for services, controllers, and utilities
+- **E2E Tests**: Integration tests for complete API endpoints
+- **Coverage**: Istanbul/Jest coverage reporting
+- **CI/CD**: Automated testing on GitHub Actions with PostgreSQL
+
+### Running Tests
 
 ```bash
 # unit tests
 $ npm run test
+
+# unit tests in watch mode
+$ npm run test:watch
 
 # e2e tests
 $ npm run test:e2e
@@ -91,6 +103,33 @@ $ npm run test:e2e
 # test coverage
 $ npm run test:cov
 ```
+
+### Test Coverage
+
+Current test modules:
+- **Auth Module**: AuthController, AuthService with login/register/logout/refresh
+- **Users Module**: UsersController, UsersService with profile management
+- **Exercises Module**: ExercisesController, ExercisesService with exercise catalog
+- **Token Module**: TokenService with JWT and refresh token management
+- **Routines Module**: RoutinesService with CRUD and progression features
+- **Workouts Module**: WorkoutsService, WorkoutsController with session management
+
+### CI/CD Pipeline
+
+GitHub Actions workflow includes:
+- PostgreSQL database setup
+- Prisma migrations and seeding
+- Unit and E2E test execution
+- Build verification
+- Environment variable validation
+
+### Test Maintenance
+
+⚠️ **Important**: When making code changes, always:
+1. Update existing tests if functionality changes
+2. Add new tests for new features or bug fixes
+3. Verify all tests pass before committing
+4. Update test documentation if test structure changes
 
 ### Register Flow:
 
