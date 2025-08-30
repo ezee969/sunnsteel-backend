@@ -60,6 +60,15 @@ export class TokenService {
       where: { userId },
     });
 
+    // Verify user exists before creating refresh token
+    const userExists = await this.db.user.findUnique({
+      where: { id: userId },
+    });
+    
+    if (!userExists) {
+      throw new Error(`Cannot create refresh token for non-existent user: ${userId}`);
+    }
+
     await this.db.refreshToken.create({
       data: {
         token,

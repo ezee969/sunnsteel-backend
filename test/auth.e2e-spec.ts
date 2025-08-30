@@ -162,21 +162,27 @@ describe('Auth (e2e)', () => {
 
     beforeEach(async () => {
       // Register and login
-      await request(app.getHttpServer())
+      const registerResponse = await request(app.getHttpServer())
         .post('/api/auth/register')
-        .send(testUser);
+        .send(testUser)
+        .expect(201);
 
       const loginResponse = await request(app.getHttpServer())
         .post('/api/auth/login')
         .send({
           email: testUser.email,
           password: testUser.password,
-        });
+        })
+        .expect(200);
 
       accessToken = loginResponse.body.accessToken;
       const cookies = loginResponse.headers['set-cookie'];
       if (!cookies || !cookies[0]) {
-        throw new Error(`No refresh token cookie in response: ${JSON.stringify(loginResponse.headers)}`);
+        throw new Error(`No refresh token cookie in response: ${JSON.stringify({
+          loginBody: loginResponse.body,
+          loginHeaders: loginResponse.headers,
+          registerBody: registerResponse.body
+        })}`);
       }
       refreshTokenCookie = cookies[0];
       
@@ -209,16 +215,22 @@ describe('Auth (e2e)', () => {
       // Register and login
       await request(app.getHttpServer())
         .post('/api/auth/register')
-        .send(testUser);
+        .send(testUser)
+        .expect(201);
 
       const loginResponse = await request(app.getHttpServer())
         .post('/api/auth/login')
         .send({
           email: testUser.email,
           password: testUser.password,
-        });
+        })
+        .expect(200);
 
-      refreshTokenCookie = loginResponse.headers['set-cookie'][0];
+      const cookies = loginResponse.headers['set-cookie'];
+      if (!cookies || !cookies[0]) {
+        throw new Error(`No refresh token cookie in refresh test: ${JSON.stringify(loginResponse.headers)}`);
+      }
+      refreshTokenCookie = cookies[0];
     });
 
     it('should refresh tokens successfully', async () => {

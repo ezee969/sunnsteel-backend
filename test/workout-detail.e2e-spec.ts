@@ -14,6 +14,7 @@ describe('Workout Detail (e2e)', () => {
   let sessionId: string;
   let exerciseId: string;
   let routineExerciseId: string;
+  let exerciseName: string;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -62,10 +63,11 @@ describe('Workout Detail (e2e)', () => {
       throw new Error(`Invalid register response: ${JSON.stringify(registerResponse.body)}`);
     }
 
-    // Create test exercise
+    // Create test exercise with unique name
+    exerciseName = `Bench Press ${Date.now()}`;
     const exercise = await prisma.exercise.create({
       data: {
-        name: 'Bench Press',
+        name: exerciseName,
         primaryMuscle: 'CHEST',
         equipment: 'BARBELL',
       },
@@ -221,7 +223,7 @@ describe('Workout Detail (e2e)', () => {
 
       // Exercise details
       expect(exercise.exercise.id).toBe(exerciseId);
-      expect(exercise.exercise.name).toBe('Bench Press');
+      expect(exercise.exercise.name).toBe(exerciseName);
       expect(exercise.exercise.primaryMuscle).toBe('CHEST');
       expect(exercise.exercise.equipment).toBe('BARBELL');
 
@@ -264,7 +266,7 @@ describe('Workout Detail (e2e)', () => {
 
       // Set logs should include exercise details
       expect(setLog1.exercise.id).toBe(exerciseId);
-      expect(setLog1.exercise.name).toBe('Bench Press');
+      expect(setLog1.exercise.name).toBe(exerciseName);
       expect(setLog1.exercise.primaryMuscle).toBe('CHEST');
       expect(setLog1.exercise.equipment).toBe('BARBELL');
     });
