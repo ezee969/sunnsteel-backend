@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, WorkoutSessionStatus } from '@prisma/client';
+import { Prisma, WorkoutSessionStatus, RepType } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 import { StartWorkoutDto } from './dto/start-workout.dto';
 import { FinishWorkoutDto, FinishStatusDto } from './dto/finish-workout.dto';
@@ -162,12 +162,12 @@ export class WorkoutsService {
         }> = [];
 
         const targetFor = (set: {
-          repType: 'FIXED' | 'RANGE';
-          reps: number | null;
-          minReps: number | null;
-          maxReps: number | null;
+          repType: RepType;
+          reps: number | null | undefined;
+          minReps: number | null | undefined;
+          maxReps: number | null | undefined;
         }) => {
-          if (set.repType === 'RANGE') return set.maxReps ?? null;
+          if (set.repType === RepType.RANGE) return set.maxReps ?? null;
           return set.reps ?? null;
         };
 
@@ -181,10 +181,10 @@ export class WorkoutsService {
             for (const s of ex.sets) {
               const log = logMap.get(logKey(ex.id, s.setNumber));
               const target = targetFor({
-                repType: s.repType as any,
-                reps: (s as any).reps ?? null,
-                minReps: (s as any).minReps ?? null,
-                maxReps: (s as any).maxReps ?? null,
+                repType: s.repType,
+                reps: s.reps ?? null,
+                minReps: s.minReps ?? null,
+                maxReps: s.maxReps ?? null,
               });
               const reps = log?.reps ?? null;
               const hit =
@@ -210,10 +210,10 @@ export class WorkoutsService {
             for (const s of ex.sets) {
               const log = logMap.get(logKey(ex.id, s.setNumber));
               const target = targetFor({
-                repType: s.repType as any,
-                reps: (s as any).reps ?? null,
-                minReps: (s as any).minReps ?? null,
-                maxReps: (s as any).maxReps ?? null,
+                repType: s.repType,
+                reps: s.reps ?? null,
+                minReps: s.minReps ?? null,
+                maxReps: s.maxReps ?? null,
               });
               const reps = log?.reps ?? null;
               const hit =

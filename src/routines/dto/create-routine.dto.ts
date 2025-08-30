@@ -30,20 +30,26 @@ export class CreateRoutineExerciseSetDto {
   repType: RepTypeDto;
 
   // When repType is FIXED, reps must be provided
-  @ValidateIf((o) => o.repType === RepTypeDto.FIXED)
+  @ValidateIf(
+    (o: CreateRoutineExerciseSetDto) => o.repType === RepTypeDto.FIXED,
+  )
   @IsInt()
   @Min(1)
   @Max(50)
   reps?: number;
 
   // When repType is RANGE, minReps/maxReps must be provided
-  @ValidateIf((o) => o.repType === RepTypeDto.RANGE)
+  @ValidateIf(
+    (o: CreateRoutineExerciseSetDto) => o.repType === RepTypeDto.RANGE,
+  )
   @IsInt()
   @Min(1)
   @Max(50)
   minReps?: number;
 
-  @ValidateIf((o) => o.repType === RepTypeDto.RANGE)
+  @ValidateIf(
+    (o: CreateRoutineExerciseSetDto) => o.repType === RepTypeDto.RANGE,
+  )
   @IsInt()
   @Min(1)
   @Max(50)

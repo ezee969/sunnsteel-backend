@@ -7,9 +7,13 @@ export class ExercisesService {
   constructor(private readonly db: DatabaseService) {}
 
   async findAll(): Promise<Exercise[]> {
-    const exercises = await this.db.exercise.findMany({
-      orderBy: { name: 'asc' },
+    // Fetch then sort with a deterministic, locale-aware comparator to avoid
+    // environment-dependent DB collation differences (CI vs local).
+    const exercises = await this.db.exercise.findMany();
+    const collator = new Intl.Collator('en', {
+      sensitivity: 'base',
+      ignorePunctuation: true,
     });
-    return exercises;
+    return exercises.sort((a, b) => collator.compare(a.name, b.name));
   }
 }

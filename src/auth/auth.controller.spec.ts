@@ -2,8 +2,6 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/auth.dto';
-import { PassportLocalGuard } from './guards/passport-local.guard';
-import { JwtAuthGuard } from './guards/passport-jwt.guard';
 import { UnauthorizedException } from '@nestjs/common';
 import { Response, Request } from 'express';
 
