@@ -55,6 +55,11 @@ export class TokenService {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7); // 7 days from now
 
+    // Delete any existing tokens for this user to avoid duplicates
+    await this.db.refreshToken.deleteMany({
+      where: { userId },
+    });
+
     await this.db.refreshToken.create({
       data: {
         token,
