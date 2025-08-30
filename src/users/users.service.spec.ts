@@ -16,7 +16,8 @@ describe('UsersService', () => {
     id: '1',
     email: 'test@example.com',
     name: 'Test User',
-    weightUnit: 'kg',
+    password: 'hashedPassword',
+    weightUnit: 'KG' as any,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -26,6 +27,9 @@ describe('UsersService', () => {
     email: 'test@example.com',
     name: 'Test User',
     password: 'hashedPassword',
+    weightUnit: 'KG' as any,
+    createdAt: new Date(),
+    updatedAt: new Date(),
   };
 
   beforeEach(async () => {
