@@ -13,6 +13,10 @@ describe('TokenService', () => {
     id: '1',
     email: 'test@example.com',
     name: 'Test User',
+    password: 'hashed-password',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    weightUnit: 'KG' as const,
   };
 
   const mockTokens = {
@@ -44,6 +48,9 @@ describe('TokenService', () => {
     };
 
     const mockDatabaseService = {
+      user: {
+        findUnique: jest.fn(),
+      },
       refreshToken: {
         create: jest.fn(),
         delete: jest.fn(),
@@ -85,6 +92,7 @@ describe('TokenService', () => {
       jest.spyOn(jwtService, 'signAsync')
         .mockResolvedValueOnce(mockTokens.accessToken)
         .mockResolvedValueOnce(mockTokens.refreshToken);
+      jest.spyOn(databaseService.user, 'findUnique').mockResolvedValue(mockUser);
       jest.spyOn(databaseService.refreshToken, 'create').mockResolvedValue(mockStoredToken);
 
       const result = await service.generateTokens(mockUser.id, mockUser.email);
