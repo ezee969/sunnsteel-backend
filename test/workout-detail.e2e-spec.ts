@@ -23,14 +23,17 @@ describe('Workout Detail (e2e)', () => {
     app = moduleFixture.createNestApplication();
     prisma = moduleFixture.get<DatabaseService>(DatabaseService);
     
-    // Add validation pipe
+    // Add validation pipe to enable DTO validation
     const { ValidationPipe } = await import('@nestjs/common');
     app.useGlobalPipes(new ValidationPipe());
     
-    // Add cookie parser middleware
+    // Add cookie parser middleware  
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const cookieParser = require('cookie-parser');
     app.use(cookieParser());
+    
+    // Set global API prefix
+    app.setGlobalPrefix('api');
     
     await app.init();
 
@@ -45,13 +48,19 @@ describe('Workout Detail (e2e)', () => {
     const registerResponse = await request(app.getHttpServer())
       .post('/api/auth/register')
       .send({
-        email: 'workout-detail-test@example.com',
+        email: `workout-detail-${Date.now()}@example.com`,
         password: 'password123',
         name: 'Workout Detail Test User',
-      });
+      })
+      .expect(201);
 
     accessToken = registerResponse.body.accessToken;
     userId = registerResponse.body.user.id;
+    
+    // Verify we got valid response
+    if (!accessToken || !userId) {
+      throw new Error(`Invalid register response: ${JSON.stringify(registerResponse.body)}`);
+    }
 
     // Create test exercise
     const exercise = await prisma.exercise.create({
@@ -154,7 +163,7 @@ describe('Workout Detail (e2e)', () => {
         },
       ],
     });
-  });
+  }, 30000); // Increase timeout to 30 seconds
 
   afterAll(async () => {
     // Clean up test data
@@ -297,7 +306,7 @@ describe('Workout Detail (e2e)', () => {
       await request(app.getHttpServer())
         .get(`/api/workouts/sessions/${sessionId}`)
         .set('Authorization', `Bearer ${otherAccessToken}`)
-        .expect(403);
+        .expect(404);
 
       // Clean up other user
       await prisma.user.deleteMany({

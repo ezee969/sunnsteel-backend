@@ -11,7 +11,7 @@ describe('Users & Exercises (e2e)', () => {
   let userId: string;
 
   const testUser = {
-    email: 'test@example.com',
+    email: `users-exercises-${Date.now()}@example.com`,
     password: 'password123',
     name: 'Test User',
   };
@@ -24,14 +24,17 @@ describe('Users & Exercises (e2e)', () => {
     app = moduleFixture.createNestApplication();
     databaseService = moduleFixture.get<DatabaseService>(DatabaseService);
     
-    // Add validation pipe
+    // Add validation pipe to enable DTO validation
     const { ValidationPipe } = await import('@nestjs/common');
     app.useGlobalPipes(new ValidationPipe());
     
-    // Add cookie parser middleware
+    // Add cookie parser middleware  
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const cookieParser = require('cookie-parser');
     app.use(cookieParser());
+    
+    // Set global API prefix
+    app.setGlobalPrefix('api');
     
     await app.init();
   });
@@ -46,11 +49,17 @@ describe('Users & Exercises (e2e)', () => {
 
     // Register and authenticate a user for protected routes
     const registerResponse = await request(app.getHttpServer())
-      .post('/auth/register')
-      .send(testUser);
+      .post('/api/auth/register')
+      .send(testUser)
+      .expect(201);
 
     accessToken = registerResponse.body.accessToken;
     userId = registerResponse.body.user.id;
+    
+    // Verify we got valid response
+    if (!accessToken || !userId) {
+      throw new Error(`Invalid register response: ${JSON.stringify(registerResponse.body)}`);
+    }
   });
 
   afterAll(async () => {
@@ -61,7 +70,7 @@ describe('Users & Exercises (e2e)', () => {
   describe('/users/profile (GET)', () => {
     it('should return user profile', async () => {
       const response = await request(app.getHttpServer())
-        .get('/users/profile')
+        .get('/api/users/profile')
         .set('Authorization', `Bearer ${accessToken}`)
         .expect(200);
 
@@ -76,13 +85,13 @@ describe('Users & Exercises (e2e)', () => {
 
     it('should return 401 without authorization', async () => {
       await request(app.getHttpServer())
-        .get('/users/profile')
+        .get('/api/users/profile')
         .expect(401);
     });
 
     it('should return 401 with invalid token', async () => {
       await request(app.getHttpServer())
-        .get('/users/profile')
+        .get('/api/users/profile')
         .set('Authorization', 'Bearer invalid-token')
         .expect(401);
     });
@@ -91,7 +100,7 @@ describe('Users & Exercises (e2e)', () => {
   describe('/exercises (GET)', () => {
     it('should return list of exercises', async () => {
       const response = await request(app.getHttpServer())
-        .get('/exercises')
+        .get('/api/exercises')
         .set('Authorization', `Bearer ${accessToken}`)
         .expect(200);
 
@@ -109,7 +118,7 @@ describe('Users & Exercises (e2e)', () => {
 
     it('should return exercises ordered by name', async () => {
       const response = await request(app.getHttpServer())
-        .get('/exercises')
+        .get('/api/exercises')
         .set('Authorization', `Bearer ${accessToken}`)
         .expect(200);
 
@@ -122,13 +131,13 @@ describe('Users & Exercises (e2e)', () => {
 
     it('should return 401 without authorization', async () => {
       await request(app.getHttpServer())
-        .get('/exercises')
+        .get('/api/exercises')
         .expect(401);
     });
 
     it('should return 401 with invalid token', async () => {
       await request(app.getHttpServer())
-        .get('/exercises')
+        .get('/api/exercises')
         .set('Authorization', 'Bearer invalid-token')
         .expect(401);
     });
@@ -139,14 +148,14 @@ describe('Users & Exercises (e2e)', () => {
       // This test would require generating an expired token
       // For now, we'll test with malformed token
       await request(app.getHttpServer())
-        .get('/users/profile')
+        .get('/api/users/profile')
         .set('Authorization', 'Bearer malformed.jwt.token')
         .expect(401);
     });
 
     it('should reject token without Bearer prefix', async () => {
       await request(app.getHttpServer())
-        .get('/users/profile')
+        .get('/api/users/profile')
         .set('Authorization', accessToken)
         .expect(401);
     });

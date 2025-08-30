@@ -9,7 +9,7 @@ describe('Auth (e2e)', () => {
   let databaseService: DatabaseService;
 
   const testUser = {
-    email: 'test@example.com',
+    email: `auth-test-${Date.now()}@example.com`,
     password: 'password123',
     name: 'Test User',
   };
@@ -31,6 +31,9 @@ describe('Auth (e2e)', () => {
     const cookieParser = require('cookie-parser');
     app.use(cookieParser());
     
+    // Set global API prefix
+    app.setGlobalPrefix('api');
+    
     await app.init();
   });
 
@@ -51,7 +54,7 @@ describe('Auth (e2e)', () => {
   describe('/auth/register (POST)', () => {
     it('should register a new user', async () => {
       const response = await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/api/auth/register')
         .send(testUser)
         .expect(201);
 
@@ -69,20 +72,20 @@ describe('Auth (e2e)', () => {
     it('should return 409 if email already exists', async () => {
       // First registration
       await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/api/auth/register')
         .send(testUser)
         .expect(201);
 
       // Second registration with same email
       await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/api/auth/register')
         .send(testUser)
         .expect(409);
     });
 
     it('should return 400 for invalid email', async () => {
       const response = await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/api/auth/register')
         .send({
           name: 'Test User',
           password: 'password123',
@@ -95,7 +98,7 @@ describe('Auth (e2e)', () => {
 
     it('should return 400 for weak password', async () => {
       await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/api/auth/register')
         .send({
           ...testUser,
           password: '123',
@@ -108,14 +111,14 @@ describe('Auth (e2e)', () => {
     beforeEach(async () => {
       // Register a user for login tests
       await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/api/auth/register')
         .send(testUser)
         .expect(201);
     });
 
     it('should login with valid credentials', async () => {
       const response = await request(app.getHttpServer())
-        .post('/auth/login')
+        .post('/api/auth/login')
         .send({
           email: testUser.email,
           password: testUser.password,
@@ -134,7 +137,7 @@ describe('Auth (e2e)', () => {
 
     it('should return 401 for invalid email', async () => {
       await request(app.getHttpServer())
-        .post('/auth/login')
+        .post('/api/auth/login')
         .send({
           email: 'wrong@example.com',
           password: testUser.password,
@@ -144,7 +147,7 @@ describe('Auth (e2e)', () => {
 
     it('should return 401 for invalid password', async () => {
       await request(app.getHttpServer())
-        .post('/auth/login')
+        .post('/api/auth/login')
         .send({
           email: testUser.email,
           password: 'wrongpassword',
@@ -160,23 +163,31 @@ describe('Auth (e2e)', () => {
     beforeEach(async () => {
       // Register and login
       await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/api/auth/register')
         .send(testUser);
 
       const loginResponse = await request(app.getHttpServer())
-        .post('/auth/login')
+        .post('/api/auth/login')
         .send({
           email: testUser.email,
           password: testUser.password,
         });
 
       accessToken = loginResponse.body.accessToken;
-      refreshTokenCookie = loginResponse.headers['set-cookie'][0];
+      const cookies = loginResponse.headers['set-cookie'];
+      if (!cookies || !cookies[0]) {
+        throw new Error(`No refresh token cookie in response: ${JSON.stringify(loginResponse.headers)}`);
+      }
+      refreshTokenCookie = cookies[0];
+      
+      if (!accessToken) {
+        throw new Error(`Invalid login response: ${JSON.stringify(loginResponse.body)}`);
+      }
     });
 
     it('should logout successfully', async () => {
       const response = await request(app.getHttpServer())
-        .post('/auth/logout')
+        .post('/api/auth/logout')
         .set('Authorization', `Bearer ${accessToken}`)
         .set('Cookie', refreshTokenCookie)
         .expect(200);
@@ -186,7 +197,7 @@ describe('Auth (e2e)', () => {
 
     it('should return 401 without access token', async () => {
       await request(app.getHttpServer())
-        .post('/auth/logout')
+        .post('/api/auth/logout')
         .expect(401);
     });
   });
@@ -197,11 +208,11 @@ describe('Auth (e2e)', () => {
     beforeEach(async () => {
       // Register and login
       await request(app.getHttpServer())
-        .post('/auth/register')
+        .post('/api/auth/register')
         .send(testUser);
 
       const loginResponse = await request(app.getHttpServer())
-        .post('/auth/login')
+        .post('/api/auth/login')
         .send({
           email: testUser.email,
           password: testUser.password,
@@ -212,7 +223,7 @@ describe('Auth (e2e)', () => {
 
     it('should refresh tokens successfully', async () => {
       const response = await request(app.getHttpServer())
-        .post('/auth/refresh')
+        .post('/api/auth/refresh')
         .set('Cookie', refreshTokenCookie)
         .expect(200);
 
@@ -224,7 +235,7 @@ describe('Auth (e2e)', () => {
 
     it('should return 401 without refresh token', async () => {
       await request(app.getHttpServer())
-        .post('/auth/refresh')
+        .post('/api/auth/refresh')
         .expect(401);
     });
   });
