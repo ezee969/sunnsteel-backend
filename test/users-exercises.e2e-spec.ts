@@ -127,8 +127,11 @@ describe('Users & Exercises (e2e)', () => {
         .expect(200);
 
       if (response.body.length > 1) {
-        const names = response.body.map((exercise: any) => exercise.name);
-        const sortedNames = [...names].sort();
+        const names = response.body.map((exercise: any) => exercise.name as string);
+        // Use locale-aware comparison to align with DB collation ordering
+        const sortedNames = [...names].sort((a, b) =>
+          a.localeCompare(b, undefined, { sensitivity: 'base' }),
+        );
         expect(names).toEqual(sortedNames);
       }
     });
