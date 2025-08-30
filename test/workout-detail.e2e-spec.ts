@@ -63,6 +63,12 @@ describe('Workout Detail (e2e)', () => {
       throw new Error(`Invalid register response: ${JSON.stringify(registerResponse.body)}`);
     }
 
+    // Verify user still exists before creating dependent entities
+    const userCheck = await prisma.user.findUnique({ where: { id: userId } });
+    if (!userCheck) {
+      throw new Error(`User ${userId} was deleted by another test before routine creation`);
+    }
+
     // Create test exercise with unique name
     exerciseName = `Bench Press ${Date.now()}`;
     const exercise = await prisma.exercise.create({
