@@ -1,120 +1,397 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, MuscleGroup } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-const exercises = [
+type ExerciseSeed = {
+  name: string;
+  primaryMuscles: MuscleGroup[];
+  secondaryMuscles: MuscleGroup[];
+  equipment: string;
+};
+
+const exercises: ExerciseSeed[] = [
   // Chest
-  { name: 'Bench Press', primaryMuscle: 'chest', equipment: 'barbell' },
-  { name: 'Incline Bench Press', primaryMuscle: 'chest', equipment: 'barbell' },
+  {
+    name: 'Bench Press',
+    primaryMuscles: [MuscleGroup.PECTORAL],
+    secondaryMuscles: [MuscleGroup.ANTERIOR_DELTOIDS, MuscleGroup.TRICEPS],
+    equipment: 'barbell',
+  },
+  {
+    name: 'Incline Bench Press',
+    primaryMuscles: [MuscleGroup.PECTORAL],
+    secondaryMuscles: [MuscleGroup.ANTERIOR_DELTOIDS, MuscleGroup.TRICEPS],
+    equipment: 'barbell',
+  },
   {
     name: 'Dumbbell Bench Press',
-    primaryMuscle: 'chest',
+    primaryMuscles: [MuscleGroup.PECTORAL],
+    secondaryMuscles: [MuscleGroup.ANTERIOR_DELTOIDS, MuscleGroup.TRICEPS],
     equipment: 'dumbbell',
   },
   {
     name: 'Incline Dumbbell Press',
-    primaryMuscle: 'chest',
+    primaryMuscles: [MuscleGroup.PECTORAL],
+    secondaryMuscles: [MuscleGroup.ANTERIOR_DELTOIDS, MuscleGroup.TRICEPS],
     equipment: 'dumbbell',
   },
-  { name: 'Push-ups', primaryMuscle: 'chest', equipment: 'bodyweight' },
-  { name: 'Chest Dips', primaryMuscle: 'chest', equipment: 'bodyweight' },
-  { name: 'Cable Fly', primaryMuscle: 'chest', equipment: 'cable' },
+  {
+    name: 'Push-ups',
+    primaryMuscles: [MuscleGroup.PECTORAL],
+    secondaryMuscles: [
+      MuscleGroup.ANTERIOR_DELTOIDS,
+      MuscleGroup.TRICEPS,
+      MuscleGroup.CORE,
+    ],
+    equipment: 'bodyweight',
+  },
+  {
+    name: 'Chest Dips',
+    primaryMuscles: [MuscleGroup.PECTORAL],
+    secondaryMuscles: [MuscleGroup.TRICEPS, MuscleGroup.ANTERIOR_DELTOIDS],
+    equipment: 'bodyweight',
+  },
+  {
+    name: 'Cable Fly',
+    primaryMuscles: [MuscleGroup.PECTORAL],
+    secondaryMuscles: [MuscleGroup.ANTERIOR_DELTOIDS],
+    equipment: 'cable',
+  },
 
   // Back
-  { name: 'Deadlift', primaryMuscle: 'back', equipment: 'barbell' },
-  { name: 'Pull-ups', primaryMuscle: 'back', equipment: 'bodyweight' },
-  { name: 'Chin-ups', primaryMuscle: 'back', equipment: 'bodyweight' },
-  { name: 'Bent-over Row', primaryMuscle: 'back', equipment: 'barbell' },
-  { name: 'Dumbbell Row', primaryMuscle: 'back', equipment: 'dumbbell' },
-  { name: 'T-Bar Row', primaryMuscle: 'back', equipment: 'machine' },
-  { name: 'Lat Pulldown', primaryMuscle: 'back', equipment: 'cable' },
-  { name: 'Cable Row', primaryMuscle: 'back', equipment: 'cable' },
-
-  // Shoulders
-  { name: 'Overhead Press', primaryMuscle: 'shoulders', equipment: 'barbell' },
   {
-    name: 'Dumbbell Shoulder Press',
-    primaryMuscle: 'shoulders',
+    name: 'Deadlift',
+    primaryMuscles: [
+      MuscleGroup.ERECTOR_SPINAE,
+      MuscleGroup.HAMSTRINGS,
+      MuscleGroup.GLUTES,
+    ],
+    secondaryMuscles: [
+      MuscleGroup.LATISSIMUS_DORSI,
+      MuscleGroup.TRAPEZIUS,
+      MuscleGroup.QUADRICEPS,
+    ],
+    equipment: 'barbell',
+  },
+  {
+    name: 'Pull-ups',
+    primaryMuscles: [MuscleGroup.LATISSIMUS_DORSI],
+    secondaryMuscles: [
+      MuscleGroup.BICEPS,
+      MuscleGroup.REAR_DELTOIDS,
+      MuscleGroup.TERES_MAJOR_MINOR,
+    ],
+    equipment: 'bodyweight',
+  },
+  {
+    name: 'Chin-ups',
+    primaryMuscles: [MuscleGroup.LATISSIMUS_DORSI, MuscleGroup.BICEPS],
+    secondaryMuscles: [
+      MuscleGroup.REAR_DELTOIDS,
+      MuscleGroup.TERES_MAJOR_MINOR,
+    ],
+    equipment: 'bodyweight',
+  },
+  {
+    name: 'Bent-over Row',
+    primaryMuscles: [MuscleGroup.LATISSIMUS_DORSI, MuscleGroup.TRAPEZIUS],
+    secondaryMuscles: [MuscleGroup.BICEPS, MuscleGroup.REAR_DELTOIDS],
+    equipment: 'barbell',
+  },
+  {
+    name: 'Dumbbell Row',
+    primaryMuscles: [MuscleGroup.LATISSIMUS_DORSI],
+    secondaryMuscles: [
+      MuscleGroup.BICEPS,
+      MuscleGroup.REAR_DELTOIDS,
+      MuscleGroup.TRAPEZIUS,
+    ],
     equipment: 'dumbbell',
   },
-  { name: 'Lateral Raises', primaryMuscle: 'shoulders', equipment: 'dumbbell' },
-  { name: 'Front Raises', primaryMuscle: 'shoulders', equipment: 'dumbbell' },
-  { name: 'Rear Delt Fly', primaryMuscle: 'shoulders', equipment: 'dumbbell' },
-  { name: 'Upright Row', primaryMuscle: 'shoulders', equipment: 'barbell' },
+  {
+    name: 'T-Bar Row',
+    primaryMuscles: [MuscleGroup.LATISSIMUS_DORSI, MuscleGroup.TRAPEZIUS],
+    secondaryMuscles: [MuscleGroup.BICEPS, MuscleGroup.REAR_DELTOIDS],
+    equipment: 'machine',
+  },
+  {
+    name: 'Lat Pulldown',
+    primaryMuscles: [MuscleGroup.LATISSIMUS_DORSI],
+    secondaryMuscles: [MuscleGroup.BICEPS, MuscleGroup.REAR_DELTOIDS],
+    equipment: 'cable',
+  },
+  {
+    name: 'Cable Row',
+    primaryMuscles: [MuscleGroup.LATISSIMUS_DORSI, MuscleGroup.TRAPEZIUS],
+    secondaryMuscles: [MuscleGroup.BICEPS, MuscleGroup.REAR_DELTOIDS],
+    equipment: 'cable',
+  },
+
+  // Shoulders
+  {
+    name: 'Overhead Press',
+    primaryMuscles: [
+      MuscleGroup.ANTERIOR_DELTOIDS,
+      MuscleGroup.MEDIAL_DELTOIDS,
+    ],
+    secondaryMuscles: [MuscleGroup.TRICEPS, MuscleGroup.CORE],
+    equipment: 'barbell',
+  },
+  {
+    name: 'Dumbbell Shoulder Press',
+    primaryMuscles: [
+      MuscleGroup.ANTERIOR_DELTOIDS,
+      MuscleGroup.MEDIAL_DELTOIDS,
+    ],
+    secondaryMuscles: [MuscleGroup.TRICEPS, MuscleGroup.CORE],
+    equipment: 'dumbbell',
+  },
+  {
+    name: 'Lateral Raises',
+    primaryMuscles: [MuscleGroup.MEDIAL_DELTOIDS],
+    secondaryMuscles: [MuscleGroup.ANTERIOR_DELTOIDS],
+    equipment: 'dumbbell',
+  },
+  {
+    name: 'Front Raises',
+    primaryMuscles: [MuscleGroup.ANTERIOR_DELTOIDS],
+    secondaryMuscles: [MuscleGroup.MEDIAL_DELTOIDS],
+    equipment: 'dumbbell',
+  },
+  {
+    name: 'Rear Delt Fly',
+    primaryMuscles: [MuscleGroup.REAR_DELTOIDS],
+    secondaryMuscles: [MuscleGroup.TRAPEZIUS],
+    equipment: 'dumbbell',
+  },
+  {
+    name: 'Upright Row',
+    primaryMuscles: [MuscleGroup.MEDIAL_DELTOIDS, MuscleGroup.TRAPEZIUS],
+    secondaryMuscles: [MuscleGroup.BICEPS],
+    equipment: 'barbell',
+  },
 
   // Arms - Biceps
-  { name: 'Barbell Curl', primaryMuscle: 'biceps', equipment: 'barbell' },
-  { name: 'Dumbbell Curl', primaryMuscle: 'biceps', equipment: 'dumbbell' },
-  { name: 'Hammer Curl', primaryMuscle: 'biceps', equipment: 'dumbbell' },
-  { name: 'Preacher Curl', primaryMuscle: 'biceps', equipment: 'barbell' },
-  { name: 'Cable Curl', primaryMuscle: 'biceps', equipment: 'cable' },
+  {
+    name: 'Barbell Curl',
+    primaryMuscles: [MuscleGroup.BICEPS],
+    secondaryMuscles: [MuscleGroup.FOREARMS],
+    equipment: 'barbell',
+  },
+  {
+    name: 'Dumbbell Curl',
+    primaryMuscles: [MuscleGroup.BICEPS],
+    secondaryMuscles: [MuscleGroup.FOREARMS],
+    equipment: 'dumbbell',
+  },
+  {
+    name: 'Hammer Curl',
+    primaryMuscles: [MuscleGroup.BICEPS, MuscleGroup.FOREARMS],
+    secondaryMuscles: [],
+    equipment: 'dumbbell',
+  },
+  {
+    name: 'Preacher Curl',
+    primaryMuscles: [MuscleGroup.BICEPS],
+    secondaryMuscles: [MuscleGroup.FOREARMS],
+    equipment: 'barbell',
+  },
+  {
+    name: 'Cable Curl',
+    primaryMuscles: [MuscleGroup.BICEPS],
+    secondaryMuscles: [MuscleGroup.FOREARMS],
+    equipment: 'cable',
+  },
 
   // Arms - Triceps
   {
     name: 'Close-Grip Bench Press',
-    primaryMuscle: 'triceps',
+    primaryMuscles: [MuscleGroup.TRICEPS],
+    secondaryMuscles: [MuscleGroup.PECTORAL, MuscleGroup.ANTERIOR_DELTOIDS],
     equipment: 'barbell',
   },
-  { name: 'Tricep Dips', primaryMuscle: 'triceps', equipment: 'bodyweight' },
+  {
+    name: 'Tricep Dips',
+    primaryMuscles: [MuscleGroup.TRICEPS],
+    secondaryMuscles: [MuscleGroup.PECTORAL, MuscleGroup.ANTERIOR_DELTOIDS],
+    equipment: 'bodyweight',
+  },
   {
     name: 'Overhead Tricep Extension',
-    primaryMuscle: 'triceps',
+    primaryMuscles: [MuscleGroup.TRICEPS],
+    secondaryMuscles: [MuscleGroup.CORE],
     equipment: 'dumbbell',
   },
-  { name: 'Tricep Pushdown', primaryMuscle: 'triceps', equipment: 'cable' },
+  {
+    name: 'Tricep Pushdown',
+    primaryMuscles: [MuscleGroup.TRICEPS],
+    secondaryMuscles: [],
+    equipment: 'cable',
+  },
   {
     name: 'Diamond Push-ups',
-    primaryMuscle: 'triceps',
+    primaryMuscles: [MuscleGroup.TRICEPS],
+    secondaryMuscles: [
+      MuscleGroup.PECTORAL,
+      MuscleGroup.ANTERIOR_DELTOIDS,
+      MuscleGroup.CORE,
+    ],
     equipment: 'bodyweight',
   },
 
   // Legs - Quadriceps
-  { name: 'Squat', primaryMuscle: 'quadriceps', equipment: 'barbell' },
-  { name: 'Front Squat', primaryMuscle: 'quadriceps', equipment: 'barbell' },
-  { name: 'Leg Press', primaryMuscle: 'quadriceps', equipment: 'machine' },
-  { name: 'Leg Extension', primaryMuscle: 'quadriceps', equipment: 'machine' },
+  {
+    name: 'Squat',
+    primaryMuscles: [MuscleGroup.QUADRICEPS, MuscleGroup.GLUTES],
+    secondaryMuscles: [
+      MuscleGroup.HAMSTRINGS,
+      MuscleGroup.CORE,
+      MuscleGroup.CALVES,
+    ],
+    equipment: 'barbell',
+  },
+  {
+    name: 'Front Squat',
+    primaryMuscles: [MuscleGroup.QUADRICEPS],
+    secondaryMuscles: [MuscleGroup.GLUTES, MuscleGroup.CORE],
+    equipment: 'barbell',
+  },
+  {
+    name: 'Leg Press',
+    primaryMuscles: [MuscleGroup.QUADRICEPS],
+    secondaryMuscles: [MuscleGroup.GLUTES],
+    equipment: 'machine',
+  },
+  {
+    name: 'Leg Extension',
+    primaryMuscles: [MuscleGroup.QUADRICEPS],
+    secondaryMuscles: [],
+    equipment: 'machine',
+  },
   {
     name: 'Bulgarian Split Squat',
-    primaryMuscle: 'quadriceps',
+    primaryMuscles: [MuscleGroup.QUADRICEPS, MuscleGroup.GLUTES],
+    secondaryMuscles: [
+      MuscleGroup.HAMSTRINGS,
+      MuscleGroup.CORE,
+      MuscleGroup.CALVES,
+    ],
     equipment: 'dumbbell',
   },
-  { name: 'Lunges', primaryMuscle: 'quadriceps', equipment: 'bodyweight' },
+  {
+    name: 'Lunges',
+    primaryMuscles: [MuscleGroup.QUADRICEPS, MuscleGroup.GLUTES],
+    secondaryMuscles: [
+      MuscleGroup.HAMSTRINGS,
+      MuscleGroup.CORE,
+      MuscleGroup.CALVES,
+    ],
+    equipment: 'bodyweight',
+  },
 
   // Legs - Hamstrings
   {
     name: 'Romanian Deadlift',
-    primaryMuscle: 'hamstrings',
+    primaryMuscles: [MuscleGroup.HAMSTRINGS, MuscleGroup.GLUTES],
+    secondaryMuscles: [MuscleGroup.ERECTOR_SPINAE],
     equipment: 'barbell',
   },
-  { name: 'Leg Curl', primaryMuscle: 'hamstrings', equipment: 'machine' },
-  { name: 'Good Morning', primaryMuscle: 'hamstrings', equipment: 'barbell' },
+  {
+    name: 'Leg Curl',
+    primaryMuscles: [MuscleGroup.HAMSTRINGS],
+    secondaryMuscles: [],
+    equipment: 'machine',
+  },
+  {
+    name: 'Good Morning',
+    primaryMuscles: [MuscleGroup.HAMSTRINGS, MuscleGroup.ERECTOR_SPINAE],
+    secondaryMuscles: [MuscleGroup.GLUTES],
+    equipment: 'barbell',
+  },
   {
     name: 'Stiff Leg Deadlift',
-    primaryMuscle: 'hamstrings',
+    primaryMuscles: [MuscleGroup.HAMSTRINGS],
+    secondaryMuscles: [MuscleGroup.GLUTES, MuscleGroup.ERECTOR_SPINAE],
     equipment: 'dumbbell',
   },
 
   // Legs - Glutes
-  { name: 'Hip Thrust', primaryMuscle: 'glutes', equipment: 'barbell' },
-  { name: 'Glute Bridge', primaryMuscle: 'glutes', equipment: 'bodyweight' },
-  { name: 'Sumo Deadlift', primaryMuscle: 'glutes', equipment: 'barbell' },
+  {
+    name: 'Hip Thrust',
+    primaryMuscles: [MuscleGroup.GLUTES],
+    secondaryMuscles: [MuscleGroup.HAMSTRINGS],
+    equipment: 'barbell',
+  },
+  {
+    name: 'Glute Bridge',
+    primaryMuscles: [MuscleGroup.GLUTES],
+    secondaryMuscles: [MuscleGroup.HAMSTRINGS, MuscleGroup.CORE],
+    equipment: 'bodyweight',
+  },
+  {
+    name: 'Sumo Deadlift',
+    primaryMuscles: [MuscleGroup.GLUTES, MuscleGroup.QUADRICEPS],
+    secondaryMuscles: [MuscleGroup.HAMSTRINGS, MuscleGroup.ERECTOR_SPINAE],
+    equipment: 'barbell',
+  },
 
   // Legs - Calves
-  { name: 'Calf Raise', primaryMuscle: 'calves', equipment: 'bodyweight' },
-  { name: 'Seated Calf Raise', primaryMuscle: 'calves', equipment: 'machine' },
+  {
+    name: 'Calf Raise',
+    primaryMuscles: [MuscleGroup.CALVES],
+    secondaryMuscles: [],
+    equipment: 'bodyweight',
+  },
+  {
+    name: 'Seated Calf Raise',
+    primaryMuscles: [MuscleGroup.CALVES],
+    secondaryMuscles: [],
+    equipment: 'machine',
+  },
   {
     name: 'Standing Calf Raise',
-    primaryMuscle: 'calves',
+    primaryMuscles: [MuscleGroup.CALVES],
+    secondaryMuscles: [],
     equipment: 'machine',
   },
 
   // Core
-  { name: 'Plank', primaryMuscle: 'core', equipment: 'bodyweight' },
-  { name: 'Crunches', primaryMuscle: 'core', equipment: 'bodyweight' },
-  { name: 'Russian Twists', primaryMuscle: 'core', equipment: 'bodyweight' },
-  { name: 'Mountain Climbers', primaryMuscle: 'core', equipment: 'bodyweight' },
-  { name: 'Dead Bug', primaryMuscle: 'core', equipment: 'bodyweight' },
-  { name: 'Hanging Leg Raise', primaryMuscle: 'core', equipment: 'bodyweight' },
+  {
+    name: 'Plank',
+    primaryMuscles: [MuscleGroup.CORE],
+    secondaryMuscles: [],
+    equipment: 'bodyweight',
+  },
+  {
+    name: 'Crunches',
+    primaryMuscles: [MuscleGroup.CORE],
+    secondaryMuscles: [],
+    equipment: 'bodyweight',
+  },
+  {
+    name: 'Russian Twists',
+    primaryMuscles: [MuscleGroup.CORE],
+    secondaryMuscles: [],
+    equipment: 'bodyweight',
+  },
+  {
+    name: 'Mountain Climbers',
+    primaryMuscles: [MuscleGroup.CORE],
+    secondaryMuscles: [MuscleGroup.ANTERIOR_DELTOIDS, MuscleGroup.QUADRICEPS],
+    equipment: 'bodyweight',
+  },
+  {
+    name: 'Dead Bug',
+    primaryMuscles: [MuscleGroup.CORE],
+    secondaryMuscles: [],
+    equipment: 'bodyweight',
+  },
+  {
+    name: 'Hanging Leg Raise',
+    primaryMuscles: [MuscleGroup.CORE],
+    secondaryMuscles: [MuscleGroup.FOREARMS],
+    equipment: 'bodyweight',
+  },
 ];
 
 async function main() {

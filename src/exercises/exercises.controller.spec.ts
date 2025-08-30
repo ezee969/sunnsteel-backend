@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ExercisesController } from './exercises.controller';
 import { ExercisesService } from './exercises.service';
 import { JwtAuthGuard } from '../auth/guards/passport-jwt.guard';
+import { MuscleGroup } from '@prisma/client';
 
 describe('ExercisesController', () => {
   let controller: ExercisesController;
@@ -11,16 +12,22 @@ describe('ExercisesController', () => {
     {
       id: '1',
       name: 'Bench Press',
-      primaryMuscle: 'chest',
+      primaryMuscles: [MuscleGroup.PECTORAL],
+      secondaryMuscles: [MuscleGroup.ANTERIOR_DELTOIDS, MuscleGroup.TRICEPS],
       equipment: 'barbell',
+      progressionScheme: 'DYNAMIC' as const,
+      minWeightIncrement: 2.5,
       createdAt: new Date(),
       updatedAt: new Date(),
     },
     {
       id: '2',
       name: 'Squat',
-      primaryMuscle: 'legs',
+      primaryMuscles: [MuscleGroup.QUADRICEPS],
+      secondaryMuscles: [MuscleGroup.GLUTES, MuscleGroup.HAMSTRINGS],
       equipment: 'barbell',
+      progressionScheme: 'DYNAMIC' as const,
+      minWeightIncrement: 2.5,
       createdAt: new Date(),
       updatedAt: new Date(),
     },

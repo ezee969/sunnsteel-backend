@@ -114,7 +114,7 @@ describe('Users & Exercises (e2e)', () => {
         expect(response.body[0]).toMatchObject({
           id: expect.any(String),
           name: expect.any(String),
-          primaryMuscle: expect.any(String),
+          primaryMuscles: expect.any(Array),
           equipment: expect.any(String),
         });
       }

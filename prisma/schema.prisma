@@ -51,11 +51,32 @@ enum WeightUnit {
   LB
 }
 
+// Muscle groups for exercise targeting
+enum MuscleGroup {
+  PECTORAL
+  LATISSIMUS_DORSI
+  TRAPEZIUS
+  REAR_DELTOIDS
+  ERECTOR_SPINAE
+  TERES_MAJOR_MINOR
+  ANTERIOR_DELTOIDS
+  MEDIAL_DELTOIDS
+  BICEPS
+  FOREARMS
+  TRICEPS
+  QUADRICEPS
+  HAMSTRINGS
+  GLUTES
+  CALVES
+  CORE
+}
+
 // Catalog of exercises selectable when building routines
 model Exercise {
   id               String            @id @default(uuid())
   name             String            @unique
-  primaryMuscle    String            // e.g., "chest", "back", "legs"
+  primaryMuscles   MuscleGroup[]     // Primary muscle movers (counts as 1.0 for volume)
+  secondaryMuscles MuscleGroup[]     // Secondary muscle movers (counts as 0.5 for volume)
   equipment        String            // e.g., "barbell", "dumbbell", "bodyweight"
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt

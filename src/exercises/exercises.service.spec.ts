@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ExercisesService } from './exercises.service';
 import { DatabaseService } from '../database/database.service';
+import { MuscleGroup } from '@prisma/client';
 
 describe('ExercisesService', () => {
   let service: ExercisesService;
@@ -10,7 +11,8 @@ describe('ExercisesService', () => {
     {
       id: '1',
       name: 'Bench Press',
-      primaryMuscle: 'chest',
+      primaryMuscles: [MuscleGroup.PECTORAL],
+      secondaryMuscles: [MuscleGroup.ANTERIOR_DELTOIDS, MuscleGroup.TRICEPS],
       equipment: 'barbell',
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -18,7 +20,8 @@ describe('ExercisesService', () => {
     {
       id: '2',
       name: 'Squat',
-      primaryMuscle: 'legs',
+      primaryMuscles: [MuscleGroup.QUADRICEPS, MuscleGroup.GLUTES],
+      secondaryMuscles: [MuscleGroup.HAMSTRINGS, MuscleGroup.CORE],
       equipment: 'barbell',
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -26,7 +29,8 @@ describe('ExercisesService', () => {
     {
       id: '3',
       name: 'Deadlift',
-      primaryMuscle: 'back',
+      primaryMuscles: [MuscleGroup.ERECTOR_SPINAE, MuscleGroup.GLUTES],
+      secondaryMuscles: [MuscleGroup.HAMSTRINGS, MuscleGroup.LATISSIMUS_DORSI],
       equipment: 'barbell',
       createdAt: new Date(),
       updatedAt: new Date(),

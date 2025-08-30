@@ -71,7 +71,8 @@ describe('Workout Detail (e2e)', () => {
     const exercise = await prisma.exercise.create({
       data: {
         name: exerciseName,
-        primaryMuscle: 'CHEST',
+        primaryMuscles: ['PECTORAL'],
+        secondaryMuscles: ['TRICEPS'],
         equipment: 'BARBELL',
       },
     });
@@ -227,7 +228,7 @@ describe('Workout Detail (e2e)', () => {
       // Exercise details
       expect(exercise.exercise.id).toBe(exerciseId);
       expect(exercise.exercise.name).toBe(exerciseName);
-      expect(exercise.exercise.primaryMuscle).toBe('CHEST');
+      expect(exercise.exercise.primaryMuscles).toEqual(['PECTORAL']);
       expect(exercise.exercise.equipment).toBe('BARBELL');
 
       // Planned sets
@@ -270,7 +271,7 @@ describe('Workout Detail (e2e)', () => {
       // Set logs should include exercise details
       expect(setLog1.exercise.id).toBe(exerciseId);
       expect(setLog1.exercise.name).toBe(exerciseName);
-      expect(setLog1.exercise.primaryMuscle).toBe('CHEST');
+      expect(setLog1.exercise.primaryMuscles).toEqual(['PECTORAL']);
       expect(setLog1.exercise.equipment).toBe('BARBELL');
     });
 

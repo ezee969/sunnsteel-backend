@@ -544,7 +544,7 @@ export class WorkoutsService {
                 select: {
                   id: true,
                   name: true,
-                  primaryMuscle: true,
+                  primaryMuscles: true,
                   equipment: true,
                 },
               },
@@ -584,7 +584,7 @@ export class WorkoutsService {
                   select: {
                     id: true,
                     name: true,
-                    primaryMuscle: true,
+                    primaryMuscles: true,
                     equipment: true,
                   },
                 },
