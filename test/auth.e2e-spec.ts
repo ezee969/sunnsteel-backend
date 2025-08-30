@@ -22,14 +22,25 @@ describe('Auth (e2e)', () => {
     app = moduleFixture.createNestApplication();
     databaseService = moduleFixture.get<DatabaseService>(DatabaseService);
     
+    // Add validation pipe to enable DTO validation
+    const { ValidationPipe } = await import('@nestjs/common');
+    app.useGlobalPipes(new ValidationPipe());
+    
+    // Add cookie parser middleware  
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const cookieParser = require('cookie-parser');
+    app.use(cookieParser());
+    
     await app.init();
   });
 
   beforeEach(async () => {
     // Clean up database before each test
-    await databaseService.user.deleteMany();
-    await databaseService.refreshToken.deleteMany();
     await databaseService.blacklistedToken.deleteMany();
+    await databaseService.refreshToken.deleteMany(); 
+    await databaseService.workoutSession.deleteMany();
+    await databaseService.routine.deleteMany();
+    await databaseService.user.deleteMany();
   });
 
   afterAll(async () => {
@@ -70,13 +81,16 @@ describe('Auth (e2e)', () => {
     });
 
     it('should return 400 for invalid email', async () => {
-      await request(app.getHttpServer())
+      const response = await request(app.getHttpServer())
         .post('/auth/register')
         .send({
-          ...testUser,
+          name: 'Test User',
+          password: 'password123',
           email: 'invalid-email',
         })
         .expect(400);
+        
+      expect(response.body.message).toContain('Invalid email format');
     });
 
     it('should return 400 for weak password', async () => {
@@ -95,7 +109,8 @@ describe('Auth (e2e)', () => {
       // Register a user for login tests
       await request(app.getHttpServer())
         .post('/auth/register')
-        .send(testUser);
+        .send(testUser)
+        .expect(201);
     });
 
     it('should login with valid credentials', async () => {

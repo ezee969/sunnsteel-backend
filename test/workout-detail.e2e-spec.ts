@@ -22,8 +22,25 @@ describe('Workout Detail (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     prisma = moduleFixture.get<DatabaseService>(DatabaseService);
+    
+    // Add validation pipe
+    const { ValidationPipe } = await import('@nestjs/common');
+    app.useGlobalPipes(new ValidationPipe());
+    
+    // Add cookie parser middleware
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const cookieParser = require('cookie-parser');
+    app.use(cookieParser());
+    
     await app.init();
 
+    // Clean up database before setup
+    await prisma.blacklistedToken.deleteMany();
+    await prisma.refreshToken.deleteMany();
+    await prisma.workoutSession.deleteMany();
+    await prisma.routine.deleteMany();
+    await prisma.user.deleteMany();
+    
     // Create test user and login
     const registerResponse = await request(app.getHttpServer())
       .post('/api/auth/register')
@@ -33,15 +50,8 @@ describe('Workout Detail (e2e)', () => {
         name: 'Workout Detail Test User',
       });
 
-    const loginResponse = await request(app.getHttpServer())
-      .post('/api/auth/login')
-      .send({
-        email: 'workout-detail-test@example.com',
-        password: 'password123',
-      });
-
-    accessToken = loginResponse.body.accessToken;
-    userId = loginResponse.body.user.id;
+    accessToken = registerResponse.body.accessToken;
+    userId = registerResponse.body.user.id;
 
     // Create test exercise
     const exercise = await prisma.exercise.create({

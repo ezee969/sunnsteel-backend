@@ -66,7 +66,7 @@ export class AuthController {
     @Req() request: RequestWithJwt,
     @Res({ passthrough: true }) response: Response,
   ) {
-    const refreshToken = request.cookies.refresh_token;
+    const refreshToken = request.cookies?.refresh_token;
     const accessToken = this.extractTokenFromHeader(request);
 
     if (refreshToken && accessToken) {
@@ -83,7 +83,7 @@ export class AuthController {
     @Req() request: RequestWithJwt,
     @Res({ passthrough: true }) response: Response,
   ) {
-    const refreshToken = request.cookies.refresh_token;
+    const refreshToken = request.cookies?.refresh_token;
 
     if (!refreshToken) {
       throw new UnauthorizedException('Refresh token not found');
