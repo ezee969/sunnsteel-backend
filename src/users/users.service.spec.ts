@@ -60,7 +60,9 @@ describe('UsersService', () => {
 
   describe('findByEmail', () => {
     it('should return user without password when found', async () => {
-      jest.spyOn(databaseService.user, 'findUnique').mockResolvedValue(mockUser);
+      jest
+        .spyOn(databaseService.user, 'findUnique')
+        .mockResolvedValue(mockUser);
 
       const result = await service.findByEmail('test@example.com');
 
@@ -89,7 +91,9 @@ describe('UsersService', () => {
 
   describe('findByEmailWithPassword', () => {
     it('should return user with password when found', async () => {
-      jest.spyOn(databaseService.user, 'findUnique').mockResolvedValue(mockUserWithPassword);
+      jest
+        .spyOn(databaseService.user, 'findUnique')
+        .mockResolvedValue(mockUserWithPassword);
 
       const result = await service.findByEmailWithPassword('test@example.com');
 
@@ -108,7 +112,9 @@ describe('UsersService', () => {
     it('should return null when user not found', async () => {
       jest.spyOn(databaseService.user, 'findUnique').mockResolvedValue(null);
 
-      const result = await service.findByEmailWithPassword('nonexistent@example.com');
+      const result = await service.findByEmailWithPassword(
+        'nonexistent@example.com',
+      );
 
       expect(result).toBeNull();
     });

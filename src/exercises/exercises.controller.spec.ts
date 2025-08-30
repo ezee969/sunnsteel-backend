@@ -17,7 +17,7 @@ describe('ExercisesController', () => {
       updatedAt: new Date(),
     },
     {
-      id: '2', 
+      id: '2',
       name: 'Squat',
       primaryMuscle: 'legs',
       equipment: 'barbell',

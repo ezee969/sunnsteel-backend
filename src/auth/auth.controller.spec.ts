@@ -76,15 +76,22 @@ describe('AuthController', () => {
 
       jest.spyOn(authService, 'register').mockResolvedValue(mockAuthResult);
 
-      const result = await controller.register(registerDto, mockResponse as Response);
+      const result = await controller.register(
+        registerDto,
+        mockResponse as Response,
+      );
 
       expect(authService.register).toHaveBeenCalledWith(registerDto);
-      expect(mockResponse.cookie).toHaveBeenCalledWith('refresh_token', mockTokens.refreshToken, {
-        httpOnly: true,
-        secure: false, // NODE_ENV !== 'production'
-        sameSite: 'strict',
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-      });
+      expect(mockResponse.cookie).toHaveBeenCalledWith(
+        'refresh_token',
+        mockTokens.refreshToken,
+        {
+          httpOnly: true,
+          secure: false, // NODE_ENV !== 'production'
+          sameSite: 'strict',
+          maxAge: 7 * 24 * 60 * 60 * 1000,
+        },
+      );
       expect(result).toEqual({
         user: mockUser,
         accessToken: mockTokens.accessToken,
@@ -101,15 +108,22 @@ describe('AuthController', () => {
 
       jest.spyOn(authService, 'login').mockResolvedValue(mockAuthResult);
 
-      const result = await controller.login(requestWithUser as any, mockResponse as Response);
+      const result = await controller.login(
+        requestWithUser as any,
+        mockResponse as Response,
+      );
 
       expect(authService.login).toHaveBeenCalledWith(mockUser);
-      expect(mockResponse.cookie).toHaveBeenCalledWith('refresh_token', mockTokens.refreshToken, {
-        httpOnly: true,
-        secure: false,
-        sameSite: 'strict',
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-      });
+      expect(mockResponse.cookie).toHaveBeenCalledWith(
+        'refresh_token',
+        mockTokens.refreshToken,
+        {
+          httpOnly: true,
+          secure: false,
+          sameSite: 'strict',
+          maxAge: 7 * 24 * 60 * 60 * 1000,
+        },
+      );
       expect(result).toEqual({
         user: mockUser,
         accessToken: mockTokens.accessToken,
@@ -123,7 +137,7 @@ describe('AuthController', () => {
       };
 
       await expect(
-        controller.login(requestWithoutUser as any, mockResponse as Response)
+        controller.login(requestWithoutUser as any, mockResponse as Response),
       ).rejects.toThrow(UnauthorizedException);
     });
   });
@@ -138,9 +152,15 @@ describe('AuthController', () => {
 
       jest.spyOn(authService, 'logout').mockResolvedValue();
 
-      const result = await controller.logout(requestWithTokens as any, mockResponse as Response);
+      const result = await controller.logout(
+        requestWithTokens as any,
+        mockResponse as Response,
+      );
 
-      expect(authService.logout).toHaveBeenCalledWith('mock-refresh-token', 'mock-access-token');
+      expect(authService.logout).toHaveBeenCalledWith(
+        'mock-refresh-token',
+        'mock-access-token',
+      );
       expect(mockResponse.clearCookie).toHaveBeenCalledWith('refresh_token');
       expect(result).toEqual({ message: 'Logged out successfully' });
     });
@@ -152,7 +172,10 @@ describe('AuthController', () => {
         headers: {},
       };
 
-      const result = await controller.logout(requestWithoutTokens as any, mockResponse as Response);
+      const result = await controller.logout(
+        requestWithoutTokens as any,
+        mockResponse as Response,
+      );
 
       expect(authService.logout).not.toHaveBeenCalled();
       expect(mockResponse.clearCookie).toHaveBeenCalledWith('refresh_token');
@@ -169,15 +192,24 @@ describe('AuthController', () => {
 
       jest.spyOn(authService, 'refreshTokens').mockResolvedValue(mockTokens);
 
-      const result = await controller.refresh(requestWithRefreshToken as any, mockResponse as Response);
+      const result = await controller.refresh(
+        requestWithRefreshToken as any,
+        mockResponse as Response,
+      );
 
-      expect(authService.refreshTokens).toHaveBeenCalledWith('mock-refresh-token');
-      expect(mockResponse.cookie).toHaveBeenCalledWith('refresh_token', mockTokens.refreshToken, {
-        httpOnly: true,
-        secure: false,
-        sameSite: 'strict',
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-      });
+      expect(authService.refreshTokens).toHaveBeenCalledWith(
+        'mock-refresh-token',
+      );
+      expect(mockResponse.cookie).toHaveBeenCalledWith(
+        'refresh_token',
+        mockTokens.refreshToken,
+        {
+          httpOnly: true,
+          secure: false,
+          sameSite: 'strict',
+          maxAge: 7 * 24 * 60 * 60 * 1000,
+        },
+      );
       expect(result).toEqual({
         accessToken: mockTokens.accessToken,
       });
@@ -190,7 +222,10 @@ describe('AuthController', () => {
       };
 
       await expect(
-        controller.refresh(requestWithoutRefreshToken as any, mockResponse as Response)
+        controller.refresh(
+          requestWithoutRefreshToken as any,
+          mockResponse as Response,
+        ),
       ).rejects.toThrow(UnauthorizedException);
     });
   });

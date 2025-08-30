@@ -96,7 +96,10 @@ describe('AuthService', () => {
 
       expect(usersService.findByEmail).toHaveBeenCalledWith(registerDto.email);
       expect(usersService.create).toHaveBeenCalledWith(registerDto);
-      expect(tokenService.generateTokens).toHaveBeenCalledWith(mockUser.id, mockUser.email);
+      expect(tokenService.generateTokens).toHaveBeenCalledWith(
+        mockUser.id,
+        mockUser.email,
+      );
       expect(result).toEqual({
         user: {
           id: mockUser.id,
@@ -123,7 +126,9 @@ describe('AuthService', () => {
     const password = 'password123';
 
     it('should return user identification for valid credentials', async () => {
-      jest.spyOn(usersService, 'findByEmailWithPassword').mockResolvedValue(mockUser);
+      jest
+        .spyOn(usersService, 'findByEmailWithPassword')
+        .mockResolvedValue(mockUser);
       mockedBcrypt.compare.mockResolvedValue(true as never);
 
       const result = await service.validateUser(email, password);
@@ -134,17 +139,25 @@ describe('AuthService', () => {
     });
 
     it('should throw UnauthorizedException if user not found', async () => {
-      jest.spyOn(usersService, 'findByEmailWithPassword').mockResolvedValue(null);
+      jest
+        .spyOn(usersService, 'findByEmailWithPassword')
+        .mockResolvedValue(null);
 
-      await expect(service.validateUser(email, password)).rejects.toThrow(UnauthorizedException);
+      await expect(service.validateUser(email, password)).rejects.toThrow(
+        UnauthorizedException,
+      );
       expect(usersService.findByEmailWithPassword).toHaveBeenCalledWith(email);
     });
 
     it('should throw UnauthorizedException if password is invalid', async () => {
-      jest.spyOn(usersService, 'findByEmailWithPassword').mockResolvedValue(mockUser);
+      jest
+        .spyOn(usersService, 'findByEmailWithPassword')
+        .mockResolvedValue(mockUser);
       mockedBcrypt.compare.mockResolvedValue(false as never);
 
-      await expect(service.validateUser(email, password)).rejects.toThrow(UnauthorizedException);
+      await expect(service.validateUser(email, password)).rejects.toThrow(
+        UnauthorizedException,
+      );
       expect(bcrypt.compare).toHaveBeenCalledWith(password, mockUser.password);
     });
   });
@@ -174,10 +187,7 @@ describe('AuthService', () => {
       jest.spyOn(tokenService, 'revokeRefreshToken').mockResolvedValue();
       jest.spyOn(tokenService, 'blacklistAccessToken').mockResolvedValue();
 
-      await service.logout(
-        refreshToken,
-        accessToken,
-      );
+      await service.logout(refreshToken, accessToken);
 
       expect(tokenService.revokeRefreshToken).toHaveBeenCalledWith(
         refreshToken,
@@ -192,31 +202,46 @@ describe('AuthService', () => {
     const refreshToken = 'mock-refresh-token';
 
     it('should return new tokens for valid refresh token', async () => {
-      jest.spyOn(tokenService, 'verifyRefreshToken').mockResolvedValue(mockTokenPayload);
+      jest
+        .spyOn(tokenService, 'verifyRefreshToken')
+        .mockResolvedValue(mockTokenPayload);
       jest.spyOn(usersService, 'findByEmail').mockResolvedValue(mockUser);
       jest.spyOn(tokenService, 'generateTokens').mockResolvedValue(mockTokens);
 
       const result = await service.refreshTokens(refreshToken);
 
-      expect(tokenService.verifyRefreshToken).toHaveBeenCalledWith(refreshToken);
+      expect(tokenService.verifyRefreshToken).toHaveBeenCalledWith(
+        refreshToken,
+      );
       expect(usersService.findByEmail).toHaveBeenCalledWith(
         mockTokenPayload.email,
       );
-      expect(tokenService.generateTokens).toHaveBeenCalledWith(mockUser.id, mockUser.email);
+      expect(tokenService.generateTokens).toHaveBeenCalledWith(
+        mockUser.id,
+        mockUser.email,
+      );
       expect(result).toEqual(mockTokens);
     });
 
     it('should throw UnauthorizedException if user not found', async () => {
-      jest.spyOn(tokenService, 'verifyRefreshToken').mockResolvedValue(mockTokenPayload);
+      jest
+        .spyOn(tokenService, 'verifyRefreshToken')
+        .mockResolvedValue(mockTokenPayload);
       jest.spyOn(usersService, 'findByEmail').mockResolvedValue(null);
 
-      await expect(service.refreshTokens(refreshToken)).rejects.toThrow(UnauthorizedException);
+      await expect(service.refreshTokens(refreshToken)).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
 
     it('should throw UnauthorizedException if refresh token is invalid', async () => {
-      jest.spyOn(tokenService, 'verifyRefreshToken').mockRejectedValue(new Error('Invalid token'));
+      jest
+        .spyOn(tokenService, 'verifyRefreshToken')
+        .mockRejectedValue(new Error('Invalid token'));
 
-      await expect(service.refreshTokens(refreshToken)).rejects.toThrow(UnauthorizedException);
+      await expect(service.refreshTokens(refreshToken)).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
   });
 });

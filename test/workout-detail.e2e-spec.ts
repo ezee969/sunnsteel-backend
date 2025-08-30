@@ -23,28 +23,21 @@ describe('Workout Detail (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     prisma = moduleFixture.get<DatabaseService>(DatabaseService);
-    
+
     // Add validation pipe to enable DTO validation
     const { ValidationPipe } = await import('@nestjs/common');
     app.useGlobalPipes(new ValidationPipe());
-    
-    // Add cookie parser middleware  
+
+    // Add cookie parser middleware
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const cookieParser = require('cookie-parser');
     app.use(cookieParser());
-    
+
     // Set global API prefix
     app.setGlobalPrefix('api');
-    
+
     await app.init();
 
-    // Clean up database before setup
-    await prisma.blacklistedToken.deleteMany();
-    await prisma.refreshToken.deleteMany();
-    await prisma.workoutSession.deleteMany();
-    await prisma.routine.deleteMany();
-    await prisma.user.deleteMany();
-    
     // Create test user and login
     const registerResponse = await request(app.getHttpServer())
       .post('/api/auth/register')
@@ -57,16 +50,20 @@ describe('Workout Detail (e2e)', () => {
 
     accessToken = registerResponse.body.accessToken;
     userId = registerResponse.body.user.id;
-    
+
     // Verify we got valid response
     if (!accessToken || !userId) {
-      throw new Error(`Invalid register response: ${JSON.stringify(registerResponse.body)}`);
+      throw new Error(
+        `Invalid register response: ${JSON.stringify(registerResponse.body)}`,
+      );
     }
 
     // Verify user still exists before creating dependent entities
     const userCheck = await prisma.user.findUnique({ where: { id: userId } });
     if (!userCheck) {
-      throw new Error(`User ${userId} was deleted by another test before routine creation`);
+      throw new Error(
+        `User ${userId} was deleted by another test before routine creation`,
+      );
     }
 
     // Create test exercise with unique name
@@ -183,7 +180,7 @@ describe('Workout Detail (e2e)', () => {
     await prisma.routine.deleteMany({ where: { userId } });
     await prisma.exercise.deleteMany({ where: { id: exerciseId } });
     await prisma.user.deleteMany({
-      where: { email: 'workout-detail-test@example.com' },
+      where: { id: userId },
     });
 
     await app.close();
@@ -279,7 +276,7 @@ describe('Workout Detail (e2e)', () => {
 
     it('should return 404 for non-existent session', async () => {
       const nonExistentId = '00000000-0000-0000-0000-000000000000';
-      
+
       await request(app.getHttpServer())
         .get(`/api/workouts/sessions/${nonExistentId}`)
         .set('Authorization', `Bearer ${accessToken}`)
@@ -294,13 +291,11 @@ describe('Workout Detail (e2e)', () => {
 
     it('should return 403 for session belonging to another user', async () => {
       // Create another user
-      await request(app.getHttpServer())
-        .post('/api/auth/register')
-        .send({
-          email: 'other-user@example.com',
-          password: 'password123',
-          name: 'Other User',
-        });
+      await request(app.getHttpServer()).post('/api/auth/register').send({
+        email: 'other-user@example.com',
+        password: 'password123',
+        name: 'Other User',
+      });
 
       const otherLoginResponse = await request(app.getHttpServer())
         .post('/api/auth/login')

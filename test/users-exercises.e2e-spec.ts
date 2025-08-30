@@ -10,11 +10,7 @@ describe('Users & Exercises (e2e)', () => {
   let accessToken: string;
   let userId: string;
 
-  const testUser = {
-    email: `users-exercises-${Date.now()}@example.com`,
-    password: 'password123',
-    name: 'Test User',
-  };
+  let testUser: { email: string; password: string; name: string };
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -23,29 +19,31 @@ describe('Users & Exercises (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     databaseService = moduleFixture.get<DatabaseService>(DatabaseService);
-    
+
     // Add validation pipe to enable DTO validation
     const { ValidationPipe } = await import('@nestjs/common');
     app.useGlobalPipes(new ValidationPipe());
-    
-    // Add cookie parser middleware  
+
+    // Add cookie parser middleware
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const cookieParser = require('cookie-parser');
     app.use(cookieParser());
-    
+
     // Set global API prefix
     app.setGlobalPrefix('api');
-    
+
     await app.init();
   });
 
   beforeEach(async () => {
-    // Clean up database before each test - order matters for foreign keys
-    await databaseService.blacklistedToken.deleteMany();
-    await databaseService.refreshToken.deleteMany();
-    await databaseService.workoutSession.deleteMany();
-    await databaseService.routine.deleteMany();
-    await databaseService.user.deleteMany();
+    // Generate a unique user per test to avoid collisions
+    testUser = {
+      email: `users-exercises-${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2, 8)}@example.com`,
+      password: 'password123',
+      name: 'Test User',
+    };
 
     // Register and authenticate a user for protected routes
     const registerResponse = await request(app.getHttpServer())
@@ -55,10 +53,18 @@ describe('Users & Exercises (e2e)', () => {
 
     accessToken = registerResponse.body.accessToken;
     userId = registerResponse.body.user.id;
-    
-    // Verify we got valid response
+
     if (!accessToken || !userId) {
-      throw new Error(`Invalid register response: ${JSON.stringify(registerResponse.body)}`);
+      throw new Error(
+        `Invalid register response: ${JSON.stringify(registerResponse.body)}`,
+      );
+    }
+  });
+
+  afterEach(async () => {
+    // Clean up only the user created by this test (cascades handle dependents)
+    if (userId) {
+      await databaseService.user.deleteMany({ where: { id: userId } });
     }
   });
 
@@ -84,9 +90,7 @@ describe('Users & Exercises (e2e)', () => {
     });
 
     it('should return 401 without authorization', async () => {
-      await request(app.getHttpServer())
-        .get('/api/users/profile')
-        .expect(401);
+      await request(app.getHttpServer()).get('/api/users/profile').expect(401);
     });
 
     it('should return 401 with invalid token', async () => {
@@ -105,7 +109,7 @@ describe('Users & Exercises (e2e)', () => {
         .expect(200);
 
       expect(Array.isArray(response.body)).toBe(true);
-      
+
       if (response.body.length > 0) {
         expect(response.body[0]).toMatchObject({
           id: expect.any(String),
@@ -130,9 +134,7 @@ describe('Users & Exercises (e2e)', () => {
     });
 
     it('should return 401 without authorization', async () => {
-      await request(app.getHttpServer())
-        .get('/api/exercises')
-        .expect(401);
+      await request(app.getHttpServer()).get('/api/exercises').expect(401);
     });
 
     it('should return 401 with invalid token', async () => {

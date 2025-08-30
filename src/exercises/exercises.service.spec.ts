@@ -60,7 +60,9 @@ describe('ExercisesService', () => {
 
   describe('findAll', () => {
     it('should return all exercises ordered by name', async () => {
-      jest.spyOn(databaseService.exercise, 'findMany').mockResolvedValue(mockExercises);
+      jest
+        .spyOn(databaseService.exercise, 'findMany')
+        .mockResolvedValue(mockExercises);
 
       const result = await service.findAll();
 
@@ -83,9 +85,13 @@ describe('ExercisesService', () => {
 
     it('should handle database errors', async () => {
       const dbError = new Error('Database connection failed');
-      jest.spyOn(databaseService.exercise, 'findMany').mockRejectedValue(dbError);
+      jest
+        .spyOn(databaseService.exercise, 'findMany')
+        .mockRejectedValue(dbError);
 
-      await expect(service.findAll()).rejects.toThrow('Database connection failed');
+      await expect(service.findAll()).rejects.toThrow(
+        'Database connection failed',
+      );
     });
   });
 });

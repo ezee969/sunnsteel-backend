@@ -89,22 +89,29 @@ describe('TokenService', () => {
 
   describe('generateTokens', () => {
     it('should generate access and refresh tokens', async () => {
-      jest.spyOn(jwtService, 'signAsync')
+      jest
+        .spyOn(jwtService, 'signAsync')
         .mockResolvedValueOnce(mockTokens.accessToken)
         .mockResolvedValueOnce(mockTokens.refreshToken);
-      jest.spyOn(databaseService.user, 'findUnique').mockResolvedValue(mockUser);
-      jest.spyOn(databaseService.refreshToken, 'create').mockResolvedValue(mockStoredToken);
+      jest
+        .spyOn(databaseService.user, 'findUnique')
+        .mockResolvedValue(mockUser);
+      jest
+        .spyOn(databaseService.refreshToken, 'create')
+        .mockResolvedValue(mockStoredToken);
 
       const result = await service.generateTokens(mockUser.id, mockUser.email);
 
       expect(jwtService.signAsync).toHaveBeenCalledTimes(2);
-      expect(jwtService.signAsync).toHaveBeenNthCalledWith(1, 
+      expect(jwtService.signAsync).toHaveBeenNthCalledWith(
+        1,
         { sub: mockUser.id, email: mockUser.email },
-        { secret: process.env.JWT_ACCESS_SECRET, expiresIn: '15m' }
+        { secret: process.env.JWT_ACCESS_SECRET, expiresIn: '15m' },
       );
-      expect(jwtService.signAsync).toHaveBeenNthCalledWith(2,
+      expect(jwtService.signAsync).toHaveBeenNthCalledWith(
+        2,
         { sub: mockUser.id, email: mockUser.email },
-        { secret: process.env.JWT_REFRESH_SECRET, expiresIn: '7d' }
+        { secret: process.env.JWT_REFRESH_SECRET, expiresIn: '7d' },
       );
       expect(databaseService.refreshToken.create).toHaveBeenCalled();
       expect(result).toEqual(mockTokens);
@@ -113,7 +120,9 @@ describe('TokenService', () => {
 
   describe('revokeRefreshToken', () => {
     it('should delete refresh token from database', async () => {
-      jest.spyOn(databaseService.refreshToken, 'delete').mockResolvedValue(mockStoredToken);
+      jest
+        .spyOn(databaseService.refreshToken, 'delete')
+        .mockResolvedValue(mockStoredToken);
 
       await service.revokeRefreshToken('mock-refresh-token');
 
@@ -125,7 +134,9 @@ describe('TokenService', () => {
 
   describe('verifyRefreshToken', () => {
     it('should verify valid refresh token and return payload', async () => {
-      jest.spyOn(databaseService.refreshToken, 'findUnique').mockResolvedValue(mockStoredToken);
+      jest
+        .spyOn(databaseService.refreshToken, 'findUnique')
+        .mockResolvedValue(mockStoredToken);
       jest.spyOn(jwtService, 'verifyAsync').mockResolvedValue(mockJwtPayload);
 
       const result = await service.verifyRefreshToken('mock-refresh-token');
@@ -134,9 +145,12 @@ describe('TokenService', () => {
         where: { token: 'mock-refresh-token' },
         include: { user: true },
       });
-      expect(jwtService.verifyAsync).toHaveBeenCalledWith('mock-refresh-token', {
-        secret: process.env.JWT_REFRESH_SECRET,
-      });
+      expect(jwtService.verifyAsync).toHaveBeenCalledWith(
+        'mock-refresh-token',
+        {
+          secret: process.env.JWT_REFRESH_SECRET,
+        },
+      );
       expect(result).toEqual({
         sub: mockJwtPayload.sub,
         email: mockJwtPayload.email,
@@ -144,10 +158,13 @@ describe('TokenService', () => {
     });
 
     it('should throw UnauthorizedException if token not found in database', async () => {
-      jest.spyOn(databaseService.refreshToken, 'findUnique').mockResolvedValue(null);
+      jest
+        .spyOn(databaseService.refreshToken, 'findUnique')
+        .mockResolvedValue(null);
 
-      await expect(service.verifyRefreshToken('invalid-token'))
-        .rejects.toThrow(UnauthorizedException);
+      await expect(service.verifyRefreshToken('invalid-token')).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
 
     it('should throw UnauthorizedException if token is expired', async () => {
@@ -155,11 +172,16 @@ describe('TokenService', () => {
         ...mockStoredToken,
         expiresAt: new Date(Date.now() - 1000), // Expired 1 second ago
       };
-      jest.spyOn(databaseService.refreshToken, 'findUnique').mockResolvedValue(expiredToken);
-      jest.spyOn(databaseService.refreshToken, 'delete').mockResolvedValue(expiredToken);
+      jest
+        .spyOn(databaseService.refreshToken, 'findUnique')
+        .mockResolvedValue(expiredToken);
+      jest
+        .spyOn(databaseService.refreshToken, 'delete')
+        .mockResolvedValue(expiredToken);
 
-      await expect(service.verifyRefreshToken('expired-token'))
-        .rejects.toThrow(UnauthorizedException);
+      await expect(service.verifyRefreshToken('expired-token')).rejects.toThrow(
+        UnauthorizedException,
+      );
       expect(databaseService.refreshToken.delete).toHaveBeenCalledWith({
         where: { token: 'expired-token' },
       });
@@ -167,25 +189,37 @@ describe('TokenService', () => {
 
     it('should throw UnauthorizedException if token belongs to different user', async () => {
       const differentUserPayload = { ...mockJwtPayload, sub: '2' };
-      jest.spyOn(databaseService.refreshToken, 'findUnique').mockResolvedValue(mockStoredToken);
-      jest.spyOn(jwtService, 'verifyAsync').mockResolvedValue(differentUserPayload);
+      jest
+        .spyOn(databaseService.refreshToken, 'findUnique')
+        .mockResolvedValue(mockStoredToken);
+      jest
+        .spyOn(jwtService, 'verifyAsync')
+        .mockResolvedValue(differentUserPayload);
 
-      await expect(service.verifyRefreshToken('mock-refresh-token'))
-        .rejects.toThrow(UnauthorizedException);
+      await expect(
+        service.verifyRefreshToken('mock-refresh-token'),
+      ).rejects.toThrow(UnauthorizedException);
     });
 
     it('should throw UnauthorizedException if JWT verification fails', async () => {
-      jest.spyOn(databaseService.refreshToken, 'findUnique').mockResolvedValue(mockStoredToken);
-      jest.spyOn(jwtService, 'verifyAsync').mockRejectedValue(new Error('Invalid JWT'));
+      jest
+        .spyOn(databaseService.refreshToken, 'findUnique')
+        .mockResolvedValue(mockStoredToken);
+      jest
+        .spyOn(jwtService, 'verifyAsync')
+        .mockRejectedValue(new Error('Invalid JWT'));
 
-      await expect(service.verifyRefreshToken('mock-refresh-token'))
-        .rejects.toThrow(UnauthorizedException);
+      await expect(
+        service.verifyRefreshToken('mock-refresh-token'),
+      ).rejects.toThrow(UnauthorizedException);
     });
   });
 
   describe('revokeAllUserTokens', () => {
     it('should delete all refresh tokens for a user', async () => {
-      jest.spyOn(databaseService.refreshToken, 'deleteMany').mockResolvedValue({ count: 3 });
+      jest
+        .spyOn(databaseService.refreshToken, 'deleteMany')
+        .mockResolvedValue({ count: 3 });
 
       await service.revokeAllUserTokens(mockUser.id);
 
@@ -224,26 +258,32 @@ describe('TokenService', () => {
     it('should throw error for invalid token payload', async () => {
       jest.spyOn(jwtService, 'decode').mockReturnValue(null);
 
-      await expect(service.blacklistAccessToken('invalid-token'))
-        .rejects.toThrow('Invalid token payload');
+      await expect(
+        service.blacklistAccessToken('invalid-token'),
+      ).rejects.toThrow('Invalid token payload');
     });
 
     it('should throw error for token without expiration', async () => {
-      jest.spyOn(jwtService, 'decode').mockReturnValue({ sub: '1', email: 'test@example.com' });
+      jest
+        .spyOn(jwtService, 'decode')
+        .mockReturnValue({ sub: '1', email: 'test@example.com' });
 
-      await expect(service.blacklistAccessToken('token-without-exp'))
-        .rejects.toThrow('Invalid token payload');
+      await expect(
+        service.blacklistAccessToken('token-without-exp'),
+      ).rejects.toThrow('Invalid token payload');
     });
   });
 
   describe('isTokenBlacklisted', () => {
     it('should return true if token is blacklisted', async () => {
-      jest.spyOn(databaseService.blacklistedToken, 'findUnique').mockResolvedValue({
-        id: '1',
-        token: 'blacklisted-token',
-        issuedAt: new Date(),
-        expiresAt: new Date(),
-      });
+      jest
+        .spyOn(databaseService.blacklistedToken, 'findUnique')
+        .mockResolvedValue({
+          id: '1',
+          token: 'blacklisted-token',
+          issuedAt: new Date(),
+          expiresAt: new Date(),
+        });
 
       const result = await service.isTokenBlacklisted('blacklisted-token');
 
@@ -251,7 +291,9 @@ describe('TokenService', () => {
     });
 
     it('should return false if token is not blacklisted', async () => {
-      jest.spyOn(databaseService.blacklistedToken, 'findUnique').mockResolvedValue(null);
+      jest
+        .spyOn(databaseService.blacklistedToken, 'findUnique')
+        .mockResolvedValue(null);
 
       const result = await service.isTokenBlacklisted('valid-token');
 
@@ -261,7 +303,9 @@ describe('TokenService', () => {
 
   describe('cleanupBlacklistedTokens', () => {
     it('should delete expired blacklisted tokens', async () => {
-      jest.spyOn(databaseService.blacklistedToken, 'deleteMany').mockResolvedValue({ count: 5 });
+      jest
+        .spyOn(databaseService.blacklistedToken, 'deleteMany')
+        .mockResolvedValue({ count: 5 });
 
       await service.cleanupBlacklistedTokens();
 

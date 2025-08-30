@@ -55,7 +55,9 @@ describe('UsersController', () => {
 
       const result = await controller.getProfile(mockRequest as any);
 
-      expect(usersService.findByEmail).toHaveBeenCalledWith(mockRequest.user.email);
+      expect(usersService.findByEmail).toHaveBeenCalledWith(
+        mockRequest.user.email,
+      );
       expect(result).toEqual(mockUser);
     });
 
@@ -64,7 +66,9 @@ describe('UsersController', () => {
 
       const result = await controller.getProfile(mockRequest as any);
 
-      expect(usersService.findByEmail).toHaveBeenCalledWith(mockRequest.user.email);
+      expect(usersService.findByEmail).toHaveBeenCalledWith(
+        mockRequest.user.email,
+      );
       expect(result).toBeNull();
     });
   });

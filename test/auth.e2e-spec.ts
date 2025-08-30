@@ -8,11 +8,11 @@ describe('Auth (e2e)', () => {
   let app: INestApplication;
   let databaseService: DatabaseService;
 
-  const testUser = {
-    email: `auth-test-${Date.now()}@example.com`,
+  const makeUser = () => ({
+    email: `auth-test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`,
     password: 'password123',
     name: 'Test User',
-  };
+  });
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -21,30 +21,23 @@ describe('Auth (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     databaseService = moduleFixture.get<DatabaseService>(DatabaseService);
-    
+
     // Add validation pipe to enable DTO validation
     const { ValidationPipe } = await import('@nestjs/common');
     app.useGlobalPipes(new ValidationPipe());
-    
-    // Add cookie parser middleware  
+
+    // Add cookie parser middleware
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const cookieParser = require('cookie-parser');
     app.use(cookieParser());
-    
+
     // Set global API prefix
     app.setGlobalPrefix('api');
-    
+
     await app.init();
   });
 
-  beforeEach(async () => {
-    // Clean up database before each test
-    await databaseService.blacklistedToken.deleteMany();
-    await databaseService.refreshToken.deleteMany(); 
-    await databaseService.workoutSession.deleteMany();
-    await databaseService.routine.deleteMany();
-    await databaseService.user.deleteMany();
-  });
+  // No global DB wipes. Tests will clean up only what they create.
 
   afterAll(async () => {
     await databaseService.$disconnect();
@@ -53,6 +46,7 @@ describe('Auth (e2e)', () => {
 
   describe('/auth/register (POST)', () => {
     it('should register a new user', async () => {
+      const testUser = makeUser();
       const response = await request(app.getHttpServer())
         .post('/api/auth/register')
         .send(testUser)
@@ -67,10 +61,15 @@ describe('Auth (e2e)', () => {
       });
       expect(response.body.user.id).toBeDefined();
       expect(response.headers['set-cookie']).toBeDefined();
+      // Cleanup
+      await databaseService.user.deleteMany({
+        where: { email: testUser.email },
+      });
     });
 
     it('should return 409 if email already exists', async () => {
       // First registration
+      const testUser = makeUser();
       await request(app.getHttpServer())
         .post('/api/auth/register')
         .send(testUser)
@@ -81,6 +80,11 @@ describe('Auth (e2e)', () => {
         .post('/api/auth/register')
         .send(testUser)
         .expect(409);
+
+      // Cleanup
+      await databaseService.user.deleteMany({
+        where: { email: testUser.email },
+      });
     });
 
     it('should return 400 for invalid email', async () => {
@@ -92,11 +96,12 @@ describe('Auth (e2e)', () => {
           email: 'invalid-email',
         })
         .expect(400);
-        
+
       expect(response.body.message).toContain('Invalid email format');
     });
 
     it('should return 400 for weak password', async () => {
+      const testUser = makeUser();
       await request(app.getHttpServer())
         .post('/api/auth/register')
         .send({
@@ -108,12 +113,18 @@ describe('Auth (e2e)', () => {
   });
 
   describe('/auth/login (POST)', () => {
-    beforeEach(async () => {
+    const testUser = makeUser();
+    beforeAll(async () => {
       // Register a user for login tests
       await request(app.getHttpServer())
         .post('/api/auth/register')
         .send(testUser)
         .expect(201);
+    });
+    afterAll(async () => {
+      await databaseService.user.deleteMany({
+        where: { email: testUser.email },
+      });
     });
 
     it('should login with valid credentials', async () => {
@@ -159,10 +170,11 @@ describe('Auth (e2e)', () => {
   describe('/auth/logout (POST)', () => {
     let accessToken: string;
     let refreshTokenCookie: string;
+    const testUser = makeUser();
 
-    beforeEach(async () => {
+    beforeAll(async () => {
       // Register and login
-      const registerResponse = await request(app.getHttpServer())
+      await request(app.getHttpServer())
         .post('/api/auth/register')
         .send(testUser)
         .expect(201);
@@ -178,17 +190,25 @@ describe('Auth (e2e)', () => {
       accessToken = loginResponse.body.accessToken;
       const cookies = loginResponse.headers['set-cookie'];
       if (!cookies || !cookies[0]) {
-        throw new Error(`No refresh token cookie in response: ${JSON.stringify({
-          loginBody: loginResponse.body,
-          loginHeaders: loginResponse.headers,
-          registerBody: registerResponse.body
-        })}`);
+        throw new Error(
+          `No refresh token cookie in response: ${JSON.stringify({
+            loginBody: loginResponse.body,
+            loginHeaders: loginResponse.headers,
+          })}`,
+        );
       }
       refreshTokenCookie = cookies[0];
-      
+
       if (!accessToken) {
-        throw new Error(`Invalid login response: ${JSON.stringify(loginResponse.body)}`);
+        throw new Error(
+          `Invalid login response: ${JSON.stringify(loginResponse.body)}`,
+        );
       }
+    });
+    afterAll(async () => {
+      await databaseService.user.deleteMany({
+        where: { email: testUser.email },
+      });
     });
 
     it('should logout successfully', async () => {
@@ -202,16 +222,15 @@ describe('Auth (e2e)', () => {
     });
 
     it('should return 401 without access token', async () => {
-      await request(app.getHttpServer())
-        .post('/api/auth/logout')
-        .expect(401);
+      await request(app.getHttpServer()).post('/api/auth/logout').expect(401);
     });
   });
 
   describe('/auth/refresh (POST)', () => {
     let refreshTokenCookie: string;
+    const testUser = makeUser();
 
-    beforeEach(async () => {
+    beforeAll(async () => {
       // Register and login
       await request(app.getHttpServer())
         .post('/api/auth/register')
@@ -228,9 +247,18 @@ describe('Auth (e2e)', () => {
 
       const cookies = loginResponse.headers['set-cookie'];
       if (!cookies || !cookies[0]) {
-        throw new Error(`No refresh token cookie in refresh test: ${JSON.stringify(loginResponse.headers)}`);
+        throw new Error(
+          `No refresh token cookie in refresh test: ${JSON.stringify(
+            loginResponse.headers,
+          )}`,
+        );
       }
       refreshTokenCookie = cookies[0];
+    });
+    afterAll(async () => {
+      await databaseService.user.deleteMany({
+        where: { email: testUser.email },
+      });
     });
 
     it('should refresh tokens successfully', async () => {
@@ -246,9 +274,7 @@ describe('Auth (e2e)', () => {
     });
 
     it('should return 401 without refresh token', async () => {
-      await request(app.getHttpServer())
-        .post('/api/auth/refresh')
-        .expect(401);
+      await request(app.getHttpServer()).post('/api/auth/refresh').expect(401);
     });
   });
 });
