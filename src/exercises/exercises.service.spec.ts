@@ -60,16 +60,25 @@ describe('ExercisesService', () => {
 
   describe('findAll', () => {
     it('should return all exercises ordered by name', async () => {
+      // Mock unsorted exercises to verify sorting behavior
+      const unsortedExercises = [
+        mockExercises[1],
+        mockExercises[2],
+        mockExercises[0],
+      ]; // Squat, Deadlift, Bench Press
       jest
         .spyOn(databaseService.exercise, 'findMany')
-        .mockResolvedValue(mockExercises);
+        .mockResolvedValue(unsortedExercises);
 
       const result = await service.findAll();
 
-      expect(databaseService.exercise.findMany).toHaveBeenCalledWith({
-        orderBy: { name: 'asc' },
-      });
-      expect(result).toEqual(mockExercises);
+      expect(databaseService.exercise.findMany).toHaveBeenCalledWith();
+      // Should be sorted: Bench Press, Deadlift, Squat
+      expect(result).toEqual([
+        mockExercises[0],
+        mockExercises[2],
+        mockExercises[1],
+      ]);
     });
 
     it('should return empty array when no exercises found', async () => {
@@ -77,9 +86,7 @@ describe('ExercisesService', () => {
 
       const result = await service.findAll();
 
-      expect(databaseService.exercise.findMany).toHaveBeenCalledWith({
-        orderBy: { name: 'asc' },
-      });
+      expect(databaseService.exercise.findMany).toHaveBeenCalledWith();
       expect(result).toEqual([]);
     });
 

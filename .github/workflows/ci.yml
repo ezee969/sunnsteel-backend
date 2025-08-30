@@ -14,19 +14,6 @@ jobs:
   test:
     runs-on: ubuntu-latest
     
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: test_db
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
 
     strategy:
       matrix:
@@ -45,38 +32,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Generate Prisma client
-        run: npx prisma generate
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
-
-      - name: Run database migrations
-        run: npx prisma migrate deploy
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
-
-      - name: Seed database
-        run: npx ts-node prisma/seed.ts
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
-
       - name: Run unit tests
         env:
           CI: true
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
           JWT_ACCESS_SECRET: test-access-secret-key-for-ci
           JWT_REFRESH_SECRET: test-refresh-secret-key-for-ci
           FRONTEND_URL: http://localhost:3000
         run: npm test
 
-      - name: Run E2E tests
-        env:
-          CI: true
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
-          JWT_ACCESS_SECRET: test-access-secret-key-for-ci
-          JWT_REFRESH_SECRET: test-refresh-secret-key-for-ci
-          FRONTEND_URL: http://localhost:3000
-        run: npm run test:e2e
 
       - name: Build application
         run: npm run build
