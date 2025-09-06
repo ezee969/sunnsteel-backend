@@ -94,6 +94,13 @@ model Routine {
   isPeriodized Boolean      @default(false)
   isFavorite   Boolean      @default(false)
   isCompleted  Boolean      @default(false)
+  // Programmed Reps-to-Failure (RtF) schedule (date-driven). If nulls, routine is infinite (non-programmed)
+  programWithDeloads       Boolean?
+  programDurationWeeks     Int?
+  programStartDate         DateTime?    @db.Date
+  programEndDate           DateTime?    @db.Date
+  programTrainingDaysOfWeek Int[]       @default([])
+  programTimezone          String?
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
   days         RoutineDay[]
@@ -128,6 +135,11 @@ model RoutineExercise {
   // Progression configuration per exercise
   progressionScheme  ProgressionScheme @default(NONE)
   minWeightIncrement Float             @default(2.5)
+  // Programmed Reps-to-Failure (RtF) specific config (applies when progressionScheme = PROGRAMMED_RTF)
+  programTMKg             Float?
+  programRoundingKg       Float               @default(2.5)
+  // To ensure at most one TM adjustment per calendar week per exercise instance
+  programLastAdjustedWeek Int?
   sets         RoutineExerciseSet[]
   setLogs      SetLog[]
 }
@@ -159,6 +171,7 @@ enum ProgressionScheme {
   NONE                      // no progression applied
   DOUBLE_PROGRESSION        // progress when all sets hit target (formerly DYNAMIC)
   DYNAMIC_DOUBLE_PROGRESSION // progress per set when that set hits target (formerly DYNAMIC_DOUBLE)
+  PROGRAMMED_RTF            // date-driven, 5 sets (4 fixed + 1 AMRAP), optional deloads
 }
 
 // Tracking a user's execution of a specific RoutineDay

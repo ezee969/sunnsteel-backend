@@ -80,16 +80,18 @@ export class CreateRoutineExerciseDto {
       NONE: 'NONE',
       DOUBLE_PROGRESSION: 'DOUBLE_PROGRESSION',
       DYNAMIC_DOUBLE_PROGRESSION: 'DYNAMIC_DOUBLE_PROGRESSION',
+      PROGRAMMED_RTF: 'PROGRAMMED_RTF',
     } as const,
     {
       message:
-        'progressionScheme must be NONE, DOUBLE_PROGRESSION, or DYNAMIC_DOUBLE_PROGRESSION',
+        'progressionScheme must be NONE, DOUBLE_PROGRESSION, DYNAMIC_DOUBLE_PROGRESSION, or PROGRAMMED_RTF',
     },
   )
   progressionScheme?:
     | 'NONE'
     | 'DOUBLE_PROGRESSION'
-    | 'DYNAMIC_DOUBLE_PROGRESSION';
+    | 'DYNAMIC_DOUBLE_PROGRESSION'
+    | 'PROGRAMMED_RTF';
 
   @IsOptional()
   @IsNumber()
@@ -100,6 +102,21 @@ export class CreateRoutineExerciseDto {
   @ValidateNested({ each: true })
   @Type(() => CreateRoutineExerciseSetDto)
   sets: CreateRoutineExerciseSetDto[];
+
+  // RtF-specific fields when progressionScheme = PROGRAMMED_RTF
+  @ValidateIf(
+    (o: CreateRoutineExerciseDto) => o.progressionScheme === 'PROGRAMMED_RTF',
+  )
+  @IsNumber()
+  @Min(1)
+  programTMKg?: number;
+
+  @ValidateIf(
+    (o: CreateRoutineExerciseDto) => o.progressionScheme === 'PROGRAMMED_RTF',
+  )
+  @IsNumber()
+  @Min(0.5)
+  programRoundingKg?: number; // defaults to 2.5 if omitted
 }
 
 export class CreateRoutineDayDto {
@@ -133,4 +150,17 @@ export class CreateRoutineDto {
   @ValidateNested({ each: true })
   @Type(() => CreateRoutineDayDto)
   days: CreateRoutineDayDto[];
+
+  // Routine-level program fields (only required if any exercise is PROGRAMMED_RTF)
+  @IsOptional()
+  @IsBoolean()
+  programWithDeloads?: boolean; // true=21w; false=18w
+
+  @IsOptional()
+  @IsString()
+  programStartDate?: string; // ISO date (yyyy-mm-dd)
+
+  @IsOptional()
+  @IsString()
+  programTimezone?: string; // IANA TZ, e.g. "America/Argentina/Buenos_Aires"
 }

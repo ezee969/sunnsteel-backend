@@ -10,7 +10,93 @@ import { CreateRoutineDto, RepTypeDto } from './dto/create-routine.dto';
 export class RoutinesService {
   constructor(private readonly db: DatabaseService) {}
 
+  // Helpers to work with calendar days in a given IANA timezone
+  private localDateParts(d: Date, timeZone: string) {
+    const fmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      weekday: 'short',
+    });
+    const parts = fmt.formatToParts(d);
+    const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+    const y = Number(get('year'));
+    const m = Number(get('month'));
+    const day = Number(get('day'));
+    const wk = get('weekday'); // 'Sun'..'Sat'
+    const map: Record<string, number> = {
+      Sun: 0,
+      Mon: 1,
+      Tue: 2,
+      Wed: 3,
+      Thu: 4,
+      Fri: 5,
+      Sat: 6,
+    };
+    const dow = map[wk] ?? 0;
+    return { y, m, day, dow };
+  }
+
+  private addDays(dateOnly: Date, days: number) {
+    const d = new Date(Date.UTC(dateOnly.getUTCFullYear(), dateOnly.getUTCMonth(), dateOnly.getUTCDate()));
+    d.setUTCDate(d.getUTCDate() + days);
+    return d;
+  }
+
   async create(userId: string, dto: CreateRoutineDto) {
+    // Determine if any exercise uses PROGRAMMED_RTF
+    const hasRtF = dto.days.some((d) =>
+      d.exercises.some((e) => e.progressionScheme === 'PROGRAMMED_RTF'),
+    );
+
+    // Prepare program fields (optional unless hasRtF)
+    let programWithDeloads: boolean | null = null;
+    let programDurationWeeks: number | null = null;
+    let programStartDate: Date | null = null;
+    let programEndDate: Date | null = null;
+    let programTimezone: string | null = null;
+    let programTrainingDaysOfWeek: number[] = [];
+
+    if (hasRtF) {
+      if (typeof dto.programWithDeloads !== 'boolean') {
+        throw new BadRequestException('programWithDeloads is required when using PROGRAMMED_RTF');
+      }
+      if (!dto.programStartDate) {
+        throw new BadRequestException('programStartDate (yyyy-mm-dd) is required when using PROGRAMMED_RTF');
+      }
+      if (!dto.programTimezone) {
+        throw new BadRequestException('programTimezone (IANA) is required when using PROGRAMMED_RTF');
+      }
+
+      programWithDeloads = dto.programWithDeloads;
+      programDurationWeeks = dto.programWithDeloads ? 21 : 18;
+      programTimezone = dto.programTimezone;
+
+      // Parse date-only string as UTC midnight; PostgreSQL @db.Date stores date only
+      const start = new Date(`${dto.programStartDate}T00:00:00.000Z`);
+      if (isNaN(start.getTime())) {
+        throw new BadRequestException('programStartDate must be an ISO date (yyyy-mm-dd)');
+      }
+
+      // Validate weekday match with first training day
+      const orderedDays = [...dto.days].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      if (orderedDays.length === 0) {
+        throw new BadRequestException('Routine requires at least one training day when using PROGRAMMED_RTF');
+      }
+      programTrainingDaysOfWeek = orderedDays.map((d) => d.dayOfWeek);
+      const firstTrainingDow = programTrainingDaysOfWeek[0]; // 0..6
+      const startDow = this.localDateParts(start, programTimezone).dow; // 0..6
+      if (startDow !== firstTrainingDow) {
+        throw new BadRequestException('programStartDate must fall on the weekday of the first training day');
+      }
+
+      programStartDate = start;
+      // End date = last day of the program window
+      const totalDays = programDurationWeeks * 7 - 1;
+      programEndDate = this.addDays(start, totalDays);
+    }
+
     const routine = await this.db.routine.create({
       data: {
         user: {
@@ -21,6 +107,23 @@ export class RoutinesService {
         name: dto.name,
         description: dto.description,
         isPeriodized: false,
+        ...(hasRtF
+          ? {
+              programWithDeloads,
+              programDurationWeeks,
+              programStartDate,
+              programEndDate,
+              programTrainingDaysOfWeek,
+              programTimezone,
+            }
+          : {
+              programWithDeloads: null,
+              programDurationWeeks: null,
+              programStartDate: null,
+              programEndDate: null,
+              programTrainingDaysOfWeek: [],
+              programTimezone: null,
+            }),
         days: {
           create: dto.days.map((d) => ({
             dayOfWeek: d.dayOfWeek,
@@ -32,6 +135,12 @@ export class RoutinesService {
                 restSeconds: e.restSeconds,
                 progressionScheme: e.progressionScheme ?? 'NONE',
                 minWeightIncrement: e.minWeightIncrement ?? 2.5,
+                ...(e.progressionScheme === 'PROGRAMMED_RTF'
+                  ? {
+                      programTMKg: e.programTMKg ?? undefined,
+                      programRoundingKg: e.programRoundingKg ?? 2.5,
+                    }
+                  : {}),
                 sets: {
                   create: e.sets.map((s) => {
                     if (s.repType === RepTypeDto.RANGE) {
@@ -86,6 +195,12 @@ export class RoutinesService {
         isPeriodized: true,
         isFavorite: true,
         isCompleted: true,
+        programWithDeloads: true,
+        programDurationWeeks: true,
+        programStartDate: true,
+        programEndDate: true,
+        programTrainingDaysOfWeek: true,
+        programTimezone: true,
         createdAt: true,
         updatedAt: true,
         days: {
@@ -100,6 +215,8 @@ export class RoutinesService {
                 restSeconds: true,
                 progressionScheme: true,
                 minWeightIncrement: true,
+                programTMKg: true,
+                programRoundingKg: true,
                 exercise: { select: { id: true, name: true } },
                 sets: {
                   select: {
@@ -253,6 +370,53 @@ export class RoutinesService {
       // Remove current days (cascade removes exercises and sets)
       await tx.routineDay.deleteMany({ where: { routineId: id } });
 
+      // Determine if any exercise uses PROGRAMMED_RTF
+      const hasRtF = dto.days.some((d) =>
+        d.exercises.some((e) => e.progressionScheme === 'PROGRAMMED_RTF'),
+      );
+
+      let programWithDeloads: boolean | null = null;
+      let programDurationWeeks: number | null = null;
+      let programStartDate: Date | null = null;
+      let programEndDate: Date | null = null;
+      let programTimezone: string | null = null;
+      let programTrainingDaysOfWeek: number[] = [];
+
+      if (hasRtF) {
+        if (typeof dto.programWithDeloads !== 'boolean') {
+          throw new BadRequestException('programWithDeloads is required when using PROGRAMMED_RTF');
+        }
+        if (!dto.programStartDate) {
+          throw new BadRequestException('programStartDate (yyyy-mm-dd) is required when using PROGRAMMED_RTF');
+        }
+        if (!dto.programTimezone) {
+          throw new BadRequestException('programTimezone (IANA) is required when using PROGRAMMED_RTF');
+        }
+
+        programWithDeloads = dto.programWithDeloads;
+        programDurationWeeks = dto.programWithDeloads ? 21 : 18;
+        programTimezone = dto.programTimezone;
+        const start = new Date(`${dto.programStartDate}T00:00:00.000Z`);
+        if (isNaN(start.getTime())) {
+          throw new BadRequestException('programStartDate must be an ISO date (yyyy-mm-dd)');
+        }
+
+        const orderedDays = [...dto.days].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+        if (orderedDays.length === 0) {
+          throw new BadRequestException('Routine requires at least one training day when using PROGRAMMED_RTF');
+        }
+        programTrainingDaysOfWeek = orderedDays.map((d) => d.dayOfWeek);
+        const firstTrainingDow = programTrainingDaysOfWeek[0];
+        const startDow = this.localDateParts(start, programTimezone).dow;
+        if (startDow !== firstTrainingDow) {
+          throw new BadRequestException('programStartDate must fall on the weekday of the first training day');
+        }
+
+        programStartDate = start;
+        const totalDays = programDurationWeeks * 7 - 1;
+        programEndDate = this.addDays(start, totalDays);
+      }
+
       // Update routine basic fields and recreate nested structure
       const updated = await tx.routine.update({
         where: { id },
@@ -260,6 +424,23 @@ export class RoutinesService {
           name: dto.name,
           description: dto.description,
           isPeriodized: false,
+          ...(hasRtF
+            ? {
+                programWithDeloads,
+                programDurationWeeks,
+                programStartDate,
+                programEndDate,
+                programTrainingDaysOfWeek,
+                programTimezone,
+              }
+            : {
+                programWithDeloads: null,
+                programDurationWeeks: null,
+                programStartDate: null,
+                programEndDate: null,
+                programTrainingDaysOfWeek: [],
+                programTimezone: null,
+              }),
           days: {
             create: dto.days.map((d) => ({
               dayOfWeek: d.dayOfWeek,
@@ -271,6 +452,12 @@ export class RoutinesService {
                   restSeconds: e.restSeconds,
                   progressionScheme: e.progressionScheme ?? 'NONE',
                   minWeightIncrement: e.minWeightIncrement ?? 2.5,
+                  ...(e.progressionScheme === 'PROGRAMMED_RTF'
+                    ? {
+                        programTMKg: e.programTMKg ?? undefined,
+                        programRoundingKg: e.programRoundingKg ?? 2.5,
+                      }
+                    : {}),
                   sets: {
                     create: e.sets.map((s) => {
                       if (s.repType === RepTypeDto.RANGE) {
@@ -325,6 +512,12 @@ export class RoutinesService {
           isPeriodized: true,
           isFavorite: true,
           isCompleted: true,
+          programWithDeloads: true,
+          programDurationWeeks: true,
+          programStartDate: true,
+          programEndDate: true,
+          programTrainingDaysOfWeek: true,
+          programTimezone: true,
           createdAt: true,
           updatedAt: true,
           days: {

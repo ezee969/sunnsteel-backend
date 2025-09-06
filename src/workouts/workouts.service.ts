@@ -3,7 +3,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, WorkoutSessionStatus, RepType } from '@prisma/client';
+import {
+  Prisma,
+  WorkoutSessionStatus,
+  RepType,
+  ProgressionScheme,
+} from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 import { StartWorkoutDto } from './dto/start-workout.dto';
 import { FinishWorkoutDto, FinishStatusDto } from './dto/finish-workout.dto';
@@ -19,6 +24,113 @@ const isPrismaErrorWithCode = (e: unknown): e is { code: string } => {
 @Injectable()
 export class WorkoutsService {
   constructor(private readonly db: DatabaseService) {}
+
+  // --- RtF weekly goals (with deloads) adapted to 5 sets: 4 fixed + 1 AMRAP (set #5)
+  // Weeks 7, 14, 21 are deloads (3x5 @ RPE6 @ ~60% TM)
+  private readonly RTF_WITH_DELOADS: Array<
+    | { week: number; intensity: number; fixedReps: number; amrapTarget: number }
+    | { week: number; isDeload: true }
+  > = [
+    { week: 1, intensity: 0.7, fixedReps: 5, amrapTarget: 10 },
+    { week: 2, intensity: 0.75, fixedReps: 4, amrapTarget: 8 },
+    { week: 3, intensity: 0.8, fixedReps: 3, amrapTarget: 6 },
+    { week: 4, intensity: 0.725, fixedReps: 5, amrapTarget: 9 },
+    { week: 5, intensity: 0.775, fixedReps: 4, amrapTarget: 7 },
+    { week: 6, intensity: 0.825, fixedReps: 3, amrapTarget: 5 },
+    { week: 7, isDeload: true },
+    { week: 8, intensity: 0.75, fixedReps: 4, amrapTarget: 8 },
+    { week: 9, intensity: 0.8, fixedReps: 3, amrapTarget: 6 },
+    { week: 10, intensity: 0.85, fixedReps: 2, amrapTarget: 4 },
+    { week: 11, intensity: 0.775, fixedReps: 4, amrapTarget: 7 },
+    { week: 12, intensity: 0.825, fixedReps: 3, amrapTarget: 5 },
+    { week: 13, intensity: 0.875, fixedReps: 2, amrapTarget: 3 },
+    { week: 14, isDeload: true },
+    { week: 15, intensity: 0.8, fixedReps: 3, amrapTarget: 6 },
+    { week: 16, intensity: 0.85, fixedReps: 2, amrapTarget: 4 },
+    { week: 17, intensity: 0.9, fixedReps: 1, amrapTarget: 2 },
+    { week: 18, intensity: 0.85, fixedReps: 2, amrapTarget: 4 },
+    { week: 19, intensity: 0.9, fixedReps: 1, amrapTarget: 2 },
+    { week: 20, intensity: 0.95, fixedReps: 1, amrapTarget: 2 },
+    { week: 21, isDeload: true },
+  ];
+
+  private localDateParts(d: Date, timeZone: string) {
+    const fmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      weekday: 'short',
+    });
+    const parts = fmt.formatToParts(d);
+    const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+    const y = Number(get('year'));
+    const m = Number(get('month'));
+    const day = Number(get('day'));
+    const wk = get('weekday'); // 'Sun'..'Sat'
+    const map: Record<string, number> = {
+      Sun: 0,
+      Mon: 1,
+      Tue: 2,
+      Wed: 3,
+      Thu: 4,
+      Fri: 5,
+      Sat: 6,
+    };
+    const dow = map[wk] ?? 0;
+    return { y, m, day, dow };
+  }
+
+  private diffLocalDays(a: Date, b: Date, timeZone: string) {
+    const ap = this.localDateParts(a, timeZone);
+    const bp = this.localDateParts(b, timeZone);
+    const aUTC = Date.UTC(ap.y, ap.m - 1, ap.day);
+    const bUTC = Date.UTC(bp.y, bp.m - 1, bp.day);
+    return Math.floor((aUTC - bUTC) / 86_400_000);
+  }
+
+  private getCurrentProgramWeek(
+    today: Date,
+    programStartDate: Date,
+    programDurationWeeks: number,
+    timeZone: string,
+  ) {
+    const diffDays = this.diffLocalDays(today, programStartDate, timeZone);
+    const week = Math.floor(diffDays / 7) + 1;
+    if (week < 1) return 1;
+    if (week > programDurationWeeks) return programDurationWeeks;
+    return week;
+  }
+
+  private isDeloadWeek(week: number, withDeloads: boolean) {
+    return withDeloads && (week === 7 || week === 14 || week === 21);
+  }
+
+  private getRtFGoalForWeek(week: number, withDeloads: boolean) {
+    if (withDeloads) return this.RTF_WITH_DELOADS[week - 1];
+    // 18-week mode: filter out deload entries
+    const trainingOnly = this.RTF_WITH_DELOADS.filter(
+      (g) => !("isDeload" in g && g.isDeload === true),
+    ) as Array<{ week: number; intensity: number; fixedReps: number; amrapTarget: number }>;
+    return trainingOnly[week - 1];
+  }
+
+  private roundToNearest(value: number, increment: number): number {
+    if (!increment || increment <= 0) return value;
+    return Math.round(value / increment) * increment;
+  }
+
+  private adjustTM(currentTM: number, repsDone: number, targetReps: number) {
+    const diff = repsDone - targetReps;
+    if (diff >= 5) return currentTM * 1.03;
+    if (diff === 4) return currentTM * 1.02;
+    if (diff === 3) return currentTM * 1.015;
+    if (diff === 2) return currentTM * 1.01;
+    if (diff === 1) return currentTM * 1.005;
+    if (diff === 0) return currentTM;
+    if (diff === -1) return currentTM * 0.98;
+    return currentTM * 0.95; // diff <= -2
+  }
 
   async getActiveSession(userId: string) {
     return this.db.workoutSession.findFirst({
@@ -53,12 +165,58 @@ export class WorkoutsService {
     // Validate routine and day ownership/relationship
     const routineDay = await this.db.routineDay.findFirst({
       where: { id: dto.routineDayId, routine: { id: dto.routineId, userId } },
-      select: { id: true, routineId: true },
+      select: { id: true, routineId: true, dayOfWeek: true },
     });
     if (!routineDay) {
       throw new NotFoundException(
         'Routine day not found for this user/routine',
       );
+    }
+
+    // Load routine program configuration
+    const routine = await this.db.routine.findFirst({
+      where: { id: dto.routineId, userId },
+      select: {
+        programWithDeloads: true,
+        programDurationWeeks: true,
+        programStartDate: true,
+        programEndDate: true,
+        programTrainingDaysOfWeek: true,
+        programTimezone: true,
+      },
+    });
+
+    // If routine is date-driven (RtF configured), enforce schedule
+    const now = new Date();
+    const hasProgram =
+      !!routine?.programStartDate &&
+      !!routine?.programEndDate &&
+      !!routine?.programDurationWeeks &&
+      !!routine?.programTimezone &&
+      Array.isArray(routine?.programTrainingDaysOfWeek) &&
+      (routine?.programTrainingDaysOfWeek?.length ?? 0) > 0;
+
+    if (hasProgram) {
+      const tz = routine!.programTimezone!;
+      const dow = this.localDateParts(now, tz).dow; // 0..6
+      const isScheduled = routine!.programTrainingDaysOfWeek!.includes(dow);
+
+      // Date window checks (inclusive)
+      const beforeStart = this.diffLocalDays(now, routine!.programStartDate!, tz) < 0;
+      const afterEnd = this.diffLocalDays(now, routine!.programEndDate!, tz) > 0;
+      if (beforeStart) {
+        throw new BadRequestException('Program has not started yet');
+      }
+      if (afterEnd) {
+        throw new BadRequestException('Program has ended');
+      }
+      if (!isScheduled) {
+        throw new BadRequestException('Today is not a scheduled training day for this routine');
+      }
+      // Ensure the chosen routineDay matches today's weekday
+      if (routineDay.dayOfWeek !== dow) {
+        throw new BadRequestException('Selected routine day does not match today\'s weekday');
+      }
     }
 
     const created = await this.db.workoutSession.create({
@@ -71,6 +229,88 @@ export class WorkoutsService {
       },
       select: this.sessionSelect(),
     });
+
+    // Attach RtF plan for today if applicable
+    if (hasProgram) {
+      const tz = routine!.programTimezone!;
+      const week = this.getCurrentProgramWeek(
+        now,
+        routine!.programStartDate!,
+        routine!.programDurationWeeks!,
+        tz,
+      );
+      const withDeloads = !!routine!.programWithDeloads;
+      const isDeload = this.isDeloadWeek(week, withDeloads);
+
+      // Load exercises for this routine day with RtF config
+      const exs = await this.db.routineExercise.findMany({
+        where: { routineDayId: routineDay.id },
+        select: {
+          id: true,
+          progressionScheme: true,
+          programTMKg: true,
+          programRoundingKg: true,
+          exercise: { select: { id: true, name: true } },
+          order: true,
+        },
+        orderBy: { order: 'asc' },
+      });
+
+      const rtfPlans = exs
+        .filter((e) => e.progressionScheme === ProgressionScheme.PROGRAMMED_RTF)
+        .map((e) => {
+          const goal = this.getRtFGoalForWeek(week, withDeloads);
+          if ((goal as any).isDeload) {
+            const weightKg = this.roundToNearest((e.programTMKg ?? 0) * 0.6, e.programRoundingKg ?? 2.5);
+            return {
+              routineExerciseId: e.id,
+              exerciseId: e.exercise.id,
+              exerciseName: e.exercise.name,
+              isDeload: true,
+              sets: [
+                { setNumber: 1, reps: 5, rpe: 6, weightKg },
+                { setNumber: 2, reps: 5, rpe: 6, weightKg },
+                { setNumber: 3, reps: 5, rpe: 6, weightKg },
+              ],
+            } as const;
+          }
+          const g = goal as { intensity: number; fixedReps: number; amrapTarget: number };
+          const weightKg = this.roundToNearest(
+            (e.programTMKg ?? 0) * g.intensity,
+            e.programRoundingKg ?? 2.5,
+          );
+          return {
+            routineExerciseId: e.id,
+            exerciseId: e.exercise.id,
+            exerciseName: e.exercise.name,
+            isDeload: false,
+            weightKg,
+            fixedReps: g.fixedReps,
+            amrapTarget: g.amrapTarget,
+            sets: [
+              { setNumber: 1, reps: g.fixedReps, weightKg },
+              { setNumber: 2, reps: g.fixedReps, weightKg },
+              { setNumber: 3, reps: g.fixedReps, weightKg },
+              { setNumber: 4, reps: g.fixedReps, weightKg },
+              { setNumber: 5, reps: null, amrapTarget: g.amrapTarget, weightKg },
+            ],
+          } as const;
+        });
+
+      return {
+        ...created,
+        program: {
+          currentWeek: week,
+          durationWeeks: routine!.programDurationWeeks!,
+          withDeloads,
+          isDeloadWeek: isDeload,
+          startDate: routine!.programStartDate!,
+          endDate: routine!.programEndDate!,
+          timeZone: tz,
+        },
+        rtfPlans,
+      } as const;
+    }
 
     return created;
   }
@@ -110,11 +350,23 @@ export class WorkoutsService {
           where: { id: session.routineDayId },
           select: {
             id: true,
+            routine: {
+              select: {
+                programWithDeloads: true,
+                programDurationWeeks: true,
+                programStartDate: true,
+                programEndDate: true,
+                programTimezone: true,
+              },
+            },
             exercises: {
               select: {
                 id: true,
                 progressionScheme: true,
                 minWeightIncrement: true,
+                programTMKg: true,
+                programRoundingKg: true,
+                programLastAdjustedWeek: true,
                 sets: {
                   select: {
                     setNumber: true,
@@ -170,6 +422,29 @@ export class WorkoutsService {
           if (set.repType === RepType.RANGE) return set.maxReps ?? null;
           return set.reps ?? null;
         };
+
+        // RtF PROGRAMMED adjustments (per exercise instance, at most once per calendar week)
+        const routineProgram = routineDay?.routine;
+        const hasProgram =
+          !!routineProgram?.programStartDate &&
+          !!routineProgram?.programEndDate &&
+          !!routineProgram?.programDurationWeeks &&
+          !!routineProgram?.programTimezone;
+        let currentWeek: number | null = null;
+        let isDeload = false;
+        if (hasProgram) {
+          const tz = routineProgram!.programTimezone!;
+          currentWeek = this.getCurrentProgramWeek(
+            new Date(),
+            routineProgram!.programStartDate!,
+            routineProgram!.programDurationWeeks!,
+            tz,
+          );
+          isDeload = this.isDeloadWeek(
+            currentWeek,
+            !!routineProgram!.programWithDeloads,
+          );
+        }
 
         for (const ex of routineDay?.exercises ?? []) {
           const scheme = ex.progressionScheme;
@@ -227,6 +502,42 @@ export class WorkoutsService {
                   setNumber: s.setNumber,
                   newWeight: current + inc,
                 });
+              }
+            }
+          } else if (scheme === ProgressionScheme.PROGRAMMED_RTF) {
+            if (hasProgram && currentWeek && !isDeload) {
+              // Adjust TM using AMRAP (set #5) once per week per exercise instance
+              const lastSet = logMap.get(logKey(ex.id, 5));
+              if (
+                typeof ex.programTMKg === 'number' &&
+                typeof ex.programRoundingKg === 'number' &&
+                lastSet?.reps != null &&
+                ex.programLastAdjustedWeek !== currentWeek
+              ) {
+                const goal = this.getRtFGoalForWeek(
+                  currentWeek,
+                  !!routineProgram!.programWithDeloads,
+                );
+                if (!("isDeload" in (goal as any))) {
+                  const g = goal as {
+                    intensity: number;
+                    fixedReps: number;
+                    amrapTarget: number;
+                  };
+                  const newTM = this.adjustTM(
+                    ex.programTMKg,
+                    lastSet.reps!,
+                    g.amrapTarget,
+                  );
+                  await this.db.routineExercise.update({
+                    where: { id: ex.id },
+                    data: {
+                      programTMKg: newTM,
+                      programLastAdjustedWeek: currentWeek,
+                    },
+                    select: { id: true },
+                  });
+                }
               }
             }
           }

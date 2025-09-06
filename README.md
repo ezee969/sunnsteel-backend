@@ -35,6 +35,12 @@ Sunnsteel Backend - A fitness API built with NestJS featuring workout tracking, 
   - Si todos los sets de un ejercicio logran >= reps objetivo, se aumenta el peso en todos los sets
 - **DYNAMIC_DOUBLE_PROGRESSION**: Progresión individual por set
   - Cada set progresa independientemente cuando alcanza el objetivo de reps target
+- **PROGRAMMED_RTF (Last set Reps to Failure)**: Programa con duración fija (18/21 semanas) y avance por calendario
+  - 5 sets por ocurrencia (4 fijos + 1 AMRAP con objetivo)
+  - Intensidad semanal como % del TM (1RM proxy)
+  - Semanas de deload opcionales (7/14/21) con 3×5 @ RPE6 y TM congelado
+  - Inicio/fin programados por fecha; días programados por semana (ej. Lun/Vie)
+  - El TM se ajusta 1 vez por semana por ejercicio usando el desempeño del set AMRAP (regla pieza a pieza)
 - Configurable minimum weight increment per exercise (default: 2.5kg)
 - Automatic progression calculation on session completion
 - Support for both fixed reps and rep ranges (min/max)
@@ -52,6 +58,7 @@ Sunnsteel Backend - A fitness API built with NestJS featuring workout tracking, 
 - Set logging with reps, weight, RPE
 - Session history with filtering and pagination
 - Progression calculations applied automatically on session completion
+  - Para **PROGRAMMED_RTF**: validaciones de calendario en inicio, prescripción semanal en la respuesta, ajuste de TM al finalizar (si no es deload) y bloqueo cuando el programa termina
 
 ### Routines Management
 
@@ -335,6 +342,13 @@ model RoutineExercise {
   exercise     Exercise             @relation(fields: [exerciseId], references: [id])
   order        Int                  @default(0)
   restSeconds  Int                  @default(60)
+  // Progression configuration per exercise
+  progressionScheme  ProgressionScheme @default(NONE)
+  minWeightIncrement Float             @default(2.5)
+  // PROGRAMMED_RTF specific
+  programTMKg             Float?
+  programRoundingKg       Float         @default(2.5)
+  programLastAdjustedWeek Int?
   sets         RoutineExerciseSet[]
 }
 
@@ -356,11 +370,19 @@ enum RepType {
   FIXED
   RANGE
 }
+
+enum ProgressionScheme {
+  NONE
+  DOUBLE_PROGRESSION
+  DYNAMIC_DOUBLE_PROGRESSION
+  PROGRAMMED_RTF
+}
 ```
 
 ### API Response Shape
 
 Selectors for routines endpoints include set fields: `setNumber`, `repType`, `reps`, `minReps`, `maxReps`, `weight`.
+Cuando `progressionScheme = PROGRAMMED_RTF`, además existen campos por ejercicio: `programTMKg`, `programRoundingKg`.
 
 ### Validation
 
@@ -373,6 +395,44 @@ Selectors for routines endpoints include set fields: `setNumber`, `repType`, `re
 - Ensure Prisma client is regenerated after schema changes:
   - `npx prisma generate`
   - then `npm run build`
+
+## PROGRAMMED_RTF (RtF) — Date-Driven Program
+
+### Rutina programada (campos Routine)
+
+- `programWithDeloads: boolean` (true = 21 semanas con deload; false = 18 sin deload)
+- `programDurationWeeks: 18 | 21`
+- `programStartDate: Date` (columna DATE; día calendario)
+- `programEndDate: Date` (columna DATE; calculado)
+- `programTrainingDaysOfWeek: int[]` (0=Sun .. 6=Sat; ordenado; el primero es el “día inicial”)
+- `programTimezone: string` (IANA, ej. "America/Argentina/Buenos_Aires")
+
+Reglas:
+
+- La fecha de inicio debe coincidir con el weekday del primer día de entrenamiento configurado.
+- El programa avanza por calendario (zona horaria de la rutina). No depende de sesiones realizadas.
+- Al finalizar (fecha > `programEndDate`), se bloquea el inicio de nuevas sesiones.
+
+### Inicio de sesión (POST /api/workouts/sessions/start)
+
+- Valida: hoy ≥ `programStartDate`, hoy ≤ `programEndDate`, hoy corresponde a un día programado y `routineDay.dayOfWeek` coincide con hoy.
+- Respuesta incluye la prescripción del día para cada ejercicio `PROGRAMMED_RTF`:
+  - Semana de entrenamiento: `weightKg` (TM × intensidad % redondeado), `fixedReps` (sets 1–4), `amrapTarget` (set 5)
+  - Semana de deload: 3×5 @ RPE6 con `weightKg = round(TM × 0.60, rounding)`
+
+### Fin de sesión (PATCH /api/workouts/sessions/:id/finish)
+
+- Semana de deload: no ajusta TM.
+- Semana de entrenamiento: por cada ejercicio `PROGRAMMED_RTF`, si existe el log del set 5 (AMRAP) y aún no se ajustó en esa semana (`programLastAdjustedWeek`), ajustar TM con la regla pieza a pieza; guardar `programLastAdjustedWeek`.
+
+### Regeneración del cliente Prisma
+
+Tras aplicar los cambios en Prisma:
+
+```bash
+npx prisma generate
+npm run build
+```
 
 ### Diagram Explanation:
 

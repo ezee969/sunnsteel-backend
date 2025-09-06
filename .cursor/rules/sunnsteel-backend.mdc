@@ -66,6 +66,10 @@ Este es el proyecto backend para Sunnsteel, una API de fitness y entrenamiento.
   - Si todos los sets de un ejercicio logran >= reps objetivo, se aumenta el peso en todos los sets
 - **DYNAMIC_DOUBLE**: Progresión individual por set
   - Cada set progresa independientemente cuando alcanza el objetivo de reps
+- **PROGRAMMED_RTF (Last set Reps to Failure)**: Programa con duración fija y avance por calendario
+  - 5 sets por ocurrencia (4 fijos + 1 AMRAP)
+  - Intensidad semanal como % del TM; deloads opcionales (W7/14/21 → 3×5 @ RPE6)
+  - TM se ajusta 1 vez por semana por ejercicio con la regla pieza a pieza (según reps del AMRAP)
 - **Configuración por ejercicio**:
   - `progressionScheme`: `DYNAMIC` | `DYNAMIC_DOUBLE` (default: `DYNAMIC`)
   - `minWeightIncrement`: incremento mínimo de peso (default: `2.5`)
@@ -90,8 +94,10 @@ Este es el proyecto backend para Sunnsteel, una API de fitness y entrenamiento.
 
 - **POST /api/workouts/sessions/start**: Iniciar sesión de entrenamiento para un día de rutina
   - Body: `{ routineId: string, routineDayId: string, notes?: string }`
+  - PROGRAMMED_RTF (fecha‑dirigido): valida que hoy esté entre `programStartDate` y `programEndDate`, que hoy sea un día programado y que `routineDay.dayOfWeek` coincida con hoy. La respuesta incluye la prescripción RtF del día por ejercicio.
 - **PATCH /api/workouts/sessions/:id/finish**: Finalizar sesión en progreso
   - Body: `{ status: "COMPLETED" | "ABORTED", notes?: string }`
+  - PROGRAMMED_RTF: si no es deload, ajusta TM por ejercicio una sola vez por semana usando el AMRAP (set 5); si es deload, TM congelado.
 - **GET /api/workouts/sessions/active**: Obtener sesión activa (si existe)
 - **GET /api/workouts/sessions**: Listar sesiones (historial) con filtros y paginación por cursor
   - Query: `status?`, `routineId?`, `from?`, `to?`, `q?`, `cursor?`, `limit?`, `sort?`
@@ -113,6 +119,10 @@ Este es el proyecto backend para Sunnsteel, una API de fitness y entrenamiento.
 - **RefreshToken**: Tokens de renovación vinculados a usuarios
 - **BlacklistedToken**: Tokens de acceso invalidados
 - **Routine**: Rutinas de entrenamiento (`isFavorite: Boolean @default(false)`, `isCompleted: Boolean @default(false)`, `isPeriodized`, relación con `RoutineDay`)
+  - Campos RtF (programa fecha‑dirigido):
+    - `programWithDeloads: Boolean?`, `programDurationWeeks: Int?`
+    - `programStartDate: Date @db.Date?`, `programEndDate: Date @db.Date?`
+    - `programTrainingDaysOfWeek: Int[] @default([])`, `programTimezone: String?`
 - **WorkoutSession**: Sesión de entrenamiento por usuario y día de rutina (`status: IN_PROGRESS|COMPLETED|ABORTED`, `startedAt`, `endedAt`, `durationSec`, `notes`)
 - **SetLog**: Registro de sets ejecutados dentro de una sesión (`reps?`, `weight?`, `rpe?`, `isCompleted`, `completedAt`), único por `(sessionId, routineExerciseId, setNumber)`
 
@@ -122,6 +132,13 @@ Este es el proyecto backend para Sunnsteel, una API de fitness y entrenamiento.
 enum RepType {
   FIXED
   RANGE
+}
+
+enum ProgressionScheme {
+  NONE
+  DOUBLE_PROGRESSION
+  DYNAMIC_DOUBLE_PROGRESSION
+  PROGRAMMED_RTF
 }
 
 model RoutineExerciseSet {
