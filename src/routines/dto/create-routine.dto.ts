@@ -163,4 +163,11 @@ export class CreateRoutineDto {
   @IsOptional()
   @IsString()
   programTimezone?: string; // IANA TZ, e.g. "America/Argentina/Buenos_Aires"
+
+  // Start program at a specific calendar week (create-time feature). Clamped server-side to [1..(18|21)].
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(21)
+  programStartWeek?: number;
 }

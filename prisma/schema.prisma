@@ -97,6 +97,7 @@ model Routine {
   // Programmed Reps-to-Failure (RtF) schedule (date-driven). If nulls, routine is infinite (non-programmed)
   programWithDeloads       Boolean?
   programDurationWeeks     Int?
+  programStartWeek         Int?         @default(1)
   programStartDate         DateTime?    @db.Date
   programEndDate           DateTime?    @db.Date
   programTrainingDaysOfWeek Int[]       @default([])

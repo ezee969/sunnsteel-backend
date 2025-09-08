@@ -121,6 +121,7 @@ Este es el proyecto backend para Sunnsteel, una API de fitness y entrenamiento.
 - **Routine**: Rutinas de entrenamiento (`isFavorite: Boolean @default(false)`, `isCompleted: Boolean @default(false)`, `isPeriodized`, relación con `RoutineDay`)
   - Campos RtF (programa fecha‑dirigido):
     - `programWithDeloads: Boolean?`, `programDurationWeeks: Int?`
+    - `programStartWeek: Int? @default(1)` (solo creación; clamp 1..(18|21))
     - `programStartDate: Date @db.Date?`, `programEndDate: Date @db.Date?`
     - `programTrainingDaysOfWeek: Int[] @default([])`, `programTimezone: String?`
 - **WorkoutSession**: Sesión de entrenamiento por usuario y día de rutina (`status: IN_PROGRESS|COMPLETED|ABORTED`, `startedAt`, `endedAt`, `durationSec`, `notes`)

@@ -402,6 +402,7 @@ Cuando `progressionScheme = PROGRAMMED_RTF`, además existen campos por ejercici
 
 - `programWithDeloads: boolean` (true = 21 semanas con deload; false = 18 sin deload)
 - `programDurationWeeks: 18 | 21`
+- `programStartWeek?: number` (solo creación; default 1; clamp 1..(18|21))
 - `programStartDate: Date` (columna DATE; día calendario)
 - `programEndDate: Date` (columna DATE; calculado)
 - `programTrainingDaysOfWeek: int[]` (0=Sun .. 6=Sat; ordenado; el primero es el “día inicial”)
@@ -412,6 +413,7 @@ Reglas:
 - La fecha de inicio debe coincidir con el weekday del primer día de entrenamiento configurado.
 - El programa avanza por calendario (zona horaria de la rutina). No depende de sesiones realizadas.
 - Al finalizar (fecha > `programEndDate`), se bloquea el inicio de nuevas sesiones.
+- Si la rutina comienza en una semana N (`programStartWeek`), la `programEndDate` se calcula usando las semanas restantes desde N.
 
 ### Inicio de sesión (POST /api/workouts/sessions/start)
 

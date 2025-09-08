@@ -47,6 +47,215 @@ describe('RoutinesService', () => {
     service = module.get<RoutinesService>(RoutinesService);
   });
 
+  describe('RtF program start week & end date computation', () => {
+    const monday = '2025-01-06'; // Monday in UTC
+    const tz = 'UTC';
+
+    const ymd = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+
+    it('create: clamps startWeek to 18 when deloads=false and startWeek=21; endDate = start + 6 days', async () => {
+      (dbMock.routine.create as any).mockResolvedValue({ id: 'r1' });
+      const dto: any = {
+        name: 'r',
+        description: 'd',
+        isPeriodized: false,
+        programWithDeloads: false, // 18 weeks
+        programStartDate: monday,
+        programTimezone: tz,
+        programStartWeek: 21, // should clamp to 18
+        days: [
+          {
+            dayOfWeek: 1, // Monday
+            order: 0,
+            exercises: [
+              {
+                exerciseId: 'e1',
+                order: 0,
+                restSeconds: 60,
+                sets: [{ setNumber: 1, repType: 'FIXED', reps: 8 }],
+                progressionScheme: 'PROGRAMMED_RTF',
+                programTMKg: 100,
+                programRoundingKg: 2.5,
+              },
+            ],
+          },
+        ],
+      };
+
+      await service.create('u1', dto);
+
+      const args = (dbMock.routine.create as any).mock.calls[0][0];
+      expect(args.data.programDurationWeeks).toBe(18);
+      expect(args.data.programStartWeek).toBe(18);
+      const expectedEnd = new Date(Date.UTC(2025, 0, 6));
+      expectedEnd.setUTCDate(expectedEnd.getUTCDate() + 6); // remainingWeeks=1 → 6 days
+      expect(ymd(args.data.programEndDate)).toBe(ymd(expectedEnd));
+    });
+
+    it('create: clamps startWeek upper bound to 21 when deloads=true and startWeek=25; endDate = start + 6 days', async () => {
+      (dbMock.routine.create as any).mockResolvedValue({ id: 'r1' });
+      const dto: any = {
+        name: 'r',
+        description: 'd',
+        isPeriodized: false,
+        programWithDeloads: true, // 21 weeks
+        programStartDate: monday,
+        programTimezone: tz,
+        programStartWeek: 25, // should clamp to 21
+        days: [
+          {
+            dayOfWeek: 1,
+            order: 0,
+            exercises: [
+              {
+                exerciseId: 'e1',
+                order: 0,
+                restSeconds: 60,
+                sets: [{ setNumber: 1, repType: 'FIXED', reps: 8 }],
+                progressionScheme: 'PROGRAMMED_RTF',
+                programTMKg: 100,
+                programRoundingKg: 2.5,
+              },
+            ],
+          },
+        ],
+      };
+
+      await service.create('u1', dto);
+
+      const args = (dbMock.routine.create as any).mock.calls[0][0];
+      expect(args.data.programDurationWeeks).toBe(21);
+      expect(args.data.programStartWeek).toBe(21);
+      const expectedEnd = new Date(Date.UTC(2025, 0, 6));
+      expectedEnd.setUTCDate(expectedEnd.getUTCDate() + 6);
+      expect(ymd(args.data.programEndDate)).toBe(ymd(expectedEnd));
+    });
+
+    it('create: defaults startWeek to 1 when omitted; endDate = start + (weeks*7 - 1) days', async () => {
+      (dbMock.routine.create as any).mockResolvedValue({ id: 'r1' });
+      const dto: any = {
+        name: 'r',
+        description: 'd',
+        isPeriodized: false,
+        programWithDeloads: true, // 21
+        programStartDate: monday,
+        programTimezone: tz,
+        days: [
+          {
+            dayOfWeek: 1,
+            order: 0,
+            exercises: [
+              {
+                exerciseId: 'e1',
+                order: 0,
+                restSeconds: 60,
+                sets: [{ setNumber: 1, repType: 'FIXED', reps: 8 }],
+                progressionScheme: 'PROGRAMMED_RTF',
+                programTMKg: 100,
+                programRoundingKg: 2.5,
+              },
+            ],
+          },
+        ],
+      };
+
+      await service.create('u1', dto);
+
+      const args = (dbMock.routine.create as any).mock.calls[0][0];
+      expect(args.data.programStartWeek).toBe(1);
+      const expectedEnd = new Date(Date.UTC(2025, 0, 6));
+      expectedEnd.setUTCDate(expectedEnd.getUTCDate() + (21 * 7 - 1));
+      expect(ymd(args.data.programEndDate)).toBe(ymd(expectedEnd));
+    });
+
+    it('update: recomputes endDate when programStartWeek provided', async () => {
+      (dbMock.routine.findFirst as any).mockResolvedValue({
+        id: 'r1',
+        programWithDeloads: true,
+        programStartDate: new Date('2025-01-06T00:00:00.000Z'),
+        programEndDate: new Date('2025-06-01T00:00:00.000Z'),
+      });
+      (dbMock.routineDay.deleteMany as any).mockResolvedValue({ count: 1 });
+      (dbMock.routine.update as any).mockResolvedValue({ id: 'r1' });
+      const dto: any = {
+        name: 'r',
+        description: 'd',
+        isPeriodized: false,
+        programWithDeloads: true, // 21
+        programStartDate: monday,
+        programTimezone: tz,
+        programStartWeek: 9, // remaining = 13 → totalDays = 90
+        days: [
+          {
+            dayOfWeek: 1,
+            order: 0,
+            exercises: [
+              {
+                exerciseId: 'e1',
+                order: 0,
+                restSeconds: 60,
+                sets: [{ setNumber: 1, repType: 'FIXED', reps: 8 }],
+                progressionScheme: 'PROGRAMMED_RTF',
+                programTMKg: 100,
+                programRoundingKg: 2.5,
+              },
+            ],
+          },
+        ],
+      };
+
+      await service.update('u1', 'r1', dto);
+
+      const args = (dbMock.routine.update as any).mock.calls[0][0];
+      const expectedEnd = new Date(Date.UTC(2025, 0, 6));
+      expectedEnd.setUTCDate(expectedEnd.getUTCDate() + (13 * 7 - 1));
+      expect(ymd(args.data.programEndDate)).toBe(ymd(expectedEnd));
+    });
+
+    it('update: preserves existing endDate when base fields unchanged and no startWeek provided', async () => {
+      const existingEnd = new Date('2025-06-01T00:00:00.000Z');
+      (dbMock.routine.findFirst as any).mockResolvedValue({
+        id: 'r1',
+        programWithDeloads: true,
+        programStartDate: new Date('2025-01-06T00:00:00.000Z'),
+        programEndDate: existingEnd,
+      });
+      (dbMock.routineDay.deleteMany as any).mockResolvedValue({ count: 1 });
+      (dbMock.routine.update as any).mockResolvedValue({ id: 'r1' });
+
+      const dto: any = {
+        name: 'r',
+        description: 'd',
+        isPeriodized: false,
+        programWithDeloads: true,
+        programStartDate: monday,
+        programTimezone: tz,
+        days: [
+          {
+            dayOfWeek: 1,
+            order: 0,
+            exercises: [
+              {
+                exerciseId: 'e1',
+                order: 0,
+                restSeconds: 60,
+                sets: [{ setNumber: 1, repType: 'FIXED', reps: 8 }],
+                progressionScheme: 'PROGRAMMED_RTF',
+                programTMKg: 100,
+                programRoundingKg: 2.5,
+              },
+            ],
+          },
+        ],
+      };
+
+      await service.update('u1', 'r1', dto);
+
+      const args = (dbMock.routine.update as any).mock.calls[0][0];
+      expect(ymd(args.data.programEndDate)).toBe(ymd(existingEnd));
+    });
+  });
+
   describe('create validations and selects', () => {
     it('throws BadRequest when FIXED set is missing reps', async () => {
       const dto: any = {

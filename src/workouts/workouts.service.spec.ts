@@ -14,6 +14,9 @@ const dbMock = {
   routineDay: {
     findFirst: jest.fn(),
   },
+  routine: {
+    findFirst: jest.fn(),
+  },
   routineExercise: {
     findFirst: jest.fn(),
   },

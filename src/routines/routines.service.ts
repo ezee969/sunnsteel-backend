@@ -57,6 +57,7 @@ export class RoutinesService {
     let programEndDate: Date | null = null;
     let programTimezone: string | null = null;
     let programTrainingDaysOfWeek: number[] = [];
+    let programStartWeek: number | null = null;
 
     if (hasRtF) {
       if (typeof dto.programWithDeloads !== 'boolean') {
@@ -92,8 +93,13 @@ export class RoutinesService {
       }
 
       programStartDate = start;
-      // End date = last day of the program window
-      const totalDays = programDurationWeeks * 7 - 1;
+      // Clamp start week (create-only feature). Default to 1 when unset.
+      const requestedStartWeek = typeof dto.programStartWeek === 'number' ? dto.programStartWeek : 1;
+      const clampedStartWeek = Math.min(Math.max(requestedStartWeek, 1), programDurationWeeks);
+      programStartWeek = clampedStartWeek;
+      // End date = last day of the remaining window from start week
+      const remainingWeeks = programDurationWeeks - (clampedStartWeek - 1);
+      const totalDays = remainingWeeks * 7 - 1;
       programEndDate = this.addDays(start, totalDays);
     }
 
@@ -111,6 +117,7 @@ export class RoutinesService {
           ? {
               programWithDeloads,
               programDurationWeeks,
+              programStartWeek,
               programStartDate,
               programEndDate,
               programTrainingDaysOfWeek,
@@ -119,6 +126,7 @@ export class RoutinesService {
           : {
               programWithDeloads: null,
               programDurationWeeks: null,
+              programStartWeek: null,
               programStartDate: null,
               programEndDate: null,
               programTrainingDaysOfWeek: [],
@@ -197,6 +205,7 @@ export class RoutinesService {
         isCompleted: true,
         programWithDeloads: true,
         programDurationWeeks: true,
+        programStartWeek: true,
         programStartDate: true,
         programEndDate: true,
         programTrainingDaysOfWeek: true,
@@ -259,6 +268,12 @@ export class RoutinesService {
         isPeriodized: true,
         isFavorite: true,
         isCompleted: true,
+        programWithDeloads: true,
+        programDurationWeeks: true,
+        programStartWeek: true,
+        programStartDate: true,
+        programEndDate: true,
+        programTimezone: true,
         createdAt: true,
         updatedAt: true,
         days: {
@@ -306,6 +321,12 @@ export class RoutinesService {
         isPeriodized: true,
         isFavorite: true,
         isCompleted: true,
+        programWithDeloads: true,
+        programDurationWeeks: true,
+        programStartWeek: true,
+        programStartDate: true,
+        programEndDate: true,
+        programTimezone: true,
         createdAt: true,
         updatedAt: true,
         days: {
@@ -345,10 +366,18 @@ export class RoutinesService {
 
   async update(userId: string, id: string, dto: CreateRoutineDto) {
     return this.db.$transaction(async (tx) => {
-      // Verify ownership
+      // Verify ownership and fetch existing program fields for preservation logic
       const existing = await tx.routine.findFirst({
         where: { id, userId },
-        select: { id: true },
+        select: {
+          id: true,
+          programWithDeloads: true,
+          programDurationWeeks: true,
+          programStartDate: true,
+          programEndDate: true,
+          programTimezone: true,
+          programTrainingDaysOfWeek: true,
+        },
       });
       if (!existing) {
         throw new NotFoundException(
@@ -413,8 +442,28 @@ export class RoutinesService {
         }
 
         programStartDate = start;
-        const totalDays = programDurationWeeks * 7 - 1;
-        programEndDate = this.addDays(start, totalDays);
+        // Preserve end date if start week is create-only and base fields unchanged
+        const baseUnchanged =
+          existing.programStartDate &&
+          existing.programStartDate.getUTCFullYear() === start.getUTCFullYear() &&
+          existing.programStartDate.getUTCMonth() === start.getUTCMonth() &&
+          existing.programStartDate.getUTCDate() === start.getUTCDate() &&
+          existing.programWithDeloads === dto.programWithDeloads;
+
+        if (typeof (dto as any).programStartWeek === 'number') {
+          const requestedStartWeek = (dto as any).programStartWeek as number;
+          const clamped = Math.min(Math.max(requestedStartWeek, 1), programDurationWeeks);
+          const remainingWeeks = programDurationWeeks - (clamped - 1);
+          const totalDays = remainingWeeks * 7 - 1;
+          programEndDate = this.addDays(start, totalDays);
+        } else if (baseUnchanged && existing.programEndDate) {
+          // Keep existing computed end date
+          programEndDate = existing.programEndDate;
+        } else {
+          // Recompute full window
+          const totalDays = programDurationWeeks * 7 - 1;
+          programEndDate = this.addDays(start, totalDays);
+        }
       }
 
       // Update routine basic fields and recreate nested structure
@@ -514,6 +563,7 @@ export class RoutinesService {
           isCompleted: true,
           programWithDeloads: true,
           programDurationWeeks: true,
+          programStartWeek: true,
           programStartDate: true,
           programEndDate: true,
           programTrainingDaysOfWeek: true,
@@ -583,9 +633,38 @@ export class RoutinesService {
     });
   }
 
-  async findFavorites(userId: string) {
+  async setCompleted(userId: string, id: string, isCompleted: boolean) {
+    // Ensure routine belongs to user
+    const routine = await this.db.routine.findFirst({
+      where: { id, userId },
+      select: { id: true },
+    });
+    if (!routine) {
+      throw new NotFoundException(
+        'Routine not found or you do not have permission to modify it.',
+      );
+    }
+
+    return this.db.routine.update({
+      where: { id },
+      data: { isCompleted },
+      select: {
+        id: true,
+        userId: true,
+        name: true,
+        description: true,
+        isPeriodized: true,
+        isFavorite: true,
+        isCompleted: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+  }
+
+  async findCompleted(userId: string) {
     return this.db.routine.findMany({
-      where: { userId, isFavorite: true },
+      where: { userId, isCompleted: true },
       select: {
         id: true,
         userId: true,
@@ -628,37 +707,9 @@ export class RoutinesService {
     });
   }
 
-  async setCompleted(userId: string, id: string, isCompleted: boolean) {
-    const routine = await this.db.routine.findFirst({
-      where: { id, userId },
-      select: { id: true },
-    });
-    if (!routine) {
-      throw new NotFoundException(
-        'Routine not found or you do not have permission to modify it.',
-      );
-    }
-
-    return this.db.routine.update({
-      where: { id },
-      data: { isCompleted },
-      select: {
-        id: true,
-        userId: true,
-        name: true,
-        description: true,
-        isPeriodized: true,
-        isFavorite: true,
-        isCompleted: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
-  }
-
-  async findCompleted(userId: string) {
+  async findFavorites(userId: string) {
     return this.db.routine.findMany({
-      where: { userId, isCompleted: true },
+      where: { userId, isFavorite: true },
       select: {
         id: true,
         userId: true,
@@ -667,6 +718,12 @@ export class RoutinesService {
         isPeriodized: true,
         isFavorite: true,
         isCompleted: true,
+        programWithDeloads: true,
+        programDurationWeeks: true,
+        programStartWeek: true,
+        programStartDate: true,
+        programEndDate: true,
+        programTimezone: true,
         createdAt: true,
         updatedAt: true,
         days: {
