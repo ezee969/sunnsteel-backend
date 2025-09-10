@@ -24,3 +24,8 @@ export class LoginDto {
   @IsString()
   password: string;
 }
+
+export class GoogleAuthDto {
+  @IsString()
+  idToken: string;
+}

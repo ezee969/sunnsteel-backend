@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { Response, Request } from 'express';
 import { AuthService } from './auth.service';
-import { RegisterDto } from './dto/auth.dto';
+import { RegisterDto, GoogleAuthDto } from './dto/auth.dto';
 import { PassportLocalGuard } from './guards/passport-local.guard';
 import { JwtAuthGuard } from './guards/passport-jwt.guard';
 import { RequestWithUserIdentification } from './types/request-with-user-indentification.type';
@@ -29,6 +29,25 @@ export class AuthController {
     const result = await this.authService.register(registerDto);
 
     this.setTokenCookie(response, result.tokens.refreshToken);
+    this.setSessionCookie(response);
+
+    return {
+      user: result.user,
+      accessToken: result.tokens.accessToken,
+    };
+  }
+
+  @Post('google')
+  @HttpCode(HttpStatus.OK)
+  async googleLogin(
+    @Body() body: GoogleAuthDto,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const { idToken } = body;
+    const result = await this.authService.loginWithGoogle(idToken);
+
+    this.setTokenCookie(response, result.tokens.refreshToken);
+    this.setSessionCookie(response);
 
     return {
       user: result.user,
@@ -52,6 +71,7 @@ export class AuthController {
     const result = await this.authService.login(user);
 
     this.setTokenCookie(response, result.tokens.refreshToken);
+    this.setSessionCookie(response);
 
     return {
       user: result.user,
@@ -74,6 +94,7 @@ export class AuthController {
     }
 
     this.clearTokenCookie(response);
+    this.clearSessionCookie(response);
     return { message: 'Logged out successfully' };
   }
 
@@ -86,16 +107,27 @@ export class AuthController {
     const refreshToken = request.cookies?.refresh_token;
 
     if (!refreshToken) {
+      // Proactively clear any session markers to prevent redirect loops
+      this.clearTokenCookie(response);
+      this.clearSessionCookie(response);
       throw new UnauthorizedException('Refresh token not found');
     }
 
-    const tokens = await this.authService.refreshTokens(refreshToken);
+    try {
+      const tokens = await this.authService.refreshTokens(refreshToken);
 
-    this.setTokenCookie(response, tokens.refreshToken);
+      this.setTokenCookie(response, tokens.refreshToken);
+      this.setSessionCookie(response);
 
-    return {
-      accessToken: tokens.accessToken,
-    };
+      return {
+        accessToken: tokens.accessToken,
+      };
+    } catch {
+      // On invalid/expired refresh tokens, clear cookies to break client-side loops
+      this.clearTokenCookie(response);
+      this.clearSessionCookie(response);
+      throw new UnauthorizedException('Invalid refresh token');
+    }
   }
 
   private setTokenCookie(response: Response, token: string) {
@@ -107,8 +139,21 @@ export class AuthController {
     });
   }
 
+  private setSessionCookie(response: Response) {
+    response.cookie('has_session', 'true', {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days (mirror refresh cookie)
+    });
+  }
+
   private clearTokenCookie(response: Response) {
     response.clearCookie('refresh_token');
+  }
+
+  private clearSessionCookie(response: Response) {
+    response.clearCookie('has_session');
   }
 
   private extractTokenFromHeader(request: Request): string | undefined {

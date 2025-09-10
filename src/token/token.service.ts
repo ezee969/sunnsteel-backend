@@ -7,6 +7,7 @@ import { DatabaseService } from 'src/database/database.service';
 // Types
 import { Tokens } from './types/tokens.type';
 import { JwtPayload } from 'src/auth/types/jwt-payload.type';
+import { randomUUID } from 'crypto';
 
 @Injectable()
 export class TokenService {
@@ -31,6 +32,7 @@ export class TokenService {
         {
           sub: userId,
           email,
+          jti: randomUUID(),
         },
         {
           secret: process.env.JWT_REFRESH_SECRET,
@@ -70,13 +72,22 @@ export class TokenService {
       );
     }
 
-    await this.db.refreshToken.create({
-      data: {
-        token,
-        userId,
-        expiresAt,
-      },
-    });
+    try {
+      await this.db.refreshToken.create({
+        data: {
+          token,
+          userId,
+          expiresAt,
+        },
+      });
+    } catch (err: any) {
+      // Handle race condition where the same refresh token was created concurrently
+      if (err?.code === 'P2002') {
+        // Token already exists; safe to ignore as it belongs to this user/session
+        return;
+      }
+      throw err;
+    }
   }
 
   async revokeRefreshToken(token: string): Promise<void> {

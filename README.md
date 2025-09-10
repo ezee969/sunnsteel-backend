@@ -51,6 +51,32 @@ Sunnsteel Backend - A fitness API built with NestJS featuring workout tracking, 
 - Secure password hashing with bcrypt
 - Token blacklisting for logout functionality
 - Rate limiting for security
+- Google Sign-In via ID token (POST `/api/auth/google`)
+  - Frontend obtains a Google ID token via Google Identity Services and posts it to `/api/auth/google`.
+  - On success, backend returns `accessToken` in the JSON response and sets the refresh cookie.
+
+#### Cookies & Session Signals
+
+- Refresh token cookie: `refresh_token`
+  - `httpOnly: true`, `sameSite: 'strict'`, `secure: NODE_ENV === 'production'`, `maxAge: 7d`.
+- Session presence cookie: `has_session`
+  - `httpOnly: false` (non-HttpOnly), mirrors the refresh cookie lifetime and flags, used by the frontend middleware to safely redirect authenticated users away from `/login` and `/signup` without loops from stale cookies.
+  - Set on register/login/google/refresh; cleared on logout.
+
+#### JWT Secrets
+
+- Access token signing: `JWT_ACCESS_SECRET`
+- Refresh token signing: `JWT_REFRESH_SECRET`
+- Ensure both are defined in the environment; do not use a single `JWT_SECRET`.
+
+#### Refresh Token Storage & Rotation
+
+- Refresh tokens are stored in the database per user; on refresh the token is rotated and the new one is persisted.
+- Each refresh token carries a `jti` (unique ID) to avoid collisions; a rare race on insert is safely handled server-side.
+
+#### CORS
+
+- CORS is enabled with credentials and a configurable origin (defaults to `http://localhost:3000`).
 
 ### Workout Management
 
@@ -71,6 +97,30 @@ Sunnsteel Backend - A fitness API built with NestJS featuring workout tracking, 
 
 ```bash
 $ npm install
+```
+
+### Google Sign-In (ID token)
+
+- Endpoint: `POST /api/auth/google`
+- Body: `{ "idToken": string }` where `idToken` is obtained from Google Identity Services (GIS) on the frontend.
+- Behavior:
+  - Verifies the Google ID token server-side against `GOOGLE_CLIENT_ID`.
+  - If the email is verified and the user does not exist, it creates the user.
+  - Issues the standard access token in the response and sets the refresh token in an HTTP-only cookie (same as login/register).
+
+Example request:
+
+```http
+POST /api/auth/google
+Content-Type: application/json
+
+{ "idToken": "<google-id-token>" }
+```
+
+Response:
+
+```json
+{ "user": { "id": "...", "email": "...", "name": "..." }, "accessToken": "..." }
 ```
 
 ## Running the app
