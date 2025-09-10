@@ -1,3 +1,8 @@
+// Polyfill for crypto global (required for @nestjs/schedule)
+if (typeof global.crypto === 'undefined') {
+  global.crypto = require('crypto');
+}
+
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
