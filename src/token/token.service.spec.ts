@@ -110,7 +110,11 @@ describe('TokenService', () => {
       );
       expect(jwtService.signAsync).toHaveBeenNthCalledWith(
         2,
-        { sub: mockUser.id, email: mockUser.email },
+        expect.objectContaining({
+          sub: mockUser.id,
+          email: mockUser.email,
+          jti: expect.any(String),
+        }),
         { secret: process.env.JWT_REFRESH_SECRET, expiresIn: '7d' },
       );
       expect(databaseService.refreshToken.create).toHaveBeenCalled();

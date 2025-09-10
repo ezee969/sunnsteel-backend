@@ -28,7 +28,12 @@ export class WorkoutsService {
   // --- RtF weekly goals (with deloads) adapted to 5 sets: 4 fixed + 1 AMRAP (set #5)
   // Weeks 7, 14, 21 are deloads (3x5 @ RPE6 @ ~60% TM)
   private readonly RTF_WITH_DELOADS: Array<
-    | { week: number; intensity: number; fixedReps: number; amrapTarget: number }
+    | {
+        week: number;
+        intensity: number;
+        fixedReps: number;
+        amrapTarget: number;
+      }
     | { week: number; isDeload: true }
   > = [
     { week: 1, intensity: 0.7, fixedReps: 5, amrapTarget: 10 },
@@ -63,7 +68,8 @@ export class WorkoutsService {
       weekday: 'short',
     });
     const parts = fmt.formatToParts(d);
-    const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+    const get = (type: string) =>
+      parts.find((p) => p.type === type)?.value ?? '';
     const y = Number(get('year'));
     const m = Number(get('month'));
     const day = Number(get('day'));
@@ -110,8 +116,13 @@ export class WorkoutsService {
     if (withDeloads) return this.RTF_WITH_DELOADS[week - 1];
     // 18-week mode: filter out deload entries
     const trainingOnly = this.RTF_WITH_DELOADS.filter(
-      (g) => !("isDeload" in g && g.isDeload === true),
-    ) as Array<{ week: number; intensity: number; fixedReps: number; amrapTarget: number }>;
+      (g) => !('isDeload' in g && g.isDeload === true),
+    ) as Array<{
+      week: number;
+      intensity: number;
+      fixedReps: number;
+      amrapTarget: number;
+    }>;
     return trainingOnly[week - 1];
   }
 
@@ -197,13 +208,14 @@ export class WorkoutsService {
       (routine?.programTrainingDaysOfWeek?.length ?? 0) > 0;
 
     if (hasProgram) {
-      const tz = routine!.programTimezone!;
+      const tz = routine.programTimezone!;
       const dow = this.localDateParts(now, tz).dow; // 0..6
-      const isScheduled = routine!.programTrainingDaysOfWeek!.includes(dow);
+      const isScheduled = routine.programTrainingDaysOfWeek.includes(dow);
 
       // Date window checks (inclusive)
-      const beforeStart = this.diffLocalDays(now, routine!.programStartDate!, tz) < 0;
-      const afterEnd = this.diffLocalDays(now, routine!.programEndDate!, tz) > 0;
+      const beforeStart =
+        this.diffLocalDays(now, routine.programStartDate!, tz) < 0;
+      const afterEnd = this.diffLocalDays(now, routine.programEndDate!, tz) > 0;
       if (beforeStart) {
         throw new BadRequestException('Program has not started yet');
       }
@@ -211,11 +223,15 @@ export class WorkoutsService {
         throw new BadRequestException('Program has ended');
       }
       if (!isScheduled) {
-        throw new BadRequestException('Today is not a scheduled training day for this routine');
+        throw new BadRequestException(
+          'Today is not a scheduled training day for this routine',
+        );
       }
       // Ensure the chosen routineDay matches today's weekday
       if (routineDay.dayOfWeek !== dow) {
-        throw new BadRequestException('Selected routine day does not match today\'s weekday');
+        throw new BadRequestException(
+          "Selected routine day does not match today's weekday",
+        );
       }
     }
 
@@ -232,14 +248,14 @@ export class WorkoutsService {
 
     // Attach RtF plan for today if applicable
     if (hasProgram) {
-      const tz = routine!.programTimezone!;
+      const tz = routine.programTimezone!;
       const week = this.getCurrentProgramWeek(
         now,
-        routine!.programStartDate!,
-        routine!.programDurationWeeks!,
+        routine.programStartDate!,
+        routine.programDurationWeeks!,
         tz,
       );
-      const withDeloads = !!routine!.programWithDeloads;
+      const withDeloads = !!routine.programWithDeloads;
       const isDeload = this.isDeloadWeek(week, withDeloads);
 
       // Load exercises for this routine day with RtF config
@@ -261,7 +277,10 @@ export class WorkoutsService {
         .map((e) => {
           const goal = this.getRtFGoalForWeek(week, withDeloads);
           if ((goal as any).isDeload) {
-            const weightKg = this.roundToNearest((e.programTMKg ?? 0) * 0.6, e.programRoundingKg ?? 2.5);
+            const weightKg = this.roundToNearest(
+              (e.programTMKg ?? 0) * 0.6,
+              e.programRoundingKg ?? 2.5,
+            );
             return {
               routineExerciseId: e.id,
               exerciseId: e.exercise.id,
@@ -274,7 +293,11 @@ export class WorkoutsService {
               ],
             } as const;
           }
-          const g = goal as { intensity: number; fixedReps: number; amrapTarget: number };
+          const g = goal as {
+            intensity: number;
+            fixedReps: number;
+            amrapTarget: number;
+          };
           const weightKg = this.roundToNearest(
             (e.programTMKg ?? 0) * g.intensity,
             e.programRoundingKg ?? 2.5,
@@ -292,7 +315,12 @@ export class WorkoutsService {
               { setNumber: 2, reps: g.fixedReps, weightKg },
               { setNumber: 3, reps: g.fixedReps, weightKg },
               { setNumber: 4, reps: g.fixedReps, weightKg },
-              { setNumber: 5, reps: null, amrapTarget: g.amrapTarget, weightKg },
+              {
+                setNumber: 5,
+                reps: null,
+                amrapTarget: g.amrapTarget,
+                weightKg,
+              },
             ],
           } as const;
         });
@@ -301,11 +329,11 @@ export class WorkoutsService {
         ...created,
         program: {
           currentWeek: week,
-          durationWeeks: routine!.programDurationWeeks!,
+          durationWeeks: routine.programDurationWeeks!,
           withDeloads,
           isDeloadWeek: isDeload,
-          startDate: routine!.programStartDate!,
-          endDate: routine!.programEndDate!,
+          startDate: routine.programStartDate!,
+          endDate: routine.programEndDate!,
           timeZone: tz,
         },
         rtfPlans,
@@ -433,16 +461,16 @@ export class WorkoutsService {
         let currentWeek: number | null = null;
         let isDeload = false;
         if (hasProgram) {
-          const tz = routineProgram!.programTimezone!;
+          const tz = routineProgram.programTimezone!;
           currentWeek = this.getCurrentProgramWeek(
             new Date(),
-            routineProgram!.programStartDate!,
-            routineProgram!.programDurationWeeks!,
+            routineProgram.programStartDate!,
+            routineProgram.programDurationWeeks!,
             tz,
           );
           isDeload = this.isDeloadWeek(
             currentWeek,
-            !!routineProgram!.programWithDeloads,
+            !!routineProgram.programWithDeloads,
           );
         }
 
@@ -516,9 +544,9 @@ export class WorkoutsService {
               ) {
                 const goal = this.getRtFGoalForWeek(
                   currentWeek,
-                  !!routineProgram!.programWithDeloads,
+                  !!routineProgram.programWithDeloads,
                 );
-                if (!("isDeload" in (goal as any))) {
+                if (!('isDeload' in (goal as any))) {
                   const g = goal as {
                     intensity: number;
                     fixedReps: number;
@@ -526,7 +554,7 @@ export class WorkoutsService {
                   };
                   const newTM = this.adjustTM(
                     ex.programTMKg,
-                    lastSet.reps!,
+                    lastSet.reps,
                     g.amrapTarget,
                   );
                   await this.db.routineExercise.update({

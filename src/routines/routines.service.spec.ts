@@ -51,7 +51,8 @@ describe('RoutinesService', () => {
     const monday = '2025-01-06'; // Monday in UTC
     const tz = 'UTC';
 
-    const ymd = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+    const ymd = (d: Date) =>
+      `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
 
     it('create: clamps startWeek to 18 when deloads=false and startWeek=21; endDate = start + 6 days', async () => {
       (dbMock.routine.create as any).mockResolvedValue({ id: 'r1' });

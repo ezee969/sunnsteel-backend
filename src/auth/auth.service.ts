@@ -100,10 +100,9 @@ export class AuthService {
     if (!payload) {
       throw new UnauthorizedException('Invalid Google token');
     }
-    const email = payload.email as string | undefined;
+    const email = payload.email;
     const emailVerified = Boolean(payload.email_verified);
-    const name =
-      (payload.name as string | undefined) ?? (email ? email.split('@')[0] : 'User');
+    const name = payload.name ?? (email ? email.split('@')[0] : 'User');
 
     if (!email || !emailVerified) {
       throw new UnauthorizedException('Email not verified by Google');

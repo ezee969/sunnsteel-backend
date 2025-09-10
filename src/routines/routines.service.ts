@@ -20,7 +20,8 @@ export class RoutinesService {
       weekday: 'short',
     });
     const parts = fmt.formatToParts(d);
-    const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+    const get = (type: string) =>
+      parts.find((p) => p.type === type)?.value ?? '';
     const y = Number(get('year'));
     const m = Number(get('month'));
     const day = Number(get('day'));
@@ -39,7 +40,13 @@ export class RoutinesService {
   }
 
   private addDays(dateOnly: Date, days: number) {
-    const d = new Date(Date.UTC(dateOnly.getUTCFullYear(), dateOnly.getUTCMonth(), dateOnly.getUTCDate()));
+    const d = new Date(
+      Date.UTC(
+        dateOnly.getUTCFullYear(),
+        dateOnly.getUTCMonth(),
+        dateOnly.getUTCDate(),
+      ),
+    );
     d.setUTCDate(d.getUTCDate() + days);
     return d;
   }
@@ -61,13 +68,19 @@ export class RoutinesService {
 
     if (hasRtF) {
       if (typeof dto.programWithDeloads !== 'boolean') {
-        throw new BadRequestException('programWithDeloads is required when using PROGRAMMED_RTF');
+        throw new BadRequestException(
+          'programWithDeloads is required when using PROGRAMMED_RTF',
+        );
       }
       if (!dto.programStartDate) {
-        throw new BadRequestException('programStartDate (yyyy-mm-dd) is required when using PROGRAMMED_RTF');
+        throw new BadRequestException(
+          'programStartDate (yyyy-mm-dd) is required when using PROGRAMMED_RTF',
+        );
       }
       if (!dto.programTimezone) {
-        throw new BadRequestException('programTimezone (IANA) is required when using PROGRAMMED_RTF');
+        throw new BadRequestException(
+          'programTimezone (IANA) is required when using PROGRAMMED_RTF',
+        );
       }
 
       programWithDeloads = dto.programWithDeloads;
@@ -77,25 +90,37 @@ export class RoutinesService {
       // Parse date-only string as UTC midnight; PostgreSQL @db.Date stores date only
       const start = new Date(`${dto.programStartDate}T00:00:00.000Z`);
       if (isNaN(start.getTime())) {
-        throw new BadRequestException('programStartDate must be an ISO date (yyyy-mm-dd)');
+        throw new BadRequestException(
+          'programStartDate must be an ISO date (yyyy-mm-dd)',
+        );
       }
 
       // Validate weekday match with first training day
-      const orderedDays = [...dto.days].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      const orderedDays = [...dto.days].sort(
+        (a, b) => (a.order ?? 0) - (b.order ?? 0),
+      );
       if (orderedDays.length === 0) {
-        throw new BadRequestException('Routine requires at least one training day when using PROGRAMMED_RTF');
+        throw new BadRequestException(
+          'Routine requires at least one training day when using PROGRAMMED_RTF',
+        );
       }
       programTrainingDaysOfWeek = orderedDays.map((d) => d.dayOfWeek);
       const firstTrainingDow = programTrainingDaysOfWeek[0]; // 0..6
       const startDow = this.localDateParts(start, programTimezone).dow; // 0..6
       if (startDow !== firstTrainingDow) {
-        throw new BadRequestException('programStartDate must fall on the weekday of the first training day');
+        throw new BadRequestException(
+          'programStartDate must fall on the weekday of the first training day',
+        );
       }
 
       programStartDate = start;
       // Clamp start week (create-only feature). Default to 1 when unset.
-      const requestedStartWeek = typeof dto.programStartWeek === 'number' ? dto.programStartWeek : 1;
-      const clampedStartWeek = Math.min(Math.max(requestedStartWeek, 1), programDurationWeeks);
+      const requestedStartWeek =
+        typeof dto.programStartWeek === 'number' ? dto.programStartWeek : 1;
+      const clampedStartWeek = Math.min(
+        Math.max(requestedStartWeek, 1),
+        programDurationWeeks,
+      );
       programStartWeek = clampedStartWeek;
       // End date = last day of the remaining window from start week
       const remainingWeeks = programDurationWeeks - (clampedStartWeek - 1);
@@ -413,13 +438,19 @@ export class RoutinesService {
 
       if (hasRtF) {
         if (typeof dto.programWithDeloads !== 'boolean') {
-          throw new BadRequestException('programWithDeloads is required when using PROGRAMMED_RTF');
+          throw new BadRequestException(
+            'programWithDeloads is required when using PROGRAMMED_RTF',
+          );
         }
         if (!dto.programStartDate) {
-          throw new BadRequestException('programStartDate (yyyy-mm-dd) is required when using PROGRAMMED_RTF');
+          throw new BadRequestException(
+            'programStartDate (yyyy-mm-dd) is required when using PROGRAMMED_RTF',
+          );
         }
         if (!dto.programTimezone) {
-          throw new BadRequestException('programTimezone (IANA) is required when using PROGRAMMED_RTF');
+          throw new BadRequestException(
+            'programTimezone (IANA) is required when using PROGRAMMED_RTF',
+          );
         }
 
         programWithDeloads = dto.programWithDeloads;
@@ -427,32 +458,44 @@ export class RoutinesService {
         programTimezone = dto.programTimezone;
         const start = new Date(`${dto.programStartDate}T00:00:00.000Z`);
         if (isNaN(start.getTime())) {
-          throw new BadRequestException('programStartDate must be an ISO date (yyyy-mm-dd)');
+          throw new BadRequestException(
+            'programStartDate must be an ISO date (yyyy-mm-dd)',
+          );
         }
 
-        const orderedDays = [...dto.days].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+        const orderedDays = [...dto.days].sort(
+          (a, b) => (a.order ?? 0) - (b.order ?? 0),
+        );
         if (orderedDays.length === 0) {
-          throw new BadRequestException('Routine requires at least one training day when using PROGRAMMED_RTF');
+          throw new BadRequestException(
+            'Routine requires at least one training day when using PROGRAMMED_RTF',
+          );
         }
         programTrainingDaysOfWeek = orderedDays.map((d) => d.dayOfWeek);
         const firstTrainingDow = programTrainingDaysOfWeek[0];
         const startDow = this.localDateParts(start, programTimezone).dow;
         if (startDow !== firstTrainingDow) {
-          throw new BadRequestException('programStartDate must fall on the weekday of the first training day');
+          throw new BadRequestException(
+            'programStartDate must fall on the weekday of the first training day',
+          );
         }
 
         programStartDate = start;
         // Preserve end date if start week is create-only and base fields unchanged
         const baseUnchanged =
           existing.programStartDate &&
-          existing.programStartDate.getUTCFullYear() === start.getUTCFullYear() &&
+          existing.programStartDate.getUTCFullYear() ===
+            start.getUTCFullYear() &&
           existing.programStartDate.getUTCMonth() === start.getUTCMonth() &&
           existing.programStartDate.getUTCDate() === start.getUTCDate() &&
           existing.programWithDeloads === dto.programWithDeloads;
 
         if (typeof (dto as any).programStartWeek === 'number') {
           const requestedStartWeek = (dto as any).programStartWeek as number;
-          const clamped = Math.min(Math.max(requestedStartWeek, 1), programDurationWeeks);
+          const clamped = Math.min(
+            Math.max(requestedStartWeek, 1),
+            programDurationWeeks,
+          );
           const remainingWeeks = programDurationWeeks - (clamped - 1);
           const totalDays = remainingWeeks * 7 - 1;
           programEndDate = this.addDays(start, totalDays);
