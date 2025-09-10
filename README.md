@@ -67,7 +67,6 @@ Sunnsteel Backend - A fitness API built with NestJS featuring workout tracking, 
 
 - Access token signing: `JWT_ACCESS_SECRET`
 - Refresh token signing: `JWT_REFRESH_SECRET`
-- Ensure both are defined in the environment; do not use a single `JWT_SECRET`.
 
 #### Refresh Token Storage & Rotation
 
@@ -164,6 +163,7 @@ $ npm run test:cov
 ### Test Coverage
 
 Current test modules:
+
 - **Auth Module**: AuthController, AuthService with login/register/logout/refresh
 - **Users Module**: UsersController, UsersService with profile management
 - **Exercises Module**: ExercisesController, ExercisesService with exercise catalog
@@ -174,6 +174,7 @@ Current test modules:
 ### CI/CD Pipeline
 
 GitHub Actions workflow includes:
+
 - PostgreSQL database setup
 - Prisma migrations and seeding
 - Unit and E2E test execution
@@ -183,6 +184,7 @@ GitHub Actions workflow includes:
 ### Test Maintenance
 
 ⚠️ **Important**: When making code changes, always:
+
 1. Update existing tests if functionality changes
 2. Add new tests for new features or bug fixes
 3. Verify all tests pass before committing

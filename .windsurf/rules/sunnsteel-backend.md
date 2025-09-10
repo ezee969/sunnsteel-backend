@@ -166,7 +166,6 @@ model RoutineExerciseSet {
 ### Variables de Entorno Requeridas
 
 - `DATABASE_URL`: URL de conexión a PostgreSQL
-- `JWT_SECRET`: Clave secreta para JWT
 - `FRONTEND_URL`: URL del frontend (default: http://localhost:3000)
 - `PORT`: Puerto del servidor (default: 4000)
 

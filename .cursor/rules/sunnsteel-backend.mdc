@@ -27,7 +27,7 @@ Este es el proyecto backend para Sunnsteel, una API de fitness y entrenamiento.
 
 - **POST /api/auth/register**: Registro de usuarios
 - **POST /api/auth/login**: Inicio de sesión
- - **POST /api/auth/google**: Inicio de sesión con Google (ID token)
+- **POST /api/auth/google**: Inicio de sesión con Google (ID token)
 - **POST /api/auth/logout**: Cierre de sesión
 - **POST /api/auth/refresh**: Renovación de tokens
 - **GET /api/users/profile**: Obtener perfil de usuario (protegido)
@@ -163,8 +163,7 @@ model RoutineExerciseSet {
 ### Variables de Entorno Requeridas
 
 - `DATABASE_URL`: URL de conexión a PostgreSQL
-- `JWT_SECRET`: Clave secreta para JWT
- - `GOOGLE_CLIENT_ID`: Client ID de Google para verificar ID tokens
+- `GOOGLE_CLIENT_ID`: Client ID de Google para verificar ID tokens
 - `FRONTEND_URL`: URL del frontend (default: http://localhost:3000)
 - `PORT`: Puerto del servidor (default: 4000)
 
@@ -182,7 +181,7 @@ model RoutineExerciseSet {
 
 - **JWT Strategy**: Passport JWT para validación de tokens
 - **Local Strategy**: Passport Local para login con email/password
-- **Guards**: 
+- **Guards**:
   - `passport-jwt.guard.ts`: Guard para validación JWT
   - `passport-local.guard.ts`: Guard para autenticación local
 - **Token Management**: Access tokens + refresh tokens
