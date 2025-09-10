@@ -1,6 +1,8 @@
-// Polyfill for crypto global (required for @nestjs/schedule)
-if (typeof global.crypto === 'undefined') {
-  global.crypto = require('crypto');
+// main.ts - Add this at the very top, before any other imports
+import { webcrypto } from 'node:crypto';
+
+if (!globalThis.crypto) {
+  globalThis.crypto = webcrypto as Crypto;
 }
 
 import { NestFactory } from '@nestjs/core';
