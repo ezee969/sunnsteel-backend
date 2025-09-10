@@ -43,6 +43,7 @@ export class HealthController {
     RoutinesModule,
     WorkoutsModule,
   ],
+  controllers: [HealthController],
   providers: [
     {
       provide: APP_GUARD,
