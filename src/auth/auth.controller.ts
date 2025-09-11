@@ -131,29 +131,46 @@ export class AuthController {
   }
 
   private setTokenCookie(response: Response, token: string) {
+    const isProd = process.env.NODE_ENV === 'production';
     response.cookie('refresh_token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      secure: isProd,
+      // Cross-site cookie for Vercel (frontend) → Railway (backend)
+      sameSite: isProd ? 'none' : 'lax',
+      path: '/',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
   }
 
   private setSessionCookie(response: Response) {
+    const isProd = process.env.NODE_ENV === 'production';
     response.cookie('has_session', 'true', {
       httpOnly: false,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
+      path: '/',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days (mirror refresh cookie)
     });
   }
 
   private clearTokenCookie(response: Response) {
-    response.clearCookie('refresh_token');
+    const isProd = process.env.NODE_ENV === 'production';
+    response.clearCookie('refresh_token', {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
+      path: '/',
+    });
   }
 
   private clearSessionCookie(response: Response) {
-    response.clearCookie('has_session');
+    const isProd = process.env.NODE_ENV === 'production';
+    response.clearCookie('has_session', {
+      httpOnly: false,
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
+      path: '/',
+    });
   }
 
   private extractTokenFromHeader(request: Request): string | undefined {
