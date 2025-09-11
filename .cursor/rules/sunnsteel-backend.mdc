@@ -1,3 +1,7 @@
+---
+alwaysApply: true
+---
+
 # Sunnsteel Backend - Fitness API
 
 Este es el proyecto backend para Sunnsteel, una API de fitness y entrenamiento.

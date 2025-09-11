@@ -80,13 +80,27 @@ describe('AuthController', () => {
       );
 
       expect(authService.register).toHaveBeenCalledWith(registerDto);
-      expect(mockResponse.cookie).toHaveBeenCalledWith(
+      expect(mockResponse.cookie).toHaveBeenNthCalledWith(
+        1,
         'refresh_token',
         mockTokens.refreshToken,
         {
           httpOnly: true,
           secure: false, // NODE_ENV !== 'production'
-          sameSite: 'strict',
+          sameSite: 'lax',
+          path: '/',
+          maxAge: 7 * 24 * 60 * 60 * 1000,
+        },
+      );
+      expect(mockResponse.cookie).toHaveBeenNthCalledWith(
+        2,
+        'has_session',
+        'true',
+        {
+          httpOnly: false,
+          secure: false,
+          sameSite: 'lax',
+          path: '/',
           maxAge: 7 * 24 * 60 * 60 * 1000,
         },
       );
@@ -112,13 +126,27 @@ describe('AuthController', () => {
       );
 
       expect(authService.login).toHaveBeenCalledWith(mockUser);
-      expect(mockResponse.cookie).toHaveBeenCalledWith(
+      expect(mockResponse.cookie).toHaveBeenNthCalledWith(
+        1,
         'refresh_token',
         mockTokens.refreshToken,
         {
           httpOnly: true,
           secure: false,
-          sameSite: 'strict',
+          sameSite: 'lax',
+          path: '/',
+          maxAge: 7 * 24 * 60 * 60 * 1000,
+        },
+      );
+      expect(mockResponse.cookie).toHaveBeenNthCalledWith(
+        2,
+        'has_session',
+        'true',
+        {
+          httpOnly: false,
+          secure: false,
+          sameSite: 'lax',
+          path: '/',
           maxAge: 7 * 24 * 60 * 60 * 1000,
         },
       );
@@ -159,7 +187,26 @@ describe('AuthController', () => {
         'mock-refresh-token',
         'mock-access-token',
       );
-      expect(mockResponse.clearCookie).toHaveBeenCalledWith('refresh_token');
+      expect(mockResponse.clearCookie).toHaveBeenNthCalledWith(
+        1,
+        'refresh_token',
+        {
+          httpOnly: true,
+          secure: false,
+          sameSite: 'lax',
+          path: '/',
+        },
+      );
+      expect(mockResponse.clearCookie).toHaveBeenNthCalledWith(
+        2,
+        'has_session',
+        {
+          httpOnly: false,
+          secure: false,
+          sameSite: 'lax',
+          path: '/',
+        },
+      );
       expect(result).toEqual({ message: 'Logged out successfully' });
     });
 
@@ -176,7 +223,26 @@ describe('AuthController', () => {
       );
 
       expect(authService.logout).not.toHaveBeenCalled();
-      expect(mockResponse.clearCookie).toHaveBeenCalledWith('refresh_token');
+      expect(mockResponse.clearCookie).toHaveBeenNthCalledWith(
+        1,
+        'refresh_token',
+        {
+          httpOnly: true,
+          secure: false,
+          sameSite: 'lax',
+          path: '/',
+        },
+      );
+      expect(mockResponse.clearCookie).toHaveBeenNthCalledWith(
+        2,
+        'has_session',
+        {
+          httpOnly: false,
+          secure: false,
+          sameSite: 'lax',
+          path: '/',
+        },
+      );
       expect(result).toEqual({ message: 'Logged out successfully' });
     });
   });
@@ -198,13 +264,27 @@ describe('AuthController', () => {
       expect(authService.refreshTokens).toHaveBeenCalledWith(
         'mock-refresh-token',
       );
-      expect(mockResponse.cookie).toHaveBeenCalledWith(
+      expect(mockResponse.cookie).toHaveBeenNthCalledWith(
+        1,
         'refresh_token',
         mockTokens.refreshToken,
         {
           httpOnly: true,
           secure: false,
-          sameSite: 'strict',
+          sameSite: 'lax',
+          path: '/',
+          maxAge: 7 * 24 * 60 * 60 * 1000,
+        },
+      );
+      expect(mockResponse.cookie).toHaveBeenNthCalledWith(
+        2,
+        'has_session',
+        'true',
+        {
+          httpOnly: false,
+          secure: false,
+          sameSite: 'lax',
+          path: '/',
           maxAge: 7 * 24 * 60 * 60 * 1000,
         },
       );
