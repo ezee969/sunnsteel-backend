@@ -20,6 +20,7 @@ describe('AuthService', () => {
     email: 'test@example.com',
     name: 'Test User',
     password: 'hashedPassword',
+    supabaseUserId: null,
     weightUnit: 'KG' as const,
     createdAt: new Date(),
     updatedAt: new Date(),

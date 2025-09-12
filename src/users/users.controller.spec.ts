@@ -11,6 +11,7 @@ describe('UsersController', () => {
     id: '1',
     email: 'test@example.com',
     name: 'Test User',
+    supabaseUserId: null,
     weightUnit: 'KG' as any,
     createdAt: new Date(),
     updatedAt: new Date(),

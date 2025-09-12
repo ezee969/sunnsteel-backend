@@ -14,6 +14,7 @@ describe('TokenService', () => {
     email: 'test@example.com',
     name: 'Test User',
     password: 'hashed-password',
+    supabaseUserId: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     weightUnit: 'KG' as const,
