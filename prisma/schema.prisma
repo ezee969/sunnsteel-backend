@@ -19,8 +19,9 @@ datasource db {
 model User {
   id            String         @id @default(uuid())
   email         String         @unique
-  password      String
+  password      String?        // Made optional for Supabase migration
   name          String
+  supabaseUserId String?       @unique // Link to Supabase user
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   refreshTokens RefreshToken[]
