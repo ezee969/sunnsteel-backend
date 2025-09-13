@@ -55,6 +55,12 @@ Sunnsteel Backend - A fitness API built with NestJS featuring workout tracking, 
   - Frontend obtains a Google ID token via Google Identity Services and posts it to `/api/auth/google`.
   - On success, backend returns `accessToken` in the JSON response and sets the refresh cookie.
 
+#### Guards per Module
+
+- Users, Routines, Workouts: protected by `SupabaseJwtGuard` (expect Supabase access token in `Authorization: Bearer <token>`)
+- Exercises: protected by `SupabaseJwtGuard` as well (aligned with frontend Supabase session)
+- Legacy endpoints using `JwtAuthGuard` remain compatible where explicitly noted.
+
 #### Cookies & Session Signals
 
 - Refresh token cookie: `refresh_token`

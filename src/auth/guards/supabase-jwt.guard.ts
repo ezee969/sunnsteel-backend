@@ -16,12 +16,12 @@ export class SupabaseJwtGuard extends AuthGuard('supabase-jwt') {
       throw err || new UnauthorizedException('Authentication required');
     }
 
-    // The user is already set in the request by the strategy
+    // Ensure request.user is set and return the user provided by Passport
     const request = context.switchToHttp().getRequest();
     if (!request.user) {
-      throw new UnauthorizedException('User not found');
+      request.user = user;
     }
 
-    return request.user;
+    return user;
   }
 }

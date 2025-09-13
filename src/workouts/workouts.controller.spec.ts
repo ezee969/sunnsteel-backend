@@ -25,7 +25,7 @@ describe('WorkoutsController', () => {
     controller = module.get<WorkoutsController>(WorkoutsController);
   });
 
-  const req = { user: { userId: 'u1', email: 'u@example.com' } } as any;
+  const req = { user: { id: 'u1', email: 'u@example.com' } } as any;
 
   it('start calls service with userId and dto', async () => {
     const dto = { routineId: 'r1', routineDayId: 'd1', notes: 'go' } as any;

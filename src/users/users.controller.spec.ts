@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
-import { JwtAuthGuard } from '../auth/guards/passport-jwt.guard';
+import { SupabaseJwtGuard } from '../auth/guards/supabase-jwt.guard';
 
 describe('UsersController', () => {
   let controller: UsersController;
@@ -38,7 +38,7 @@ describe('UsersController', () => {
         },
       ],
     })
-      .overrideGuard(JwtAuthGuard)
+      .overrideGuard(SupabaseJwtGuard)
       .useValue({ canActivate: jest.fn().mockReturnValue(true) })
       .compile();
 

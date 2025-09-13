@@ -1,9 +1,9 @@
 import { Controller, Get, UseGuards } from '@nestjs/common';
 import { Exercise } from '@prisma/client';
 import { ExercisesService } from './exercises.service';
-import { JwtAuthGuard } from '../auth/guards/passport-jwt.guard';
+import { SupabaseJwtGuard } from '../auth/guards/supabase-jwt.guard';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(SupabaseJwtGuard)
 @Controller('exercises')
 export class ExercisesController {
   constructor(private readonly exercisesService: ExercisesService) {}

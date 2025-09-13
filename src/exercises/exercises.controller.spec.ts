@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ExercisesController } from './exercises.controller';
 import { ExercisesService } from './exercises.service';
-import { JwtAuthGuard } from '../auth/guards/passport-jwt.guard';
+import { SupabaseJwtGuard } from '../auth/guards/supabase-jwt.guard';
 import { MuscleGroup } from '@prisma/client';
 
 describe('ExercisesController', () => {
@@ -47,7 +47,7 @@ describe('ExercisesController', () => {
         },
       ],
     })
-      .overrideGuard(JwtAuthGuard)
+      .overrideGuard(SupabaseJwtGuard)
       .useValue({ canActivate: jest.fn().mockReturnValue(true) })
       .compile();
 

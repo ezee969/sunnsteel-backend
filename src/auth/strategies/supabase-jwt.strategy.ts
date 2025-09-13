@@ -1,42 +1,57 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
-import { Strategy, ExtractJwt } from 'passport-jwt';
+import { Strategy as BearerStrategy } from 'passport-http-bearer';
 import { SupabaseService } from '../supabase.service';
 import { User } from '@prisma/client';
 
 @Injectable()
 export class SupabaseJwtStrategy extends PassportStrategy(
-  Strategy,
+  BearerStrategy,
   'supabase-jwt',
 ) {
   constructor(private supabaseService: SupabaseService) {
-    super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-      ignoreExpiration: false,
-      // Use a dummy secret since we verify with Supabase directly
-      secretOrKey: 'dummy-secret',
-      // Pass the request to validate method
-      passReqToCallback: true,
-    });
+    super();
   }
 
-  async validate(request: any, payload: any): Promise<User> {
+  async validate(token: string): Promise<User> {
     try {
-      // Extract the token from the request
-      const token = ExtractJwt.fromAuthHeaderAsBearerToken()(request);
+      console.log('🔐 SupabaseJwtStrategy(Bearer): Validating token', {
+        hasToken: !!token,
+        tokenLength: token?.length,
+      });
 
       if (!token) {
+        console.error('🔐 SupabaseJwtStrategy(Bearer): No token provided');
         throw new UnauthorizedException('No token provided');
       }
 
-      // Verify the token with Supabase and extract user info
+      // Verify the token directly with Supabase (not through our API)
+      console.log('🔐 SupabaseJwtStrategy(Bearer): Verifying with Supabase...');
       const supabaseUser = await this.supabaseService.verifyToken(token);
+      console.log(
+        '🔐 SupabaseJwtStrategy(Bearer): Supabase verification successful',
+        {
+          userId: supabaseUser.id,
+          email: supabaseUser.email,
+        },
+      );
 
       // Get or create user in our database
+      console.log(
+        '🔐 SupabaseJwtStrategy(Bearer): Getting/creating local user...',
+      );
       const user = await this.supabaseService.getOrCreateUser(supabaseUser);
+      console.log('🔐 SupabaseJwtStrategy(Bearer): Local user found/created', {
+        userId: user.id,
+        email: user.email,
+      });
 
       return user;
     } catch (error) {
+      console.error(
+        '🔐 SupabaseJwtStrategy(Bearer): Token validation failed',
+        error,
+      );
       throw new UnauthorizedException('Token validation failed');
     }
   }

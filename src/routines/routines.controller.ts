@@ -12,22 +12,23 @@ import {
 } from '@nestjs/common';
 import { RoutinesService } from './routines.service';
 import { JwtAuthGuard } from '../auth/guards/passport-jwt.guard';
+import { SupabaseJwtGuard } from '../auth/guards/supabase-jwt.guard';
 import { CreateRoutineDto } from './dto/create-routine.dto';
 import { UpdateFavoriteDto } from './dto/update-favorite.dto';
 import { UpdateCompletedDto } from './dto/update-completed.dto';
 import { GetRoutinesFilterDto } from './dto/get-routines-filter.dto';
 import { Request } from 'express';
 
-type RequestWithUser = Request & { user: { userId: string; email: string } };
+type RequestWithUser = Request & { user: { id: string; email: string } };
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(SupabaseJwtGuard)
 @Controller('routines')
 export class RoutinesController {
   constructor(private readonly routinesService: RoutinesService) {}
 
   @Post()
   async create(@Req() req: RequestWithUser, @Body() dto: CreateRoutineDto) {
-    return this.routinesService.create(req.user.userId, dto);
+    return this.routinesService.create(req.user.id, dto);
   }
 
   @Get()
@@ -35,22 +36,22 @@ export class RoutinesController {
     @Req() req: RequestWithUser,
     @Query() filter: GetRoutinesFilterDto,
   ) {
-    return this.routinesService.findAll(req.user.userId, filter);
+    return this.routinesService.findAll(req.user.id, filter);
   }
 
   @Get('favorites')
   async findFavorites(@Req() req: RequestWithUser) {
-    return this.routinesService.findFavorites(req.user.userId);
+    return this.routinesService.findFavorites(req.user.id);
   }
 
   @Get('completed')
   async findCompleted(@Req() req: RequestWithUser) {
-    return this.routinesService.findCompleted(req.user.userId);
+    return this.routinesService.findCompleted(req.user.id);
   }
 
   @Get(':id')
   async findOne(@Req() req: RequestWithUser, @Param('id') id: string) {
-    return this.routinesService.findOne(req.user.userId, id);
+    return this.routinesService.findOne(req.user.id, id);
   }
 
   @Patch(':id')
@@ -59,7 +60,7 @@ export class RoutinesController {
     @Param('id') id: string,
     @Body() dto: CreateRoutineDto,
   ) {
-    return await this.routinesService.update(req.user.userId, id, dto);
+    return await this.routinesService.update(req.user.id, id, dto);
   }
 
   @Patch(':id/favorite')
@@ -68,11 +69,7 @@ export class RoutinesController {
     @Param('id') id: string,
     @Body() dto: UpdateFavoriteDto,
   ) {
-    return this.routinesService.setFavorite(
-      req.user.userId,
-      id,
-      dto.isFavorite,
-    );
+    return this.routinesService.setFavorite(req.user.id, id, dto.isFavorite);
   }
 
   @Patch(':id/completed')
@@ -81,15 +78,11 @@ export class RoutinesController {
     @Param('id') id: string,
     @Body() dto: UpdateCompletedDto,
   ) {
-    return this.routinesService.setCompleted(
-      req.user.userId,
-      id,
-      dto.isCompleted,
-    );
+    return this.routinesService.setCompleted(req.user.id, id, dto.isCompleted);
   }
 
   @Delete(':id')
   async remove(@Req() req: RequestWithUser, @Param('id') id: string) {
-    return this.routinesService.remove(req.user.userId, id);
+    return this.routinesService.remove(req.user.id, id);
   }
 }
