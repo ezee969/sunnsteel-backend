@@ -392,6 +392,185 @@ const exercises: ExerciseSeed[] = [
     secondaryMuscles: [MuscleGroup.FOREARMS],
     equipment: 'bodyweight',
   },
+
+  // Additional Back Exercises
+  {
+    name: 'Chest Supported T-Bar Row',
+    primaryMuscles: [MuscleGroup.LATISSIMUS_DORSI, MuscleGroup.TRAPEZIUS],
+    secondaryMuscles: [MuscleGroup.BICEPS, MuscleGroup.REAR_DELTOIDS],
+    equipment: 'machine',
+  },
+  {
+    name: 'Neutral Grip Lat Pulldown',
+    primaryMuscles: [MuscleGroup.LATISSIMUS_DORSI],
+    secondaryMuscles: [MuscleGroup.BICEPS, MuscleGroup.REAR_DELTOIDS],
+    equipment: 'cable',
+  },
+  {
+    name: 'Wide Grip Behind-the-Neck Pulldown',
+    primaryMuscles: [MuscleGroup.LATISSIMUS_DORSI],
+    secondaryMuscles: [MuscleGroup.BICEPS, MuscleGroup.REAR_DELTOIDS],
+    equipment: 'cable',
+  },
+  {
+    name: 'Seated One-Arm Cable Pulldown',
+    primaryMuscles: [MuscleGroup.LATISSIMUS_DORSI],
+    secondaryMuscles: [MuscleGroup.BICEPS, MuscleGroup.REAR_DELTOIDS],
+    equipment: 'cable',
+  },
+  {
+    name: 'One-Arm Cable Pullover',
+    primaryMuscles: [MuscleGroup.LATISSIMUS_DORSI],
+    secondaryMuscles: [MuscleGroup.PECTORAL],
+    equipment: 'cable',
+  },
+
+  // Additional Chest Exercises
+  {
+    name: 'Hammer Chest Press',
+    primaryMuscles: [MuscleGroup.PECTORAL],
+    secondaryMuscles: [MuscleGroup.ANTERIOR_DELTOIDS, MuscleGroup.TRICEPS],
+    equipment: 'machine',
+  },
+  {
+    name: 'Incline Cable Fly (Upper Chest Focus)',
+    primaryMuscles: [MuscleGroup.PECTORAL],
+    secondaryMuscles: [MuscleGroup.ANTERIOR_DELTOIDS],
+    equipment: 'cable',
+  },
+  {
+    name: 'Decline Cable Fly (Lower Chest Focus)',
+    primaryMuscles: [MuscleGroup.PECTORAL],
+    secondaryMuscles: [MuscleGroup.ANTERIOR_DELTOIDS],
+    equipment: 'cable',
+  },
+
+  // Additional Shoulder Exercises
+  {
+    name: 'Cable Lateral Raises',
+    primaryMuscles: [MuscleGroup.MEDIAL_DELTOIDS],
+    secondaryMuscles: [MuscleGroup.ANTERIOR_DELTOIDS],
+    equipment: 'cable',
+  },
+  {
+    name: 'Dumbbell Lateral Raises',
+    primaryMuscles: [MuscleGroup.MEDIAL_DELTOIDS],
+    secondaryMuscles: [MuscleGroup.ANTERIOR_DELTOIDS],
+    equipment: 'dumbbell',
+  },
+  {
+    name: 'Chest Supported Dumbbell Lateral Raises',
+    primaryMuscles: [MuscleGroup.MEDIAL_DELTOIDS],
+    secondaryMuscles: [MuscleGroup.ANTERIOR_DELTOIDS],
+    equipment: 'dumbbell',
+  },
+  {
+    name: 'Seated AD Press',
+    primaryMuscles: [
+      MuscleGroup.ANTERIOR_DELTOIDS,
+      MuscleGroup.MEDIAL_DELTOIDS,
+    ],
+    secondaryMuscles: [MuscleGroup.TRICEPS],
+    equipment: 'machine',
+  },
+
+  // Additional Triceps Exercises
+  {
+    name: 'Smith Machine JM Press',
+    primaryMuscles: [MuscleGroup.TRICEPS],
+    secondaryMuscles: [MuscleGroup.PECTORAL, MuscleGroup.ANTERIOR_DELTOIDS],
+    equipment: 'machine',
+  },
+  {
+    name: 'Overhead Rope Triceps Extension',
+    primaryMuscles: [MuscleGroup.TRICEPS],
+    secondaryMuscles: [MuscleGroup.CORE],
+    equipment: 'cable',
+  },
+  {
+    name: 'One-Arm Overhead Triceps Extension',
+    primaryMuscles: [MuscleGroup.TRICEPS],
+    secondaryMuscles: [MuscleGroup.CORE],
+    equipment: 'dumbbell',
+  },
+  {
+    name: 'Seated Cable Triceps Pushdown',
+    primaryMuscles: [MuscleGroup.TRICEPS],
+    secondaryMuscles: [],
+    equipment: 'cable',
+  },
+
+  // Additional Biceps Exercises
+  {
+    name: 'Incline Dumbbell Curl',
+    primaryMuscles: [MuscleGroup.BICEPS],
+    secondaryMuscles: [MuscleGroup.FOREARMS],
+    equipment: 'dumbbell',
+  },
+  {
+    name: 'One-Arm Machine Preacher Curl',
+    primaryMuscles: [MuscleGroup.BICEPS],
+    secondaryMuscles: [MuscleGroup.FOREARMS],
+    equipment: 'machine',
+  },
+  {
+    name: 'One-Arm Bayesian Curl',
+    primaryMuscles: [MuscleGroup.BICEPS],
+    secondaryMuscles: [MuscleGroup.FOREARMS],
+    equipment: 'cable',
+  },
+  {
+    name: 'EZ Bar Reverse Curl',
+    primaryMuscles: [MuscleGroup.BICEPS, MuscleGroup.FOREARMS],
+    secondaryMuscles: [],
+    equipment: 'barbell',
+  },
+  {
+    name: 'Dumbbell Hammer Curl',
+    primaryMuscles: [MuscleGroup.BICEPS, MuscleGroup.FOREARMS],
+    secondaryMuscles: [],
+    equipment: 'dumbbell',
+  },
+
+  // Additional Leg Exercises
+  {
+    name: 'Smith Machine Squat',
+    primaryMuscles: [MuscleGroup.QUADRICEPS, MuscleGroup.GLUTES],
+    secondaryMuscles: [
+      MuscleGroup.HAMSTRINGS,
+      MuscleGroup.CORE,
+      MuscleGroup.CALVES,
+    ],
+    equipment: 'machine',
+  },
+  {
+    name: 'Hack Squat',
+    primaryMuscles: [MuscleGroup.QUADRICEPS],
+    secondaryMuscles: [MuscleGroup.GLUTES],
+    equipment: 'machine',
+  },
+  {
+    name: 'Seated Leg Curl',
+    primaryMuscles: [MuscleGroup.HAMSTRINGS],
+    secondaryMuscles: [],
+    equipment: 'machine',
+  },
+  {
+    name: 'Seated Leg Extension',
+    primaryMuscles: [MuscleGroup.QUADRICEPS],
+    secondaryMuscles: [],
+    equipment: 'machine',
+  },
+  {
+    name: 'Dumbbell Bulgarian Split Squat',
+    primaryMuscles: [MuscleGroup.QUADRICEPS, MuscleGroup.GLUTES],
+    secondaryMuscles: [
+      MuscleGroup.HAMSTRINGS,
+      MuscleGroup.CORE,
+      MuscleGroup.CALVES,
+    ],
+    equipment: 'dumbbell',
+  },
 ];
 
 async function main() {
