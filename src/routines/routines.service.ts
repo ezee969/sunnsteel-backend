@@ -87,8 +87,9 @@ export class RoutinesService {
       programDurationWeeks = dto.programWithDeloads ? 21 : 18;
       programTimezone = dto.programTimezone;
 
-      // Parse date-only string as UTC midnight; PostgreSQL @db.Date stores date only
-      const start = new Date(`${dto.programStartDate}T00:00:00.000Z`);
+      // Parse date-only string and create a date that represents the correct date in the user's timezone
+      // We need to ensure the date validation uses the date as intended by the user
+      const start = new Date(`${dto.programStartDate}T12:00:00.000Z`); // Use noon UTC to avoid timezone edge cases
       if (isNaN(start.getTime())) {
         throw new BadRequestException(
           'programStartDate must be an ISO date (yyyy-mm-dd)',
@@ -456,7 +457,7 @@ export class RoutinesService {
         programWithDeloads = dto.programWithDeloads;
         programDurationWeeks = dto.programWithDeloads ? 21 : 18;
         programTimezone = dto.programTimezone;
-        const start = new Date(`${dto.programStartDate}T00:00:00.000Z`);
+        const start = new Date(`${dto.programStartDate}T12:00:00.000Z`); // Use noon UTC to avoid timezone edge cases
         if (isNaN(start.getTime())) {
           throw new BadRequestException(
             'programStartDate must be an ISO date (yyyy-mm-dd)',
