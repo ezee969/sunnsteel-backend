@@ -7,7 +7,6 @@ import { DatabaseService } from '../database/database.service';
 import { CreateRoutineDto, RepTypeDto } from './dto/create-routine.dto';
 import { UpdateRoutineDto } from './dto/update-routine.dto';
 import { CreateTmEventDto, TmEventResponseDto, TmEventSummaryDto } from './dto/tm-adjustment.dto';
-import { RoutineOwnershipException, InvalidProgramStyleException, TmEventNotAllowedException } from './exceptions/routine-exceptions';
 
 @Injectable()
 export class RoutinesService {

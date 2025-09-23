@@ -9,8 +9,6 @@ import {
   UseGuards,
   Patch,
   Query,
-  HttpException,
-  HttpStatus,
 } from '@nestjs/common';
 import { RoutinesService } from './routines.service';
 import { JwtAuthGuard } from '../auth/guards/passport-jwt.guard';
@@ -22,17 +20,13 @@ import { UpdateCompletedDto } from './dto/update-completed.dto';
 import { GetRoutinesFilterDto } from './dto/get-routines-filter.dto';
 import { CreateTmEventDto } from './dto/tm-adjustment.dto';
 import { Request } from 'express';
-import { ConfigService } from '../configs/config.service';
 
 type RequestWithUser = Request & { user: { id: string; email: string } };
 
 @UseGuards(SupabaseJwtGuard)
 @Controller('routines')
 export class RoutinesController {
-  constructor(
-    private readonly routinesService: RoutinesService,
-    private readonly configService: ConfigService,
-  ) {}
+  constructor(private readonly routinesService: RoutinesService) {}
 
   @Post()
   async create(@Req() req: RequestWithUser, @Body() dto: CreateRoutineDto) {
@@ -94,7 +88,7 @@ export class RoutinesController {
     return this.routinesService.remove(req.user.id, id);
   }
 
-  // TM Adjustment endpoints (feature-flagged)
+  // TM Adjustment endpoints
   
   /**
    * Create a new TM adjustment event
@@ -106,18 +100,14 @@ export class RoutinesController {
     @Param('id') routineId: string,
     @Body() dto: CreateTmEventDto
   ) {
-    if (!this.configService.isTmEventsEnabled) {
-      throw new HttpException('TM events feature is disabled', HttpStatus.NOT_FOUND);
-    }
-
     const result = await this.routinesService.createTmAdjustment(
       req.user.id, 
       routineId, 
       dto
     );
 
-    // Log significant adjustments for monitoring
-    if (Math.abs(dto.deltaKg) > this.configService.maxTmEventDeltaKg) {
+    // Log significant adjustments for monitoring (hardcoded threshold: 15kg)
+    if (Math.abs(dto.deltaKg) > 15) {
       console.warn(`Large TM adjustment detected: ${dto.deltaKg}kg for routine ${routineId}, exercise ${dto.exerciseId}`);
     }
 
@@ -136,10 +126,6 @@ export class RoutinesController {
     @Query('minWeek') minWeek?: string,
     @Query('maxWeek') maxWeek?: string
   ) {
-    if (!this.configService.isTmEventsEnabled) {
-      throw new HttpException('TM events feature is disabled', HttpStatus.NOT_FOUND);
-    }
-
     return this.routinesService.getTmAdjustments(
       req.user.id,
       routineId,
@@ -158,10 +144,6 @@ export class RoutinesController {
     @Req() req: RequestWithUser,
     @Param('id') routineId: string
   ) {
-    if (!this.configService.isTmEventsEnabled) {
-      throw new HttpException('TM events feature is disabled', HttpStatus.NOT_FOUND);
-    }
-
     return this.routinesService.getTmAdjustmentSummary(req.user.id, routineId);
   }
 }

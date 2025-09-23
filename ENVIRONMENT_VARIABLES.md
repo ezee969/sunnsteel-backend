@@ -13,10 +13,6 @@ GOOGLE_CLIENT_ID="your-google-client-id"
 # New Supabase variables
 SUPABASE_URL="https://dvqorsgrolkyvlqcujxt.supabase.co"
 SUPABASE_SERVICE_ROLE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...." # Service Role Key (secret)
-
-# TM Adjustment Feature Configuration
-ENABLE_TM_EVENTS="true"
-MAX_TM_EVENT_DELTA_KG="15"
 ```
 
 ## Frontend (.env.local)
@@ -30,9 +26,6 @@ NEXT_PUBLIC_GOOGLE_CLIENT_ID="your-google-client-id"
 # New Supabase variables
 NEXT_PUBLIC_SUPABASE_URL="https://dvqorsgrolkyvlqcujxt.supabase.co"
 NEXT_PUBLIC_SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...." # Anon/Public Key
-
-# TM Events feature flag (frontend)
-NEXT_PUBLIC_ENABLE_TM_EVENTS="true"
 ```
 
 ## Railway Environment Variables
@@ -49,14 +42,6 @@ Add these to your frontend deployment:
 
 - Added `ProgramStyle` enum and optional `programStyle` field to `Routine` for storing RtF variant (STANDARD | HYPERTROPHY).
 - Added `TmAdjustment` model for tracking training max adjustments in Programmed RtF routines.
-
-### New Configuration Variables
-
-| Variable | Purpose | Default | Required |
-|----------|---------|---------|----------|
-| ENABLE_TM_EVENTS | Toggle TM event endpoints | false | No |
-| MAX_TM_EVENT_DELTA_KG | Alert threshold for deltaKg | 15 | No |
-| NEXT_PUBLIC_ENABLE_TM_EVENTS | Frontend TM events feature flag | false | No |
 
 ## 🔍 Where to Find These Keys
 

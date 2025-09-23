@@ -17,21 +17,21 @@ async function testTmEndpoints() {
 	console.log('🧪 Testing TM Adjustment Endpoints')
 	console.log('=====================================')
 
-	// Check if TM events are enabled
+	// Test basic server connectivity
 	try {
-		const response = await fetch(`${BASE_URL}/routines/test-routine-id/tm-events`)
-		if (response.status === 404) {
-			console.log('❌ TM Events feature is disabled (ENABLE_TM_EVENTS=false)')
-			console.log('💡 Set ENABLE_TM_EVENTS=true in your .env file to test')
+		const response = await fetch(`${BASE_URL}/health`)
+		if (!response.ok) {
+			console.log('⚠️  Server might not be running')
+			console.log('💡 Make sure the server is running with: npm run start:dev')
 			return
 		}
 	} catch (error) {
-		console.log('⚠️  Server might not be running or endpoint not accessible')
+		console.log('⚠️  Server not accessible')
 		console.log('💡 Make sure the server is running with: npm run start:dev')
 		return
 	}
 
-	console.log('✅ TM Events endpoints are accessible')
+	console.log('✅ Server is running and accessible')
 
 	// Test endpoint structure (without authentication for now)
 	console.log('\n📋 Available TM Endpoints:')
@@ -51,10 +51,10 @@ async function testTmEndpoints() {
 	console.log(JSON.stringify(samplePayload, null, 2))
 
 	console.log('\n🎯 Next Steps:')
-	console.log('1. Enable TM events: ENABLE_TM_EVENTS=true')
-	console.log('2. Create a routine with PROGRAMMED_RTF exercises')  
-	console.log('3. Use authenticated requests to test the endpoints')
-	console.log('4. Check the database for stored TM adjustments')
+	console.log('1. Create a routine with PROGRAMMED_RTF exercises')  
+	console.log('2. Use authenticated requests to test the endpoints')
+	console.log('3. Check the database for stored TM adjustments')
+	console.log('4. Large adjustments (>15kg) will log warnings automatically')
 }
 
 // Run the test if this script is executed directly
