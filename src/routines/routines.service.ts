@@ -5,6 +5,9 @@ import {
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { CreateRoutineDto, RepTypeDto } from './dto/create-routine.dto';
+import { UpdateRoutineDto } from './dto/update-routine.dto';
+import { CreateTmEventDto, TmEventResponseDto, TmEventSummaryDto } from './dto/tm-adjustment.dto';
+import { RoutineOwnershipException, InvalidProgramStyleException, TmEventNotAllowedException } from './exceptions/routine-exceptions';
 
 @Injectable()
 export class RoutinesService {
@@ -402,7 +405,7 @@ export class RoutinesService {
     return routine;
   }
 
-  async update(userId: string, id: string, dto: CreateRoutineDto) {
+  async update(userId: string, id: string, dto: UpdateRoutineDto) {
     return this.db.$transaction(async (tx) => {
       // Verify ownership and fetch existing program fields for preservation logic
       const existing = await tx.routine.findFirst({
@@ -435,12 +438,15 @@ export class RoutinesService {
       });
 
       // Remove current days (cascade removes exercises and sets)
-      await tx.routineDay.deleteMany({ where: { routineId: id } });
+      // Only delete and recreate days if days array is provided in the update
+      if (dto.days) {
+        await tx.routineDay.deleteMany({ where: { routineId: id } });
+      }
 
-      // Determine if any exercise uses PROGRAMMED_RTF
-      const hasRtF = dto.days.some((d) =>
+      // Determine if any exercise uses PROGRAMMED_RTF (only if days are being updated)
+      const hasRtF = dto.days ? dto.days.some((d) =>
         d.exercises.some((e) => e.progressionScheme === 'PROGRAMMED_RTF'),
-      );
+      ) : false;
 
       let programWithDeloads: boolean | null = null;
       let programDurationWeeks: number | null = null;
@@ -450,7 +456,7 @@ export class RoutinesService {
       let programTrainingDaysOfWeek: number[] = [];
       let programStyle: 'STANDARD' | 'HYPERTROPHY' | null = null;
 
-      if (hasRtF) {
+      if (hasRtF && dto.days) {
         if (typeof dto.programWithDeloads !== 'boolean') {
           throw new BadRequestException(
             'programWithDeloads is required when using PROGRAMMED_RTF',
@@ -531,10 +537,13 @@ export class RoutinesService {
       const updated = await tx.routine.update({
         where: { id },
         data: {
-          name: dto.name,
-          description: dto.description,
+          ...(dto.name && { name: dto.name }),
+          ...(dto.description !== undefined && { description: dto.description }),
+          ...(dto.programStyle !== undefined && {
+            programStyle: dto.programStyle
+          }),
           isPeriodized: false,
-          ...(hasRtF
+          ...(hasRtF && dto.days
             ? {
                 programWithDeloads,
                 programDurationWeeks,
@@ -542,9 +551,8 @@ export class RoutinesService {
                 programEndDate,
                 programTrainingDaysOfWeek,
                 programTimezone,
-                programStyle,
               }
-            : {
+            : dto.days && {
                 programWithDeloads: null,
                 programDurationWeeks: null,
                 programStartDate: null,
@@ -553,68 +561,70 @@ export class RoutinesService {
                 programTimezone: null,
                 programStyle: null,
               }),
-          days: {
-            create: dto.days.map((d) => ({
-              dayOfWeek: d.dayOfWeek,
-              order: d.order ?? 0,
-              exercises: {
-                create: d.exercises.map((e) => ({
-                  exercise: { connect: { id: e.exerciseId } },
-                  order: e.order ?? 0,
-                  restSeconds: e.restSeconds,
-                  progressionScheme: e.progressionScheme ?? 'NONE',
-                  minWeightIncrement: e.minWeightIncrement ?? 2.5,
-                  ...(e.progressionScheme === 'PROGRAMMED_RTF'
-                    ? {
-                        programTMKg: e.programTMKg ?? undefined,
-                        programRoundingKg: e.programRoundingKg ?? 2.5,
-                      }
-                    : {}),
-                  sets: {
-                    create: e.sets.map((s) => {
-                      if (s.repType === RepTypeDto.RANGE) {
-                        if (
-                          typeof s.minReps !== 'number' ||
-                          typeof s.maxReps !== 'number'
-                        ) {
-                          throw new BadRequestException(
-                            'For RANGE repType, minReps and maxReps are required',
-                          );
+          ...(dto.days && {
+            days: {
+              create: dto.days.map((d) => ({
+                dayOfWeek: d.dayOfWeek,
+                order: d.order ?? 0,
+                exercises: {
+                  create: d.exercises.map((e) => ({
+                    exercise: { connect: { id: e.exerciseId } },
+                    order: e.order ?? 0,
+                    restSeconds: e.restSeconds,
+                    progressionScheme: e.progressionScheme ?? 'NONE',
+                    minWeightIncrement: e.minWeightIncrement ?? 2.5,
+                    ...(e.progressionScheme === 'PROGRAMMED_RTF'
+                      ? {
+                          programTMKg: e.programTMKg ?? undefined,
+                          programRoundingKg: e.programRoundingKg ?? 2.5,
                         }
-                        if (s.minReps > s.maxReps) {
-                          throw new BadRequestException(
-                            'minReps must be less than or equal to maxReps',
-                          );
+                      : {}),
+                    sets: {
+                      create: e.sets.map((s) => {
+                        if (s.repType === RepTypeDto.RANGE) {
+                          if (
+                            typeof s.minReps !== 'number' ||
+                            typeof s.maxReps !== 'number'
+                          ) {
+                            throw new BadRequestException(
+                              'For RANGE repType, minReps and maxReps are required',
+                            );
+                          }
+                          if (s.minReps > s.maxReps) {
+                            throw new BadRequestException(
+                              'minReps must be less than or equal to maxReps',
+                            );
+                          }
+                        } else if (s.repType === RepTypeDto.FIXED) {
+                          if (typeof s.reps !== 'number') {
+                            throw new BadRequestException(
+                              'For FIXED repType, reps is required',
+                            );
+                          }
                         }
-                      } else if (s.repType === RepTypeDto.FIXED) {
-                        if (typeof s.reps !== 'number') {
-                          throw new BadRequestException(
-                            'For FIXED repType, reps is required',
-                          );
-                        }
-                      }
 
-                      const repTypeVal: 'RANGE' | 'FIXED' =
-                        s.repType === RepTypeDto.RANGE ? 'RANGE' : 'FIXED';
-                      return {
-                        setNumber: s.setNumber,
-                        repType: repTypeVal,
-                        weight: s.weight,
-                        ...(repTypeVal === 'FIXED' && typeof s.reps === 'number'
-                          ? { reps: s.reps }
-                          : {}),
-                        ...(repTypeVal === 'RANGE' &&
-                        typeof s.minReps === 'number' &&
-                        typeof s.maxReps === 'number'
-                          ? { minReps: s.minReps, maxReps: s.maxReps }
-                          : {}),
-                      };
-                    }),
-                  },
-                })),
-              },
-            })),
-          },
+                        const repTypeVal: 'RANGE' | 'FIXED' =
+                          s.repType === RepTypeDto.RANGE ? 'RANGE' : 'FIXED';
+                        return {
+                          setNumber: s.setNumber,
+                          repType: repTypeVal,
+                          weight: s.weight,
+                          ...(repTypeVal === 'FIXED' && typeof s.reps === 'number'
+                            ? { reps: s.reps }
+                            : {}),
+                          ...(repTypeVal === 'RANGE' &&
+                          typeof s.minReps === 'number' &&
+                          typeof s.maxReps === 'number'
+                            ? { minReps: s.minReps, maxReps: s.maxReps }
+                            : {}),
+                        };
+                      }),
+                    },
+                  })),
+                },
+              })),
+            },
+          }),
         },
         select: {
           id: true,
@@ -837,9 +847,207 @@ export class RoutinesService {
       );
     }
 
-    // If found, proceed with deletion
+  // If found, proceed with deletion
     return this.db.routine.delete({
       where: { id },
     });
+  }
+
+  /**
+   * Create a new TM adjustment event
+   * 
+   * @param userId - User ID from authenticated request
+   * @param routineId - Routine ID to associate the adjustment with
+   * @param dto - TM adjustment data
+   */
+  async createTmAdjustment(
+    userId: string,
+    routineId: string,
+    dto: CreateTmEventDto
+  ): Promise<TmEventResponseDto> {
+    // Verify routine ownership and that it uses PROGRAMMED_RTF
+    const routine = await this.db.routine.findFirst({
+      where: { 
+        id: routineId, 
+        userId,
+        days: {
+          some: {
+            exercises: {
+              some: {
+                progressionScheme: 'PROGRAMMED_RTF'
+              }
+            }
+          }
+        }
+      },
+      select: { 
+        id: true, 
+        programStyle: true,
+        days: {
+          select: {
+            exercises: {
+              where: {
+                exerciseId: dto.exerciseId,
+                progressionScheme: 'PROGRAMMED_RTF'
+              },
+              select: { id: true }
+            }
+          }
+        }
+      }
+    })
+
+    if (!routine) {
+      throw new NotFoundException(
+        'Routine not found, not accessible, or does not use PROGRAMMED_RTF'
+      )
+    }
+
+    // Verify exercise exists in routine and uses PROGRAMMED_RTF
+    const hasExercise = routine.days.some(day => 
+      day.exercises.some(ex => ex.id)
+    )
+
+    if (!hasExercise) {
+      throw new BadRequestException(
+        'Exercise not found in routine or does not use PROGRAMMED_RTF'
+      )
+    }
+
+    // Validate delta calculation (optional integrity check)
+    const calculatedPost = dto.preTmKg + dto.deltaKg
+    const epsilon = 0.01 // Allow small floating point differences
+    if (Math.abs(calculatedPost - dto.postTmKg) > epsilon) {
+      throw new BadRequestException(
+        'preTmKg + deltaKg must equal postTmKg'
+      )
+    }
+
+    // Create the adjustment
+    const adjustment = await this.db.tmAdjustment.create({
+      data: {
+        routineId,
+        exerciseId: dto.exerciseId,
+        weekNumber: dto.weekNumber,
+        deltaKg: dto.deltaKg,
+        preTmKg: dto.preTmKg,
+        postTmKg: dto.postTmKg,
+        reason: dto.reason,
+        style: routine.programStyle
+      }
+    })
+
+    return {
+      id: adjustment.id,
+      exerciseId: adjustment.exerciseId,
+      weekNumber: adjustment.weekNumber,
+      deltaKg: adjustment.deltaKg,
+      preTmKg: adjustment.preTmKg,
+      postTmKg: adjustment.postTmKg,
+      reason: adjustment.reason,
+      style: adjustment.style as 'STANDARD' | 'HYPERTROPHY' | null,
+      createdAt: adjustment.createdAt
+    }
+  }
+
+  /**
+   * Get TM adjustment events for a routine
+   * 
+   * @param userId - User ID from authenticated request
+   * @param routineId - Routine ID to get adjustments for
+   * @param exerciseId - Optional filter by exercise
+   * @param minWeek - Optional minimum week filter
+   * @param maxWeek - Optional maximum week filter
+   */
+  async getTmAdjustments(
+    userId: string,
+    routineId: string,
+    exerciseId?: string,
+    minWeek?: number,
+    maxWeek?: number
+  ): Promise<TmEventResponseDto[]> {
+    // Verify routine ownership
+    const routine = await this.db.routine.findFirst({
+      where: { id: routineId, userId },
+      select: { id: true }
+    })
+
+    if (!routine) {
+      throw new NotFoundException('Routine not found or not accessible')
+    }
+
+    const adjustments = await this.db.tmAdjustment.findMany({
+      where: {
+        routineId,
+        ...(exerciseId && { exerciseId }),
+        ...(minWeek && { weekNumber: { gte: minWeek } }),
+        ...(maxWeek && { weekNumber: { lte: maxWeek } })
+      },
+      orderBy: [
+        { weekNumber: 'desc' },
+        { createdAt: 'desc' }
+      ]
+    })
+
+    return adjustments.map(adj => ({
+      id: adj.id,
+      exerciseId: adj.exerciseId,
+      weekNumber: adj.weekNumber,
+      deltaKg: adj.deltaKg,
+      preTmKg: adj.preTmKg,
+      postTmKg: adj.postTmKg,
+      reason: adj.reason,
+      style: adj.style as 'STANDARD' | 'HYPERTROPHY' | null,
+      createdAt: adj.createdAt
+    }))
+  }
+
+  /**
+   * Get TM adjustment summary statistics per exercise
+   * 
+   * @param userId - User ID from authenticated request
+   * @param routineId - Routine ID to get summary for
+   */
+  async getTmAdjustmentSummary(
+    userId: string,
+    routineId: string
+  ): Promise<TmEventSummaryDto[]> {
+    // Verify routine ownership
+    const routine = await this.db.routine.findFirst({
+      where: { id: routineId, userId },
+      select: { id: true }
+    })
+
+    if (!routine) {
+      throw new NotFoundException('Routine not found or not accessible')
+    }
+
+    // Get aggregated statistics using groupBy
+    const summary = await this.db.tmAdjustment.groupBy({
+      by: ['exerciseId'],
+      where: { routineId },
+      _count: { id: true },
+      _sum: { deltaKg: true },
+      _avg: { deltaKg: true },
+      _max: { createdAt: true }
+    })
+
+    // Get exercise names
+    const exerciseIds = summary.map(s => s.exerciseId)
+    const exercises = await this.db.exercise.findMany({
+      where: { id: { in: exerciseIds } },
+      select: { id: true, name: true }
+    })
+
+    const exerciseMap = new Map(exercises.map(e => [e.id, e.name]))
+
+    return summary.map(s => ({
+      exerciseId: s.exerciseId,
+      exerciseName: exerciseMap.get(s.exerciseId) || 'Unknown Exercise',
+      events: s._count.id,
+      netDelta: s._sum.deltaKg || 0,
+      avgChange: s._avg.deltaKg || 0,
+      lastEventAt: s._max.createdAt
+    }))
   }
 }

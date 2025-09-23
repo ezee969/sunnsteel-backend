@@ -108,6 +108,7 @@ model Routine {
   updatedAt    DateTime     @updatedAt
   days         RoutineDay[]
   workoutSessions WorkoutSession[]
+  tmAdjustments TmAdjustment[]
 
   @@index([userId, isFavorite])
   @@index([userId, isCompleted])
@@ -209,6 +210,25 @@ model WorkoutSession {
   updatedAt     DateTime              @updatedAt
 
   @@index([userId, status, startedAt])
+}
+
+// TM (Training Max) adjustments for Programmed RtF routines
+model TmAdjustment {
+  id          String       @id @default(cuid())
+  routineId   String
+  exerciseId  String
+  weekNumber  Int
+  deltaKg     Float
+  preTmKg     Float
+  postTmKg    Float
+  reason      String?      @db.VarChar(160)
+  style       ProgramStyle? // snapshot for historical context
+  createdAt   DateTime     @default(now())
+
+  routine     Routine      @relation(fields: [routineId], references: [id], onDelete: Cascade)
+
+  @@index([routineId, exerciseId, createdAt])
+  @@index([routineId, weekNumber])
 }
 
 // A log of an executed set during a workout session
