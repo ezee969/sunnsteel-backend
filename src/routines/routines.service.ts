@@ -65,6 +65,7 @@ export class RoutinesService {
     let programTimezone: string | null = null;
     let programTrainingDaysOfWeek: number[] = [];
     let programStartWeek: number | null = null;
+  let programStyle: 'STANDARD' | 'HYPERTROPHY' | null = null;
 
     if (hasRtF) {
       if (typeof dto.programWithDeloads !== 'boolean') {
@@ -115,6 +116,12 @@ export class RoutinesService {
       }
 
       programStartDate = start;
+      if (dto.programStyle) {
+        if (!['STANDARD', 'HYPERTROPHY'].includes(dto.programStyle)) {
+          throw new BadRequestException('programStyle must be STANDARD or HYPERTROPHY');
+        }
+        programStyle = dto.programStyle as 'STANDARD' | 'HYPERTROPHY';
+      }
       // Clamp start week (create-only feature). Default to 1 when unset.
       const requestedStartWeek =
         typeof dto.programStartWeek === 'number' ? dto.programStartWeek : 1;
@@ -148,6 +155,7 @@ export class RoutinesService {
               programEndDate,
               programTrainingDaysOfWeek,
               programTimezone,
+              programStyle,
             }
           : {
               programWithDeloads: null,
@@ -157,6 +165,7 @@ export class RoutinesService {
               programEndDate: null,
               programTrainingDaysOfWeek: [],
               programTimezone: null,
+              programStyle: null,
             }),
         days: {
           create: dto.days.map((d) => ({
@@ -236,6 +245,7 @@ export class RoutinesService {
         programEndDate: true,
         programTrainingDaysOfWeek: true,
         programTimezone: true,
+        programStyle: true,
         createdAt: true,
         updatedAt: true,
         days: {
@@ -300,6 +310,7 @@ export class RoutinesService {
         programStartDate: true,
         programEndDate: true,
         programTimezone: true,
+        programStyle: true,
         createdAt: true,
         updatedAt: true,
         days: {
@@ -353,6 +364,7 @@ export class RoutinesService {
         programStartDate: true,
         programEndDate: true,
         programTimezone: true,
+        programStyle: true,
         createdAt: true,
         updatedAt: true,
         days: {
@@ -436,6 +448,7 @@ export class RoutinesService {
       let programEndDate: Date | null = null;
       let programTimezone: string | null = null;
       let programTrainingDaysOfWeek: number[] = [];
+      let programStyle: 'STANDARD' | 'HYPERTROPHY' | null = null;
 
       if (hasRtF) {
         if (typeof dto.programWithDeloads !== 'boolean') {
@@ -482,7 +495,14 @@ export class RoutinesService {
         }
 
         programStartDate = start;
-        // Preserve end date if start week is create-only and base fields unchanged
+        if (dto.programStyle) {
+          if (!['STANDARD', 'HYPERTROPHY'].includes(dto.programStyle)) {
+            throw new BadRequestException(
+              'programStyle must be STANDARD or HYPERTROPHY',
+            );
+          }
+          programStyle = dto.programStyle as 'STANDARD' | 'HYPERTROPHY';
+        }
         const baseUnchanged =
           existing.programStartDate &&
           existing.programStartDate.getUTCFullYear() ===
@@ -501,16 +521,13 @@ export class RoutinesService {
           const totalDays = remainingWeeks * 7 - 1;
           programEndDate = this.addDays(start, totalDays);
         } else if (baseUnchanged && existing.programEndDate) {
-          // Keep existing computed end date
           programEndDate = existing.programEndDate;
         } else {
-          // Recompute full window
           const totalDays = programDurationWeeks * 7 - 1;
-          programEndDate = this.addDays(start, totalDays);
+            programEndDate = this.addDays(start, totalDays);
         }
       }
 
-      // Update routine basic fields and recreate nested structure
       const updated = await tx.routine.update({
         where: { id },
         data: {
@@ -525,6 +542,7 @@ export class RoutinesService {
                 programEndDate,
                 programTrainingDaysOfWeek,
                 programTimezone,
+                programStyle,
               }
             : {
                 programWithDeloads: null,
@@ -533,6 +551,7 @@ export class RoutinesService {
                 programEndDate: null,
                 programTrainingDaysOfWeek: [],
                 programTimezone: null,
+                programStyle: null,
               }),
           days: {
             create: dto.days.map((d) => ({
@@ -612,6 +631,7 @@ export class RoutinesService {
           programEndDate: true,
           programTrainingDaysOfWeek: true,
           programTimezone: true,
+          programStyle: true,
           createdAt: true,
           updatedAt: true,
           days: {
@@ -671,6 +691,7 @@ export class RoutinesService {
         isPeriodized: true,
         isFavorite: true,
         isCompleted: true,
+        programStyle: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -717,6 +738,7 @@ export class RoutinesService {
         isPeriodized: true,
         isFavorite: true,
         isCompleted: true,
+        programStyle: true,
         createdAt: true,
         updatedAt: true,
         days: {
@@ -768,6 +790,7 @@ export class RoutinesService {
         programStartDate: true,
         programEndDate: true,
         programTimezone: true,
+        programStyle: true,
         createdAt: true,
         updatedAt: true,
         days: {

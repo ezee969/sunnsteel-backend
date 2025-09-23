@@ -103,6 +103,7 @@ model Routine {
   programEndDate           DateTime?    @db.Date
   programTrainingDaysOfWeek Int[]       @default([])
   programTimezone          String?
+  programStyle             ProgramStyle? // STANDARD or HYPERTROPHY (front-end metadata persisted for analytics)
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
   days         RoutineDay[]
@@ -174,6 +175,12 @@ enum ProgressionScheme {
   DOUBLE_PROGRESSION        // progress when all sets hit target (formerly DYNAMIC)
   DYNAMIC_DOUBLE_PROGRESSION // progress per set when that set hits target (formerly DYNAMIC_DOUBLE)
   PROGRAMMED_RTF            // date-driven, 5 sets (4 fixed + 1 AMRAP), optional deloads
+}
+
+// Program style (variant) for PROGRAMMED_RTF routines
+enum ProgramStyle {
+  STANDARD
+  HYPERTROPHY
 }
 
 // Tracking a user's execution of a specific RoutineDay

@@ -170,4 +170,11 @@ export class CreateRoutineDto {
   @Min(1)
   @Max(21)
   programStartWeek?: number;
+
+  // Program style (variant) for PROGRAMMED_RTF routines (front-end metadata persisted)
+  @IsOptional()
+  @IsEnum({ STANDARD: 'STANDARD', HYPERTROPHY: 'HYPERTROPHY' } as const, {
+    message: 'programStyle must be STANDARD or HYPERTROPHY',
+  })
+  programStyle?: 'STANDARD' | 'HYPERTROPHY';
 }

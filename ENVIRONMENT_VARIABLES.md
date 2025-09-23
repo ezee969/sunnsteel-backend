@@ -32,15 +32,15 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...." # Anon/
 
 Add these to your Railway backend service:
 
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
 
 ## Vercel/Netlify Environment Variables
 
 Add these to your frontend deployment:
 
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+### Recent Schema Additions
+
+- Added `ProgramStyle` enum and optional `programStyle` field to `Routine` for storing RtF variant (STANDARD | HYPERTROPHY).
 
 ## 🔍 Where to Find These Keys
 

@@ -1,0 +1,35 @@
+# Enforce consistent line endings (LF) across the repository
+# Text files normalized to LF in repo; Windows will checkout with CRLF only if explicitly set.
+
+# Auto-detect text files and normalize (core.eol=lf in repo)
+* text=auto eol=lf
+
+# Explicitly ensure common source files stay LF
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+*.cjs text eol=lf
+*.json text eol=lf
+*.prisma text eol=lf
+*.sql text eol=lf
+*.sh text eol=lf
+*.md text eol=lf
+
+# Windows-specific scripts can keep CRLF if desired
+*.bat eol=crlf
+*.cmd eol=crlf
+
+# Binary files (no EOL normalization)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg binary
+
+# Lock / generated files (treat as text but keep LF)
+*.lock text eol=lf
+
+# Prevent diff noise for build artifacts (if ever committed)
+dist/ -text

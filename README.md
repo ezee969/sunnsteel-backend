@@ -485,6 +485,142 @@ Reglas:
 - Semana de deload: no ajusta TM.
 - Semana de entrenamiento: por cada ejercicio `PROGRAMMED_RTF`, si existe el log del set 5 (AMRAP) y aún no se ajustó en esa semana (`programLastAdjustedWeek`), ajustar TM con la regla pieza a pieza; guardar `programLastAdjustedWeek`.
 
+### Program Style (`programStyle`)
+
+The routine-level field `programStyle` refines the semantics of a
+`PROGRAMMED_RTF` program without introducing a separate progression scheme
+enum value. It is optional and persisted as:
+
+```
+enum ProgramStyle {
+  STANDARD
+  HYPERTROPHY
+}
+```
+
+#### Purpose
+
+`programStyle` allows multiple presentation / analytic variants of the same
+underlying PROGRAMMED_RTF engine without schema churn or legacy enum bloat.
+Currently both styles share identical progression mechanics; differentiation is
+UI + future analytics (volume focus, rep band targeting, TM heuristic tuning).
+
+#### Persistence Rules
+
+| Scenario | Stored Value |
+|----------|--------------|
+| Routine has at least one PROGRAMMED_RTF exercise & style provided | Provided style |
+| Routine has PROGRAMMED_RTF but style omitted | `NULL` (treated as STANDARD on read) |
+| Routine has no PROGRAMMED_RTF exercises | `NULL` |
+| Update removes all PROGRAMMED_RTF exercises | Field cleared to `NULL` |
+
+#### API Behavior
+
+- Create / Update DTO accepts: `programStyle?: 'STANDARD' | 'HYPERTROPHY'`.
+- Validation rejects any other string.
+- Service layer only writes `programStyle` when at least one exercise in the
+  payload uses `PROGRAMMED_RTF`.
+- Select clauses include `programStyle`; clients should coerce `null` →
+  `'STANDARD'` for display if they want a non-null label.
+
+#### Backward Compatibility
+
+Existing routines created before the field was introduced will have `NULL`.
+They are functionally equivalent to STANDARD. No migration backfill required.
+
+#### Future Differentiation (Roadmap)
+
+| Future Aspect | STANDARD (Baseline) | HYPERTROPHY (Planned) |
+|---------------|---------------------|------------------------|
+| Rep Emphasis | Strength-endurance mix | Higher average reps (8–12 focus) |
+| TM Increment Ladder | Current ladder | Possibly slower / volume-gated |
+| Volume Ramp | Flat 5-set structure | Optional ramp + mini deload pattern |
+| Analytics | Generic TM trend | Additional rep band compliance metrics |
+
+#### Client Guidance
+
+1. Treat missing style as STANDARD when rendering.
+2. Badge a hypertrophy routine distinctly (color / label) for quick scanning.
+3. When future per-exercise style overrides ship, routine-level `programStyle`
+   becomes the default style (exercise-level value can override).
+
+#### Example Create Payload (with programStyle)
+
+```json
+{
+  "name": "Lower/Upper Split RtF",
+  "isPeriodized": false,
+  "programWithDeloads": true,
+  "programStartDate": "2025-09-22",
+  "programTimezone": "UTC",
+  "programStyle": "HYPERTROPHY",
+  "days": [
+    {
+      "dayOfWeek": 1,
+      "order": 0,
+      "exercises": [
+        {
+          "exerciseId": "squat-id",
+          "restSeconds": 180,
+          "progressionScheme": "PROGRAMMED_RTF",
+          "programTMKg": 150,
+          "programRoundingKg": 2.5,
+          "sets": [ { "setNumber": 1, "repType": "FIXED", "reps": 5 }, { "setNumber": 2, "repType": "FIXED", "reps": 5 }, { "setNumber": 3, "repType": "FIXED", "reps": 5 }, { "setNumber": 4, "repType": "FIXED", "reps": 5 }, { "setNumber": 5, "repType": "FIXED", "reps": 1 } ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+#### Reading the Field
+
+```ts
+function displayStyle(raw: 'STANDARD' | 'HYPERTROPHY' | null | undefined) {
+  return raw ?? 'STANDARD'
+}
+```
+
+#### Testing Considerations
+
+- Unit tests should verify create & update pathways pass the provided style.
+- Null style routines must still compile & serialize without throwing.
+- Adding future style-specific logic should include regression tests that
+  confirm STANDARD behavior remains unchanged.
+
+---
+
+Behavioral notes (current phase):
+
+- Storage only (no server-side algorithm divergence yet).
+- Frontend uses the value to select an alternate presentation / future volume
+  heuristic.
+- If a routine has no `PROGRAMMED_RTF` exercises the field is forced to `null`.
+- When updating a routine: removing all `PROGRAMMED_RTF` exercises nullifies
+  the field; adding at least one enables (and may set from payload).
+
+Validation / API rules:
+
+| Case | Server Behavior |
+|------|-----------------|
+| Create with PROGRAMMED_RTF exercises & style provided | Persist style if `STANDARD|HYPERTROPHY` |
+| Create with PROGRAMMED_RTF exercises & no style | Persist `null` (frontend treats as STANDARD) |
+| Update adds first PROGRAMMED_RTF exercise & style provided | Persist style |
+| Update removes all PROGRAMMED_RTF exercises | Set `programStyle = null` |
+| Update supplies invalid style | 400 Bad Request |
+
+Client fallback rule: treat `null` as `STANDARD` for rendering badges and
+program summaries.
+
+Planned extensions (see backend `IMPROVEMENTS.md` Section 4 / 11):
+
+- TM adjustment event logging will snapshot `programStyle` per adjustment row.
+- Divergent hypertrophy progression heuristics (rep band & auto weight cues).
+- Per-exercise style overrides (mixed STANDARD / HYPERTROPHY) (future).
+
+Rollback safety: Field is nullable, read logic always guards; removing all UI
+references leaves existing rows harmless.
+
 ### Regeneración del cliente Prisma
 
 Tras aplicar los cambios en Prisma:
