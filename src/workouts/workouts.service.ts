@@ -407,6 +407,7 @@ export class WorkoutsService {
                   orderBy: { setNumber: 'asc' },
                 },
               },
+              orderBy: { order: 'asc' },
             },
           },
         });
