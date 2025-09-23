@@ -72,12 +72,13 @@ describe('RoutinesService - TM Adjustments', () => {
 				id: 'adjustment-123',
 				...createTmEventDto,
 				routineId: 'routine-123',
-				style: 'STANDARD',
+				style: 'STANDARD' as const,
+				reason: createTmEventDto.reason || null,
 				createdAt: new Date()
 			}
 
 			jest.spyOn(databaseService.routine, 'findFirst').mockResolvedValue(mockRoutine)
-			jest.spyOn(databaseService.tmAdjustment, 'create').mockResolvedValue(mockAdjustment)
+			jest.spyOn((databaseService as any).tmAdjustment, 'create').mockResolvedValue(mockAdjustment as any)
 
 			const result = await service.createTmAdjustment(
 				mockUser.id,
@@ -139,24 +140,30 @@ describe('RoutinesService - TM Adjustments', () => {
 			const mockAdjustments = [
 				{
 					id: 'adj-1',
+					routineId: 'routine-123',
 					exerciseId: 'exercise-123',
 					weekNumber: 3,
 					deltaKg: 2.5,
 					preTmKg: 100,
 					postTmKg: 102.5,
 					reason: 'test',
-					style: 'STANDARD',
+					style: 'STANDARD' as const,
 					createdAt: new Date()
 				}
 			]
 
 			jest.spyOn(databaseService.routine, 'findFirst').mockResolvedValue(mockRoutine)
-			jest.spyOn(databaseService.tmAdjustment, 'findMany').mockResolvedValue(mockAdjustments)
+			jest.spyOn((databaseService as any).tmAdjustment, 'findMany').mockResolvedValue(mockAdjustments as any)
 
 			const result = await service.getTmAdjustments(mockUser.id, mockRoutine.id)
 
-			expect(result).toEqual(mockAdjustments)
-			expect(databaseService.tmAdjustment.findMany).toHaveBeenCalledWith({
+			// The service should return adjustments without exposing routineId (since it's already in the context)
+			const expectedResult = mockAdjustments.map(adj => {
+				const { routineId, ...rest } = adj
+				return rest
+			})
+			expect(result).toEqual(expectedResult)
+			expect((databaseService as any).tmAdjustment.findMany).toHaveBeenCalledWith({
 				where: { routineId: mockRoutine.id },
 				orderBy: [
 					{ weekNumber: 'desc' },
@@ -167,11 +174,11 @@ describe('RoutinesService - TM Adjustments', () => {
 
 		it('should apply exercise filter', async () => {
 			jest.spyOn(databaseService.routine, 'findFirst').mockResolvedValue(mockRoutine)
-			jest.spyOn(databaseService.tmAdjustment, 'findMany').mockResolvedValue([])
+			jest.spyOn((databaseService as any).tmAdjustment, 'findMany').mockResolvedValue([] as any)
 
 			await service.getTmAdjustments(mockUser.id, mockRoutine.id, 'exercise-123')
 
-			expect(databaseService.tmAdjustment.findMany).toHaveBeenCalledWith({
+			expect((databaseService as any).tmAdjustment.findMany).toHaveBeenCalledWith({
 				where: {
 					routineId: mockRoutine.id,
 					exerciseId: 'exercise-123'
@@ -197,12 +204,20 @@ describe('RoutinesService - TM Adjustments', () => {
 			]
 
 			const mockExercises = [
-				{ id: 'exercise-123', name: 'Bench Press' }
+				{ 
+					id: 'exercise-123', 
+					name: 'Bench Press',
+					createdAt: new Date(),
+					updatedAt: new Date(),
+					primaryMuscles: [],
+					secondaryMuscles: [],
+					equipment: 'barbell'
+				}
 			]
 
 			jest.spyOn(databaseService.routine, 'findFirst').mockResolvedValue(mockRoutine)
-			jest.spyOn(databaseService.tmAdjustment, 'groupBy').mockResolvedValue(mockSummary)
-			jest.spyOn(databaseService.exercise, 'findMany').mockResolvedValue(mockExercises)
+			jest.spyOn((databaseService as any).tmAdjustment, 'groupBy').mockResolvedValue(mockSummary as any)
+			jest.spyOn(databaseService.exercise, 'findMany').mockResolvedValue(mockExercises as any)
 
 			const result = await service.getTmAdjustmentSummary(mockUser.id, mockRoutine.id)
 
