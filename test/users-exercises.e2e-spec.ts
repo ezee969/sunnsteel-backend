@@ -1,5 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
+import { SupabaseJwtGuard } from '../src/auth/guards/supabase-jwt.guard';
+import { SupabaseService } from '../src/auth/supabase.service';
 import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { DatabaseService } from '../src/database/database.service';
@@ -9,13 +11,33 @@ describe('Users & Exercises (e2e)', () => {
   let databaseService: DatabaseService;
   let accessToken: string;
   let userId: string;
+  // Shared token map for guard across tests
+  const tokenToUser: Record<string, { id: string; email: string }> = {}
+  let supabaseServiceMock: Partial<SupabaseService>
 
   let testUser: { email: string; password: string; name: string };
 
   beforeAll(async () => {
+    supabaseServiceMock = {
+      verifyToken: jest.fn().mockImplementation((token: string) => {
+        const mapped = tokenToUser[token]
+        if (!mapped) throw new Error('invalid')
+        return { id: mapped.id, email: mapped.email, user_metadata: { name: mapped.email.split('@')[0] } } as any
+      }),
+      getOrCreateUser: jest.fn().mockImplementation((supabaseUser: any) => {
+        return databaseService.user.upsert({
+          where: { email: supabaseUser.email },
+            update: {},
+            create: { email: supabaseUser.email, name: supabaseUser.user_metadata?.name || 'user' }
+        })
+      }),
+    }
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(SupabaseService)
+      .useValue(supabaseServiceMock)
+      .compile();
 
     app = moduleFixture.createNestApplication();
     databaseService = moduleFixture.get<DatabaseService>(DatabaseService);
@@ -53,6 +75,7 @@ describe('Users & Exercises (e2e)', () => {
 
     accessToken = registerResponse.body.accessToken;
     userId = registerResponse.body.user.id;
+  tokenToUser[accessToken] = { id: userId, email: testUser.email }
 
     if (!accessToken || !userId) {
       throw new Error(

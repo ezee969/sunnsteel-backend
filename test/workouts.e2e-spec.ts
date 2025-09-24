@@ -4,6 +4,7 @@ import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { WorkoutsService } from '../src/workouts/workouts.service';
 import { JwtAuthGuard } from '../src/auth/guards/passport-jwt.guard';
+import { SupabaseJwtGuard } from '../src/auth/guards/supabase-jwt.guard';
 import { FinishStatusDto } from '../src/workouts/dto/finish-workout.dto';
 
 // Mock WorkoutsService behavior for e2e to avoid DB dependency
@@ -59,6 +60,8 @@ describe('Workouts e2e (mocked service)', () => {
       .useValue(workoutsServiceMock)
       .overrideGuard(JwtAuthGuard as any)
       .useValue(allowJwtGuard)
+      .overrideGuard(SupabaseJwtGuard as any)
+      .useValue({ canActivate: (ctx: any) => { const req = ctx.switchToHttp().getRequest(); req.user = { id: 'user-1', email: 'user@example.com' }; return true as any } })
       .compile();
 
     app = moduleRef.createNestApplication();

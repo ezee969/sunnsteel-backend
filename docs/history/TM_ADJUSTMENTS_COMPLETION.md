@@ -1,34 +1,36 @@
 # Backend TM Adjustment Implementation - COMPLETE ✅
 
+(Moved from root `IMPROVEMENTS.md` on roadmap restructuring.)
+
 This document tracks the implementation of Training Max (TM) adjustments for Programmed RtF routines in the Sunsteel backend.
 
 ---
 
-## 🎉 **IMPLEMENTATION STATUS: COMPLETE**
+## 🎉 IMPLEMENTATION STATUS: COMPLETE
 
 All TM adjustment functionality has been successfully implemented and is ready for production use.
 
 ---
 
-## ✅ **What Was Built**
+## ✅ What Was Built
 
-### 1. **Database Schema**
+### 1. Database Schema
 - `TmAdjustment` model with complete field set
 - Proper foreign key relations to `Routine` 
 - Optimized indexes for query performance
 - Migration applied: `20250923192706_add_tm_adjustments`
 
-### 2. **API Endpoints (Always Enabled)**
+### 2. API Endpoints (Always Enabled)
 - `POST /api/routines/:id/tm-events` - Create TM adjustment
 - `GET /api/routines/:id/tm-events` - List adjustments with optional filters
 - `GET /api/routines/:id/tm-events/summary` - Aggregate statistics
 
-### 3. **Enhanced Routine Management**
+### 3. Enhanced Routine Management
 - `UpdateRoutineDto` for partial routine updates
 - Support for updating `programStyle` independently
 - Validation guards for program style changes
 
-### 4. **Security & Validation**
+### 4. Security & Validation
 - JWT authentication on all endpoints
 - Routine ownership validation
 - PROGRAMMED_RTF scheme requirement
@@ -37,7 +39,7 @@ All TM adjustment functionality has been successfully implemented and is ready f
 
 ---
 
-## 🔧 **Technical Details**
+## 🔧 Technical Details
 
 ### Database Model
 ```prisma
@@ -81,7 +83,7 @@ GET /api/routines/:id/tm-events/summary
 ```
 
 ### Service Methods
-```typescript
+```ts
 async createTmAdjustment(userId: string, routineId: string, dto: CreateTmEventDto)
 async getTmAdjustments(userId: string, routineId: string, exerciseId?, minWeek?, maxWeek?)
 async getTmAdjustmentSummary(userId: string, routineId: string)
@@ -89,66 +91,37 @@ async getTmAdjustmentSummary(userId: string, routineId: string)
 
 ---
 
-## 🚀 **Key Features**
+## 🚀 Key Features
+- Always Available (no feature flag)
+- Secure (auth + ownership)
+- Fast (indexed queries)
+- Validated inputs
+- Integrity checks (delta correctness)
+- Large adjustment console warning (>15kg)
 
-- **Always Available**: No feature flags or configuration needed
-- **Secure**: Full authentication and authorization
-- **Fast**: Optimized database queries with proper indexing
-- **Validated**: Comprehensive input validation and integrity checks
-- **Monitored**: Automatic warnings for large adjustments (>15kg)
-- **Flexible**: Support for filtering by exercise, week range, and more
+## 📊 Performance Optimizations
+- Composite indexes
+- Prisma `groupBy` aggregation
+- Minimal select field retrieval
 
----
+## 🔒 Security
+- Supabase JWT guard
+- Ownership enforcement
+- Progression scheme validation
+- Input sanitization & validation
 
-## 📊 **Performance Optimizations**
+## ✅ Production-Ready
+- Schema + migration
+- CRUD endpoints delivered
+- Logging, error handling
+- Zero feature flag debt
 
-- Database indexes: `[routineId, exerciseId, createdAt]` and `[routineId, weekNumber]`
-- Efficient aggregation using Prisma `groupBy`
-- Exercise name lookup optimization
-- Selective field retrieval in queries
-
----
-
-## 🔒 **Security Features**
-
-- Supabase JWT validation on all endpoints
-- Routine ownership verification
-- PROGRAMMED_RTF scheme requirement enforcement
-- Input sanitization and validation
-- Delta calculation integrity checks
-
----
-
-## ✅ **Ready for Production**
-
-The TM adjustment system is **production-ready** with:
-- ✅ Complete database schema with migration
-- ✅ Full CRUD API with 3 endpoints
-- ✅ Comprehensive security and validation
-- ✅ Performance optimizations
-- ✅ Error handling and logging
-- ✅ No configuration dependencies
+## 🎯 Next (Post-Completion) Suggestions
+1. Frontend UI integration
+2. Extended E2E flows
+3. Swagger/OpenAPI documentation
+4. Metrics & monitoring dashboards
 
 ---
 
-## 🎯 **Next Steps**
-
-1. **Frontend Integration**: Build UI components to consume the APIs
-2. **Testing**: Add E2E tests for complete workflow validation
-3. **Documentation**: Add Swagger/OpenAPI documentation
-4. **Monitoring**: Add production metrics and monitoring
-
----
-
-## 📝 **Implementation Summary**
-
-- **Files Created/Modified**: 14 files
-- **Database Changes**: 1 successful migration  
-- **API Endpoints**: 3 new endpoints with full functionality
-- **Lines of Code**: 1,000+ lines added
-- **Implementation Time**: ~2 hours
-- **Status**: ✅ **COMPLETE & PRODUCTION READY**
-
----
-
-*Last updated: September 23, 2025 - Simplified implementation without feature flags*
+_Last updated: 2025-09-23_

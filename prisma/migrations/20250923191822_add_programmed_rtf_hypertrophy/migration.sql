@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "ProgressionScheme" ADD VALUE 'PROGRAMMED_RTF_HYPERTROPHY';

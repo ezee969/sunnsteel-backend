@@ -1,3 +1,4 @@
+````markdown
 # 🔑 Environment Variables Setup
 
 ## Backend (.env)
@@ -13,6 +14,21 @@ GOOGLE_CLIENT_ID="your-google-client-id"
 # New Supabase variables
 SUPABASE_URL="https://dvqorsgrolkyvlqcujxt.supabase.co"
 SUPABASE_SERVICE_ROLE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...." # Service Role Key (secret)
+
+# RtF Week Goals Cache (RTF-B04/B10)
+# Driver can be 'memory' or 'redis'
+RTF_CACHE_DRIVER=memory
+# Optional Redis URL when driver=redis
+# RTF_REDIS_URL=redis://default:password@host:6379
+# Base TTL for week goals (seconds) applied at L2 or single-layer driver
+RTF_WEEK_GOAL_TTL_SEC=600
+# Enable layered cache (L1 in-memory + L2 redis) when using redis driver (1=on,0=off)
+RTF_CACHE_LAYERED=1
+# L1 TTL in ms (short to cap staleness window)
+RTF_WEEK_GOALS_L1_TTL_MS=5000
+
+# RtF ETag (RTF-B12) enable/disable (1=on, 0=off)
+RTF_ETAG_ENABLED=1
 ```
 
 ## Frontend (.env.local)
@@ -57,3 +73,5 @@ In your Supabase Dashboard:
 - **Anon Key**: Safe to expose in frontend (public)
 - **Service Role Key**: Keep secret, backend only
 - The key you mentioned `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY` should be `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+````

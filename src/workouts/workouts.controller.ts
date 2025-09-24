@@ -15,6 +15,8 @@ import {
 import { JwtAuthGuard } from '../auth/guards/passport-jwt.guard';
 import { SupabaseJwtGuard } from '../auth/guards/supabase-jwt.guard';
 import { WorkoutsService } from './workouts.service';
+import { UseInterceptors } from '@nestjs/common'
+import { RtfEtagInterceptor } from '../common/interceptors/rtf-etag.interceptor'
 import { StartWorkoutDto } from './dto/start-workout.dto';
 import { FinishWorkoutDto } from './dto/finish-workout.dto';
 import { UpsertSetLogDto } from './dto/upsert-set-log.dto';
@@ -81,5 +83,41 @@ export class WorkoutsController {
       routineExerciseId,
       setNumber,
     );
+  }
+
+  // RtF week goals inspection endpoint
+  @Get('routines/:routineId/rtf-week-goals')
+  @UseInterceptors(RtfEtagInterceptor)
+  async getRtFWeekGoals(
+    @Req() req: RequestWithUser,
+    @Param('routineId') routineId: string,
+    @Query('week') week?: string,
+  ) {
+    const weekNum = week ? parseInt(week, 10) : undefined;
+    return this.workoutsService.getRtFWeekGoals(
+      req.user.id,
+      routineId,
+      weekNum,
+    );
+  }
+
+  // RtF full timeline (all program weeks) endpoint (RTF-B03)
+  @Get('routines/:routineId/rtf-timeline')
+  @UseInterceptors(RtfEtagInterceptor)
+  async getRtFTimeline(
+    @Req() req: RequestWithUser,
+    @Param('routineId') routineId: string,
+  ) {
+    return this.workoutsService.getRtFTimeline(req.user.id, routineId)
+  }
+
+  // RtF forecast (projected future intensities/reps) (RTF-B06)
+  @Get('routines/:routineId/rtf-forecast')
+  @UseInterceptors(RtfEtagInterceptor)
+  async getRtFForecast(
+    @Req() req: RequestWithUser,
+    @Param('routineId') routineId: string
+  ) {
+    return this.workoutsService.getRtFForecast(req.user.id, routineId)
   }
 }

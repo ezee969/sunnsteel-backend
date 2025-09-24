@@ -1,7 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { WorkoutsService } from './workouts.service';
-import { DatabaseService } from '../database/database.service';
+import { WorkoutsService } from './workouts.service'
+import { DatabaseService } from '../database/database.service'
+import { RTF_WEEK_GOALS_CACHE } from '../cache/rtf-week-goals-cache.async'
 import { FinishStatusDto } from './dto/finish-workout.dto';
 import { WorkoutSessionStatus } from '@prisma/client';
 
@@ -42,8 +43,17 @@ describe('WorkoutsService', () => {
           provide: DatabaseService,
           useValue: dbMock,
         },
+        {
+          provide: RTF_WEEK_GOALS_CACHE,
+          useValue: {
+            get: jest.fn().mockResolvedValue(null),
+            set: jest.fn().mockResolvedValue(undefined),
+            delete: jest.fn().mockResolvedValue(undefined),
+            invalidateRoutine: jest.fn().mockResolvedValue(undefined),
+          },
+        },
       ],
-    }).compile();
+    }).compile()
 
     service = module.get<WorkoutsService>(WorkoutsService);
   });

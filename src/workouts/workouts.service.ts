@@ -3,13 +3,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  Prisma,
-  WorkoutSessionStatus,
-  RepType,
-  ProgressionScheme,
-} from '@prisma/client';
+import { Prisma, WorkoutSessionStatus, RepType, ProgressionScheme } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
+import { IRtfWeekGoalsCacheAsync, RTF_WEEK_GOALS_CACHE } from '../cache/rtf-week-goals-cache.async';
+import { RTF_STANDARD_WITH_DELOADS, RTF_HYPERTROPHY_WITH_DELOADS } from './rtf-schedules';
+import { Inject } from '@nestjs/common'
 import { StartWorkoutDto } from './dto/start-workout.dto';
 import { FinishWorkoutDto, FinishStatusDto } from './dto/finish-workout.dto';
 import { UpsertSetLogDto } from './dto/upsert-set-log.dto';
@@ -23,41 +21,65 @@ const isPrismaErrorWithCode = (e: unknown): e is { code: string } => {
 
 @Injectable()
 export class WorkoutsService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(
+    private readonly db: DatabaseService,
+    @Inject(RTF_WEEK_GOALS_CACHE) private readonly rtfCache: IRtfWeekGoalsCacheAsync,
+  ) {}
 
-  // --- RtF weekly goals (with deloads) adapted to 5 sets: 4 fixed + 1 AMRAP (set #5)
-  // Weeks 7, 14, 21 are deloads (3x5 @ RPE6 @ ~60% TM)
-  private readonly RTF_WITH_DELOADS: Array<
-    | {
-        week: number;
-        intensity: number;
-        fixedReps: number;
-        amrapTarget: number;
-      }
-    | { week: number; isDeload: true }
-  > = [
-    { week: 1, intensity: 0.7, fixedReps: 5, amrapTarget: 10 },
-    { week: 2, intensity: 0.75, fixedReps: 4, amrapTarget: 8 },
-    { week: 3, intensity: 0.8, fixedReps: 3, amrapTarget: 6 },
-    { week: 4, intensity: 0.725, fixedReps: 5, amrapTarget: 9 },
-    { week: 5, intensity: 0.775, fixedReps: 4, amrapTarget: 7 },
-    { week: 6, intensity: 0.825, fixedReps: 3, amrapTarget: 5 },
-    { week: 7, isDeload: true },
-    { week: 8, intensity: 0.75, fixedReps: 4, amrapTarget: 8 },
-    { week: 9, intensity: 0.8, fixedReps: 3, amrapTarget: 6 },
-    { week: 10, intensity: 0.85, fixedReps: 2, amrapTarget: 4 },
-    { week: 11, intensity: 0.775, fixedReps: 4, amrapTarget: 7 },
-    { week: 12, intensity: 0.825, fixedReps: 3, amrapTarget: 5 },
-    { week: 13, intensity: 0.875, fixedReps: 2, amrapTarget: 3 },
-    { week: 14, isDeload: true },
-    { week: 15, intensity: 0.8, fixedReps: 3, amrapTarget: 6 },
-    { week: 16, intensity: 0.85, fixedReps: 2, amrapTarget: 4 },
-    { week: 17, intensity: 0.9, fixedReps: 1, amrapTarget: 2 },
-    { week: 18, intensity: 0.85, fixedReps: 2, amrapTarget: 4 },
-    { week: 19, intensity: 0.9, fixedReps: 1, amrapTarget: 2 },
-    { week: 20, intensity: 0.95, fixedReps: 1, amrapTarget: 2 },
-    { week: 21, isDeload: true },
-  ];
+  // --- Payload Versioning (RTF-B05) ---
+  // Increment this when the shape of week goals or timeline responses changes
+  private static readonly RTF_WEEK_GOALS_VERSION = 1
+
+  // --- RtF Cache Abstraction (RTF-B04 Phase 1) ---
+  private cacheKey(routineId: string, week: number) {
+    return `weekGoals:${routineId}:${week}`
+  }
+  private forecastCacheKey(routineId: string) { return `forecast:${routineId}:v${WorkoutsService.RTF_WEEK_GOALS_VERSION}` }
+  private async cacheGet(key: string) { return this.rtfCache.get(key) }
+  private async cacheSet(key: string, value: any) { await this.rtfCache.set(key, value) }
+
+  // --- Metrics (RTF-B07 incremental) ---
+  private metrics = {
+    stampedeWaits: 0,
+    stampedeBypass: 0,
+    forecastSets: 0,
+    forecastHits: 0,
+    forecastMisses: 0,
+    weekGoalsSets: 0,
+    weekGoalsHits: 0,
+    weekGoalsMisses: 0,
+    startedAt: Date.now()
+  }
+
+  getInternalMetrics() {
+    const uptimeMs = Date.now() - this.metrics.startedAt
+    return { ...this.metrics, uptimeMs }
+  }
+
+  // Stampede protection: track in-flight computations keyed by cache key
+  private static inFlight = new Map<string, Promise<any>>()
+  private async withStampedeProtection<T>(key: string, factory: () => Promise<T>): Promise<T> {
+    if (WorkoutsService.inFlight.has(key)) {
+      // Another request already computing this key
+      this.metrics.stampedeWaits++
+      return WorkoutsService.inFlight.get(key) as Promise<T>
+    }
+    this.metrics.stampedeBypass++
+    const p = factory().finally(() => {
+      WorkoutsService.inFlight.delete(key)
+    })
+    WorkoutsService.inFlight.set(key, p as Promise<any>)
+    return p
+  }
+
+  // --- RtF weekly goals (with deloads) ---
+  // We now maintain TWO canonical schedules mirroring the frontend `reps-to-failure.ts` logic.
+  // STANDARD: strength leaning (lower reps, broader intensity ramp, 5 sets total, AMRAP on set 5)
+  // HYPERTROPHY: higher rep emphasis (moderate intensities, 4 sets total, AMRAP on set 4)
+  // Deload weeks (7,14,21) differ: standard -> 3x5 @ ~60% TM (RPE6 implicit), hypertrophy -> 4x5 @ 60% TM.
+  // NOTE: If programWithDeloads === false we strip deload weeks and reindex weeks logically (same as frontend approach).
+
+  // Schedules moved to shared module rtf-schedules.ts (RTF-B09)
 
   private localDateParts(d: Date, timeZone: string) {
     const fmt = new Intl.DateTimeFormat('en-CA', {
@@ -112,12 +134,16 @@ export class WorkoutsService {
     return withDeloads && (week === 7 || week === 14 || week === 21);
   }
 
-  private getRtFGoalForWeek(week: number, withDeloads: boolean) {
-    if (withDeloads) return this.RTF_WITH_DELOADS[week - 1];
-    // 18-week mode: filter out deload entries
-    const trainingOnly = this.RTF_WITH_DELOADS.filter(
-      (g) => !('isDeload' in g && g.isDeload === true),
-    ) as Array<{
+  private getRtFGoalForWeek(
+    week: number,
+    withDeloads: boolean,
+    variant: 'STANDARD' | 'HYPERTROPHY'
+  ) {
+    const source = variant === 'HYPERTROPHY'
+      ? RTF_HYPERTROPHY_WITH_DELOADS
+      : RTF_STANDARD_WITH_DELOADS;
+    if (withDeloads) return source[week - 1];
+    const trainingOnly = source.filter((g) => !("isDeload" in g && g.isDeload === true)) as Array<{
       week: number;
       intensity: number;
       fixedReps: number;
@@ -256,7 +282,7 @@ export class WorkoutsService {
         tz,
       );
       const withDeloads = !!routine.programWithDeloads;
-      const isDeload = this.isDeloadWeek(week, withDeloads);
+  const isDeload = this.isDeloadWeek(week, withDeloads);
 
       // Load exercises for this routine day with RtF config
       const exs = await this.db.routineExercise.findMany({
@@ -273,19 +299,54 @@ export class WorkoutsService {
       });
 
       const rtfPlans = exs
-        .filter((e) => e.progressionScheme === ProgressionScheme.PROGRAMMED_RTF)
+        .filter((e) =>
+          e.progressionScheme === ProgressionScheme.PROGRAMMED_RTF ||
+          e.progressionScheme === ProgressionScheme.PROGRAMMED_RTF_HYPERTROPHY,
+        )
         .map((e) => {
-          const goal = this.getRtFGoalForWeek(week, withDeloads);
+          const variant: 'STANDARD' | 'HYPERTROPHY' =
+            e.progressionScheme === ProgressionScheme.PROGRAMMED_RTF_HYPERTROPHY
+              ? 'HYPERTROPHY'
+              : 'STANDARD';
+          const goal = this.getRtFGoalForWeek(week, withDeloads, variant);
+
+          // Deload logic diverges in hypertrophy: 4 sets vs 3 sets (standard)
           if ((goal as any).isDeload) {
+            const deload: any = goal;
+            const intensity = deload.intensity ?? 0.6;
             const weightKg = this.roundToNearest(
-              (e.programTMKg ?? 0) * 0.6,
+              (e.programTMKg ?? 0) * intensity,
               e.programRoundingKg ?? 2.5,
             );
+            if (variant === 'HYPERTROPHY') {
+              const sets = (deload.sets && deload.reps)
+                ? Array.from({ length: deload.sets }, (_, i) => ({
+                    setNumber: i + 1,
+                    reps: deload.reps,
+                    weightKg,
+                  }))
+                : [
+                    { setNumber: 1, reps: 5, weightKg },
+                    { setNumber: 2, reps: 5, weightKg },
+                    { setNumber: 3, reps: 5, weightKg },
+                    { setNumber: 4, reps: 5, weightKg },
+                  ];
+              return {
+                routineExerciseId: e.id,
+                exerciseId: e.exercise.id,
+                exerciseName: e.exercise.name,
+                isDeload: true,
+                variant,
+                sets,
+              } as const;
+            }
+            // STANDARD deload: fixed 3x5 @ ~60%
             return {
               routineExerciseId: e.id,
               exerciseId: e.exercise.id,
               exerciseName: e.exercise.name,
               isDeload: true,
+              variant,
               sets: [
                 { setNumber: 1, reps: 5, rpe: 6, weightKg },
                 { setNumber: 2, reps: 5, rpe: 6, weightKg },
@@ -293,20 +354,44 @@ export class WorkoutsService {
               ],
             } as const;
           }
+
           const g = goal as {
             intensity: number;
             fixedReps: number;
             amrapTarget: number;
           };
-          const weightKg = this.roundToNearest(
-            (e.programTMKg ?? 0) * g.intensity,
-            e.programRoundingKg ?? 2.5,
-          );
+            const weightKg = this.roundToNearest(
+              (e.programTMKg ?? 0) * g.intensity,
+              e.programRoundingKg ?? 2.5,
+            );
+
+          if (variant === 'HYPERTROPHY') {
+            // 4 total sets: (fixed reps) + AMRAP @ set 4
+            return {
+              routineExerciseId: e.id,
+              exerciseId: e.exercise.id,
+              exerciseName: e.exercise.name,
+              isDeload: false,
+              variant,
+              weightKg,
+              fixedReps: g.fixedReps,
+              amrapTarget: g.amrapTarget,
+              sets: [
+                { setNumber: 1, reps: g.fixedReps, weightKg },
+                { setNumber: 2, reps: g.fixedReps, weightKg },
+                { setNumber: 3, reps: g.fixedReps, weightKg },
+                { setNumber: 4, reps: null, amrapTarget: g.amrapTarget, weightKg },
+              ],
+            } as const;
+          }
+
+          // STANDARD variant 5 sets
           return {
             routineExerciseId: e.id,
             exerciseId: e.exercise.id,
             exerciseName: e.exercise.name,
             isDeload: false,
+            variant,
             weightKg,
             fixedReps: g.fixedReps,
             amrapTarget: g.amrapTarget,
@@ -315,12 +400,7 @@ export class WorkoutsService {
               { setNumber: 2, reps: g.fixedReps, weightKg },
               { setNumber: 3, reps: g.fixedReps, weightKg },
               { setNumber: 4, reps: g.fixedReps, weightKg },
-              {
-                setNumber: 5,
-                reps: null,
-                amrapTarget: g.amrapTarget,
-                weightKg,
-              },
+              { setNumber: 5, reps: null, amrapTarget: g.amrapTarget, weightKg },
             ],
           } as const;
         });
@@ -533,10 +613,11 @@ export class WorkoutsService {
                 });
               }
             }
-          } else if (scheme === ProgressionScheme.PROGRAMMED_RTF) {
+          } else if (scheme === ProgressionScheme.PROGRAMMED_RTF || scheme === ProgressionScheme.PROGRAMMED_RTF_HYPERTROPHY) {
             if (hasProgram && currentWeek && !isDeload) {
-              // Adjust TM using AMRAP (set #5) once per week per exercise instance
-              const lastSet = logMap.get(logKey(ex.id, 5));
+              // Adjust TM using AMRAP - set #5 for Standard RTF, set #4 for Hypertrophy RTF
+              const amrapSetNumber = scheme === ProgressionScheme.PROGRAMMED_RTF_HYPERTROPHY ? 4 : 5;
+              const lastSet = logMap.get(logKey(ex.id, amrapSetNumber));
               if (
                 typeof ex.programTMKg === 'number' &&
                 typeof ex.programRoundingKg === 'number' &&
@@ -546,6 +627,9 @@ export class WorkoutsService {
                 const goal = this.getRtFGoalForWeek(
                   currentWeek,
                   !!routineProgram.programWithDeloads,
+                  scheme === ProgressionScheme.PROGRAMMED_RTF_HYPERTROPHY
+                    ? 'HYPERTROPHY'
+                    : 'STANDARD'
                 );
                 if (!('isDeload' in (goal as any))) {
                   const g = goal as {
@@ -680,6 +764,265 @@ export class WorkoutsService {
     });
 
     return upserted;
+  }
+
+  /**
+   * Public endpoint helper: expose RtF weekly goal details (intensity, fixed reps, AMRAP target)
+   * for each PROGRAMMED_RTF / PROGRAMMED_RTF_HYPERTROPHY exercise in a routine for a given
+   * calendar program week. If no week provided the current program week is derived.
+   */
+  async getRtFWeekGoals(
+    userId: string,
+    routineId: string,
+    requestedWeek?: number
+  ) {
+    // Resolve week early if provided (cache key stability: use final week value)
+    // We'll compute the actual week after loading the routine (needs duration bounds).
+    const routine = await this.db.routine.findFirst({
+      where: { id: routineId, userId },
+      select: {
+        id: true,
+        programWithDeloads: true,
+        programDurationWeeks: true,
+        programStartDate: true,
+        programTimezone: true,
+        days: {
+          select: {
+            exercises: {
+              where: {
+                OR: [
+                  { progressionScheme: ProgressionScheme.PROGRAMMED_RTF },
+                  { progressionScheme: ProgressionScheme.PROGRAMMED_RTF_HYPERTROPHY },
+                ],
+              },
+              select: {
+                id: true,
+                progressionScheme: true,
+                programTMKg: true,
+                programRoundingKg: true,
+                exercise: { select: { id: true, name: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!routine) throw new NotFoundException('Routine not found');
+    if (!routine.programStartDate || !routine.programDurationWeeks || !routine.programTimezone) {
+      throw new BadRequestException('Routine does not have program data');
+    }
+    const withDeloads = !!routine.programWithDeloads;
+    const week = requestedWeek
+      ? requestedWeek
+      : this.getCurrentProgramWeek(
+          new Date(),
+          routine.programStartDate,
+          routine.programDurationWeeks,
+          routine.programTimezone
+        );
+    if (week < 1 || week > routine.programDurationWeeks) {
+      throw new BadRequestException('Week out of range');
+    }
+    const cacheKey = this.cacheKey(routineId, week)
+    const cached = await this.cacheGet(cacheKey)
+    if (cached) {
+      this.metrics.weekGoalsHits++
+      return { ...cached, _cache: 'HIT' }
+    }
+    this.metrics.weekGoalsMisses++
+    return this.withStampedeProtection(cacheKey, async () => {
+      const again = await this.cacheGet(cacheKey)
+      if (again) return { ...again, _cache: 'HIT' }
+      const goals: any[] = [];
+      for (const day of routine.days) {
+        for (const ex of day.exercises) {
+          const variant: 'STANDARD' | 'HYPERTROPHY' =
+            ex.progressionScheme === ProgressionScheme.PROGRAMMED_RTF_HYPERTROPHY
+              ? 'HYPERTROPHY'
+              : 'STANDARD';
+          const goal = this.getRtFGoalForWeek(week, withDeloads, variant);
+          const isDeload = (goal as any).isDeload === true;
+          if (isDeload) {
+            if (variant === 'HYPERTROPHY') {
+              const deload: any = goal;
+              goals.push({
+                routineExerciseId: ex.id,
+                exerciseId: ex.exercise.id,
+                exerciseName: ex.exercise.name,
+                variant,
+                week,
+                isDeload: true,
+                intensity: deload.intensity ?? 0.6,
+                fixedReps: deload.reps ?? 5,
+                setsPlanned: deload.sets ?? 4,
+                amrapTarget: null,
+                amrapSetNumber: null,
+              });
+            } else {
+              goals.push({
+                routineExerciseId: ex.id,
+                exerciseId: ex.exercise.id,
+                exerciseName: ex.exercise.name,
+                variant,
+                week,
+                isDeload: true,
+                intensity: 0.6,
+                fixedReps: 5,
+                setsPlanned: 3,
+                amrapTarget: null,
+                amrapSetNumber: null,
+              });
+            }
+          } else {
+            const g = goal as { intensity: number; fixedReps: number; amrapTarget: number };
+            goals.push({
+              routineExerciseId: ex.id,
+              exerciseId: ex.exercise.id,
+              exerciseName: ex.exercise.name,
+              variant,
+              week,
+              isDeload: false,
+              intensity: g.intensity,
+              fixedReps: g.fixedReps,
+              setsPlanned: variant === 'HYPERTROPHY' ? 4 : 5,
+              amrapTarget: g.amrapTarget,
+              amrapSetNumber: variant === 'HYPERTROPHY' ? 4 : 5,
+            });
+          }
+        }
+      }
+      const result = { routineId, week, withDeloads, goals, version: WorkoutsService.RTF_WEEK_GOALS_VERSION }
+      await this.cacheSet(cacheKey, result)
+      this.metrics.weekGoalsSets++
+      return { ...result, _cache: 'MISS' }
+    })
+  }
+
+  /**
+   * Build full RtF timeline (all program weeks) for a routine.
+   * Reuses per-week cache; aggregates results. (RTF-B03)
+   */
+  async getRtFTimeline(userId: string, routineId: string) {
+    // Fetch routine meta to know duration & deload setting
+    const routine = await this.db.routine.findFirst({
+      where: { id: routineId, userId },
+      select: {
+        id: true,
+        programDurationWeeks: true,
+        programWithDeloads: true,
+        programStartDate: true,
+        programTimezone: true,
+      }
+    })
+    if (!routine) throw new NotFoundException('Routine not found')
+    if (!routine.programDurationWeeks) {
+      throw new BadRequestException('Routine does not have program data')
+    }
+    const weeks = routine.programDurationWeeks
+    const timeline: any[] = []
+    let cacheHits = 0
+    for (let w = 1; w <= weeks; w++) {
+      const weekGoals = await this.getRtFWeekGoals(userId, routineId, w)
+      if ((weekGoals as any)._cache === 'HIT') cacheHits++
+      timeline.push({ week: w, goals: (weekGoals as any).goals })
+    }
+    return {
+      routineId,
+      weeks,
+      version: WorkoutsService.RTF_WEEK_GOALS_VERSION,
+      cacheStats: { hits: cacheHits, misses: weeks - cacheHits },
+      timeline
+    }
+  }
+
+  /**
+   * Forecast endpoint (RTF-B06): produce projected schedule summary for the
+   * routine's remaining weeks (and all weeks) combining STANDARD + HYPERTROPHY
+   * variants per exercise, incorporating deload mapping. We do not currently
+   * adjust intensities for TM adjustments historically (future enhancement
+   * could annotate weeks with delta events). Cached by routine/version.
+   */
+  async getRtFForecast(userId: string, routineId: string) {
+    const cacheKey = this.forecastCacheKey(routineId)
+    const cached = await this.cacheGet(cacheKey)
+    if (cached) {
+      this.metrics.forecastHits++
+      return { ...cached, _cache: 'HIT' }
+    }
+    this.metrics.forecastMisses++
+    return this.withStampedeProtection(cacheKey, async () => {
+      const again = await this.cacheGet(cacheKey)
+      if (again) {
+        this.metrics.forecastHits++
+        return { ...again, _cache: 'HIT' }
+      }
+      const routine: any = await this.db.routine.findFirst({
+        where: { id: routineId, userId },
+        // Cast select as any to allow programRtfSnapshot (schema updated but
+        // generated types may lag in some environments). Snapshot is optional.
+        select: ({
+          id: true,
+          programDurationWeeks: true,
+          programWithDeloads: true,
+          programStartDate: true,
+          programTimezone: true,
+          programRtfSnapshot: true,
+          days: {
+            select: {
+              exercises: {
+                where: {
+                  OR: [
+                    { progressionScheme: ProgressionScheme.PROGRAMMED_RTF },
+                    { progressionScheme: ProgressionScheme.PROGRAMMED_RTF_HYPERTROPHY }
+                  ]
+                },
+                select: {
+                  id: true,
+                  progressionScheme: true,
+                  exercise: { select: { id: true, name: true } }
+                }
+              }
+            }
+          }
+        }) as any
+      })
+      if (!routine) throw new NotFoundException('Routine not found')
+      if (!routine.programDurationWeeks || !routine.programStartDate || !routine.programTimezone) {
+        throw new BadRequestException('Routine does not have program data')
+      }
+      const withDeloads = !!routine.programWithDeloads
+  const weeks: number = Number(routine.programDurationWeeks)
+      const forecast: any[] = []
+  const snap: any | null = (routine as any).programRtfSnapshot || null
+  const snapshotApplicable = !!snap && snap.withDeloads === withDeloads && Array.isArray(snap.standard) && Array.isArray(snap.hypertrophy)
+      for (let w = 1; w <= weeks; w++) {
+        const standard = snapshotApplicable ? snap.standard[w - 1] : this.getRtFGoalForWeek(w, withDeloads, 'STANDARD')
+        const hypertrophy = snapshotApplicable ? snap.hypertrophy[w - 1] : this.getRtFGoalForWeek(w, withDeloads, 'HYPERTROPHY')
+        const isDeload = (standard as any).isDeload || (hypertrophy as any).isDeload
+        forecast.push({
+          week: w,
+          isDeload: !!isDeload,
+          standard: isDeload ? standard : {
+            intensity: (standard as any).intensity,
+            fixedReps: (standard as any).fixedReps,
+            amrapTarget: (standard as any).amrapTarget,
+            sets: 5,
+            amrapSet: 5
+          },
+          hypertrophy: isDeload ? hypertrophy : {
+            intensity: (hypertrophy as any).intensity,
+              fixedReps: (hypertrophy as any).fixedReps,
+              amrapTarget: (hypertrophy as any).amrapTarget,
+              sets: 4,
+              amrapSet: 4
+          }
+        })
+      }
+      const result = { routineId, weeks, version: WorkoutsService.RTF_WEEK_GOALS_VERSION, withDeloads, forecast }
+      await this.cacheSet(cacheKey, result)
+      this.metrics.forecastSets++
+      return { ...result, _cache: 'MISS' }
+    })
   }
 
   async deleteSetLog(

@@ -8,6 +8,22 @@
 - For testing:
     - `.windsurf/rules/sunsteel-project-testing.md`
 
+- For documentation conventions and project references:
+    - `docs/README.md` - Documentation index
+    - `docs/roadmaps/RTF_ENHANCEMENTS.md` - Active RtF roadmap
+    - `docs/reference/ENVIRONMENT_VARIABLES.md` - Environment setup
+    - `docs/history/` - Completion reports and historical records
+
+## Documentation Conventions
+- **NEVER create documentation files at repo root** (except README.md)
+- **All project docs belong in `docs/` hierarchy**:
+  - `docs/roadmaps/` - Active feature roadmaps and task tracking
+  - `docs/history/` - Implementation completion reports
+  - `docs/reference/` - Configuration guides, environment setup, API references
+- **Update `docs/README.md` index** when adding new documentation areas
+- **Use deprecation stubs** if you must reference legacy root docs; point to canonical `docs/` location
+- **Roadmap files**: Use consistent task ID format (RTF-B01, RTF-B02, etc.) for traceability
+
 # GitHub Copilot NestJS Backend API Developer Rule
 
 You are an expert senior backend developer specializing in NestJS, TypeScript, Prisma ORM, NeonDB (PostgreSQL), Node.js, and Supabase Auth for enterprise-grade REST APIs and microservices.

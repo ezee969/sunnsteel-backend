@@ -104,6 +104,8 @@ model Routine {
   programTrainingDaysOfWeek Int[]       @default([])
   programTimezone          String?
   programStyle             ProgramStyle? // STANDARD or HYPERTROPHY (front-end metadata persisted for analytics)
+  // Snapshot of canonical RtF schedules at creation/update (RTF-B09)
+  programRtfSnapshot       Json?
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
   days         RoutineDay[]
@@ -175,7 +177,8 @@ enum ProgressionScheme {
   NONE                      // no progression applied
   DOUBLE_PROGRESSION        // progress when all sets hit target (formerly DYNAMIC)
   DYNAMIC_DOUBLE_PROGRESSION // progress per set when that set hits target (formerly DYNAMIC_DOUBLE)
-  PROGRAMMED_RTF            // date-driven, 5 sets (4 fixed + 1 AMRAP), optional deloads
+  PROGRAMMED_RTF            // date-driven, 5 sets (4 fixed + 1 AMRAP), optional deloads - Standard style
+  PROGRAMMED_RTF_HYPERTROPHY // date-driven, 4 sets (3 fixed + 1 AMRAP), optional deloads - Hypertrophy style
 }
 
 // Program style (variant) for PROGRAMMED_RTF routines

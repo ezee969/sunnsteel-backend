@@ -3,14 +3,34 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ProgressionScheme } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 import { CreateRoutineDto, RepTypeDto } from './dto/create-routine.dto';
 import { UpdateRoutineDto } from './dto/update-routine.dto';
 import { CreateTmEventDto, TmEventResponseDto, TmEventSummaryDto } from './dto/tm-adjustment.dto';
+import { WorkoutsService } from '../workouts/workouts.service';
+import { IRtfWeekGoalsCacheAsync, RTF_WEEK_GOALS_CACHE } from '../cache/rtf-week-goals-cache.async';
+import { buildRtfProgramSnapshot } from '../workouts/rtf-schedules';
+import { Inject } from '@nestjs/common'
 
 @Injectable()
 export class RoutinesService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(
+    private readonly db: DatabaseService,
+    // Inject workouts service to leverage existing RtF weekly goal logic
+    private readonly workoutsService: WorkoutsService,
+  @Inject(RTF_WEEK_GOALS_CACHE) private readonly rtfCache: IRtfWeekGoalsCacheAsync,
+  ) {}
+
+  // --- Telemetry counters (RTF-B07 extension) ---
+  private metrics = {
+    tmAdjustmentsCreated: 0,
+    tmGuardrailRejections: 0,
+    tmUnknownExerciseRejections: 0,
+    tmOwnershipOrProgramRejections: 0,
+  }
+
+  getInternalMetrics() { return { ...this.metrics } }
 
   // Helpers to work with calendar days in a given IANA timezone
   private localDateParts(d: Date, timeZone: string) {
@@ -54,9 +74,12 @@ export class RoutinesService {
   }
 
   async create(userId: string, dto: CreateRoutineDto) {
-    // Determine if any exercise uses PROGRAMMED_RTF
+    // Determine if any exercise uses PROGRAMMED_RTF or PROGRAMMED_RTF_HYPERTROPHY
     const hasRtF = dto.days.some((d) =>
-      d.exercises.some((e) => e.progressionScheme === 'PROGRAMMED_RTF'),
+      d.exercises.some((e) => 
+        e.progressionScheme === 'PROGRAMMED_RTF' || 
+        e.progressionScheme === ('PROGRAMMED_RTF_HYPERTROPHY' as any)
+      ),
     );
 
     // Prepare program fields (optional unless hasRtF)
@@ -72,17 +95,17 @@ export class RoutinesService {
     if (hasRtF) {
       if (typeof dto.programWithDeloads !== 'boolean') {
         throw new BadRequestException(
-          'programWithDeloads is required when using PROGRAMMED_RTF',
+          'programWithDeloads is required when using RTF progression schemes',
         );
       }
       if (!dto.programStartDate) {
         throw new BadRequestException(
-          'programStartDate (yyyy-mm-dd) is required when using PROGRAMMED_RTF',
+          'programStartDate (yyyy-mm-dd) is required when using RTF progression schemes',
         );
       }
       if (!dto.programTimezone) {
         throw new BadRequestException(
-          'programTimezone (IANA) is required when using PROGRAMMED_RTF',
+          'programTimezone (IANA) is required when using RTF progression schemes',
         );
       }
 
@@ -105,7 +128,7 @@ export class RoutinesService {
       );
       if (orderedDays.length === 0) {
         throw new BadRequestException(
-          'Routine requires at least one training day when using PROGRAMMED_RTF',
+          'Routine requires at least one training day when using RTF progression schemes',
         );
       }
       programTrainingDaysOfWeek = orderedDays.map((d) => d.dayOfWeek);
@@ -138,6 +161,7 @@ export class RoutinesService {
       programEndDate = this.addDays(start, totalDays);
     }
 
+    const snapshot = hasRtF ? buildRtfProgramSnapshot(!!programWithDeloads) : null
     const routine = await this.db.routine.create({
       data: {
         user: {
@@ -158,6 +182,8 @@ export class RoutinesService {
               programTrainingDaysOfWeek,
               programTimezone,
               programStyle,
+              // Cast snapshot to any to satisfy Prisma JSON input typing (RTF-B09)
+              programRtfSnapshot: snapshot as any,
             }
           : {
               programWithDeloads: null,
@@ -168,6 +194,7 @@ export class RoutinesService {
               programTrainingDaysOfWeek: [],
               programTimezone: null,
               programStyle: null,
+              programRtfSnapshot: null as any,
             }),
         days: {
           create: dto.days.map((d) => ({
@@ -180,7 +207,7 @@ export class RoutinesService {
                 restSeconds: e.restSeconds,
                 progressionScheme: e.progressionScheme ?? 'NONE',
                 minWeightIncrement: e.minWeightIncrement ?? 2.5,
-                ...(e.progressionScheme === 'PROGRAMMED_RTF'
+                ...((e.progressionScheme === 'PROGRAMMED_RTF' || e.progressionScheme === ('PROGRAMMED_RTF_HYPERTROPHY' as any))
                   ? {
                       programTMKg: e.programTMKg ?? undefined,
                       programRoundingKg: e.programRoundingKg ?? 2.5,
@@ -355,7 +382,7 @@ export class RoutinesService {
     return routines;
   }
 
-  async findOne(userId: string, id: string) {
+  async findOne(userId: string, id: string, options?: { includeRtFGoals?: boolean; week?: number }) {
     const routine = await this.db.routine.findFirst({
       where: { id, userId },
       select: {
@@ -410,6 +437,23 @@ export class RoutinesService {
       throw new NotFoundException('Routine not found');
     }
 
+    // Optionally attach RtF weekly goals (RTF-B02)
+    if (options?.includeRtFGoals) {
+      try {
+        const week = options.week
+        const goals = await this.workoutsService.getRtFWeekGoals(userId, id, week)
+        return { ...routine, rtfGoals: goals }
+      } catch (err) {
+        // If routine lacks program data or other validation errors, surface as-is
+        // (frontend can decide how to present). We only silence NOT_FOUND to keep
+        // parity with base routine fetch semantics.
+        if (err instanceof NotFoundException) {
+          return routine
+        }
+        throw err
+      }
+    }
+
     return routine;
   }
 
@@ -451,9 +495,12 @@ export class RoutinesService {
         await tx.routineDay.deleteMany({ where: { routineId: id } });
       }
 
-      // Determine if any exercise uses PROGRAMMED_RTF (only if days are being updated)
+      // Determine if any exercise uses RTF progression schemes (only if days are being updated)
       const hasRtF = dto.days ? dto.days.some((d) =>
-        d.exercises.some((e) => e.progressionScheme === 'PROGRAMMED_RTF'),
+        d.exercises.some((e) => 
+          e.progressionScheme === 'PROGRAMMED_RTF' || 
+          e.progressionScheme === ('PROGRAMMED_RTF_HYPERTROPHY' as any)
+        ),
       ) : false;
 
       let programWithDeloads: boolean | null = null;
@@ -467,17 +514,17 @@ export class RoutinesService {
       if (hasRtF && dto.days) {
         if (typeof dto.programWithDeloads !== 'boolean') {
           throw new BadRequestException(
-            'programWithDeloads is required when using PROGRAMMED_RTF',
+            'programWithDeloads is required when using RTF progression schemes',
           );
         }
         if (!dto.programStartDate) {
           throw new BadRequestException(
-            'programStartDate (yyyy-mm-dd) is required when using PROGRAMMED_RTF',
+            'programStartDate (yyyy-mm-dd) is required when using RTF progression schemes',
           );
         }
         if (!dto.programTimezone) {
           throw new BadRequestException(
-            'programTimezone (IANA) is required when using PROGRAMMED_RTF',
+            'programTimezone (IANA) is required when using RTF progression schemes',
           );
         }
 
@@ -496,7 +543,7 @@ export class RoutinesService {
         );
         if (orderedDays.length === 0) {
           throw new BadRequestException(
-            'Routine requires at least one training day when using PROGRAMMED_RTF',
+            'Routine requires at least one training day when using RTF progression schemes',
           );
         }
         programTrainingDaysOfWeek = orderedDays.map((d) => d.dayOfWeek);
@@ -542,6 +589,7 @@ export class RoutinesService {
         }
       }
 
+      const snapshot = hasRtF && dto.days ? buildRtfProgramSnapshot(!!programWithDeloads) : null
       const updated = await tx.routine.update({
         where: { id },
         data: {
@@ -559,6 +607,8 @@ export class RoutinesService {
                 programEndDate,
                 programTrainingDaysOfWeek,
                 programTimezone,
+                // Cast snapshot to any (Prisma JSON input) (RTF-B09)
+                programRtfSnapshot: snapshot as any,
               }
             : dto.days && {
                 programWithDeloads: null,
@@ -568,6 +618,7 @@ export class RoutinesService {
                 programTrainingDaysOfWeek: [],
                 programTimezone: null,
                 programStyle: null,
+                programRtfSnapshot: null as any,
               }),
           ...(dto.days && {
             days: {
@@ -581,7 +632,7 @@ export class RoutinesService {
                     restSeconds: e.restSeconds,
                     progressionScheme: e.progressionScheme ?? 'NONE',
                     minWeightIncrement: e.minWeightIncrement ?? 2.5,
-                    ...(e.progressionScheme === 'PROGRAMMED_RTF'
+                    ...((e.progressionScheme === 'PROGRAMMED_RTF' || e.progressionScheme === ('PROGRAMMED_RTF_HYPERTROPHY' as any))
                       ? {
                           programTMKg: e.programTMKg ?? undefined,
                           programRoundingKg: e.programRoundingKg ?? 2.5,
@@ -882,7 +933,7 @@ export class RoutinesService {
     routineId: string,
     dto: CreateTmEventDto
   ): Promise<TmEventResponseDto> {
-    // Verify routine ownership and that it uses PROGRAMMED_RTF
+    // Verify routine ownership and that it uses RTF progression schemes
     const routine = await this.db.routine.findFirst({
       where: { 
         id: routineId, 
@@ -891,7 +942,10 @@ export class RoutinesService {
           some: {
             exercises: {
               some: {
-                progressionScheme: 'PROGRAMMED_RTF'
+                OR: [
+                  { progressionScheme: 'PROGRAMMED_RTF' },
+                  { progressionScheme: 'PROGRAMMED_RTF_HYPERTROPHY' as any }
+                ]
               }
             }
           }
@@ -905,7 +959,10 @@ export class RoutinesService {
             exercises: {
               where: {
                 exerciseId: dto.exerciseId,
-                progressionScheme: 'PROGRAMMED_RTF'
+                OR: [
+                  { progressionScheme: 'PROGRAMMED_RTF' },
+                  { progressionScheme: 'PROGRAMMED_RTF_HYPERTROPHY' as any }
+                ]
               },
               select: { id: true }
             }
@@ -915,19 +972,21 @@ export class RoutinesService {
     })
 
     if (!routine) {
+      this.metrics.tmOwnershipOrProgramRejections++
       throw new NotFoundException(
-        'Routine not found, not accessible, or does not use PROGRAMMED_RTF'
+        'Routine not found, not accessible, or does not use RTF progression schemes'
       )
     }
 
-    // Verify exercise exists in routine and uses PROGRAMMED_RTF
+    // Verify exercise exists in routine and uses RTF progression schemes
     const hasExercise = routine.days.some(day => 
       day.exercises.some(ex => ex.id)
     )
 
     if (!hasExercise) {
+      this.metrics.tmUnknownExerciseRejections++
       throw new BadRequestException(
-        'Exercise not found in routine or does not use PROGRAMMED_RTF'
+        'Exercise not found in routine or does not use RTF progression schemes'
       )
     }
 
@@ -935,9 +994,28 @@ export class RoutinesService {
     const calculatedPost = dto.preTmKg + dto.deltaKg
     const epsilon = 0.01 // Allow small floating point differences
     if (Math.abs(calculatedPost - dto.postTmKg) > epsilon) {
+      this.metrics.tmGuardrailRejections++
       throw new BadRequestException(
         'preTmKg + deltaKg must equal postTmKg'
       )
+    }
+
+    // Guardrails (RTF-B08): reasonable delta bounds and reason length
+    const maxAbsPercent = 0.20 // 20% per single adjustment safety cap
+    if (dto.preTmKg > 0) {
+      const percent = Math.abs(dto.deltaKg) / dto.preTmKg
+      if (percent > maxAbsPercent) {
+        this.metrics.tmGuardrailRejections++
+        throw new BadRequestException('deltaKg exceeds 20% of preTmKg (guardrail)')
+      }
+    }
+    if (Math.abs(dto.deltaKg) > 25) { // Hard absolute cap
+      this.metrics.tmGuardrailRejections++
+      throw new BadRequestException('deltaKg absolute change too large (guardrail)')
+    }
+    if (dto.reason && dto.reason.length > 240) {
+      this.metrics.tmGuardrailRejections++
+      throw new BadRequestException('reason too long (max 240 chars)')
     }
 
     // Create the adjustment
@@ -953,6 +1031,19 @@ export class RoutinesService {
         style: routine.programStyle
       }
     })
+    this.metrics.tmAdjustmentsCreated++
+
+      // Invalidate cached RtF week goals for this routine (all weeks) (RTF-B04 Phase 1.5)
+      try {
+        // Broad invalidation (all weeks for routine)
+  await this.rtfCache.invalidateRoutine(routineId)
+        // Targeted safety: also remove specific week key if routine cache implementation
+        const directKey = `weekGoals:${routineId}:${dto.weekNumber}`
+  await this.rtfCache.delete(directKey)
+      } catch (e) {
+        console.warn('RtF cache invalidation failed', { routineId, error: (e as any)?.message })
+      }
+
 
     return {
       id: adjustment.id,

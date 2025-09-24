@@ -1,13 +1,20 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
+import { SupabaseJwtGuard } from '../src/auth/guards/supabase-jwt.guard';
+import { SupabaseService } from '../src/auth/supabase.service';
 import * as request from 'supertest';
 import { AppModule } from './../src/app.module';
 import { DatabaseService } from '../src/database/database.service';
+
+// Shared token registry for SupabaseService mock
+const tokenToUser: Record<string, { id: string; email: string }> = {}
+let supabaseServiceMock: Partial<SupabaseService>
 
 describe('Workout Detail (e2e)', () => {
   let app: INestApplication;
   let prisma: DatabaseService;
   let accessToken: string;
+  let otherAccessToken: string;
   let userId: string;
   let routineId: string;
   let routineDayId: string;
@@ -17,9 +24,26 @@ describe('Workout Detail (e2e)', () => {
   let exerciseName: string;
 
   beforeAll(async () => {
+    supabaseServiceMock = {
+      verifyToken: jest.fn().mockImplementation((token: string) => {
+        const mapped = tokenToUser[token];
+        if (!mapped) throw new Error('invalid')
+        return { id: mapped.id, email: mapped.email, user_metadata: { name: mapped.email.split('@')[0] } } as any
+      }),
+      getOrCreateUser: jest.fn().mockImplementation((supabaseUser: any) => {
+        return prisma.user.upsert({
+          where: { email: supabaseUser.email },
+          update: {},
+          create: { email: supabaseUser.email, name: supabaseUser.user_metadata?.name || 'wd' }
+        })
+      })
+    }
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(SupabaseService)
+      .useValue(supabaseServiceMock)
+      .compile();
 
     app = moduleFixture.createNestApplication();
     prisma = moduleFixture.get<DatabaseService>(DatabaseService);
@@ -50,6 +74,19 @@ describe('Workout Detail (e2e)', () => {
 
     accessToken = registerResponse.body.accessToken;
     userId = registerResponse.body.user.id;
+    tokenToUser[accessToken] = { id: userId, email: registerResponse.body.user.email }
+
+    // Pre-create secondary user for ownership test
+    const otherRegister = await request(app.getHttpServer())
+      .post('/api/auth/register')
+      .send({
+        email: `other-${Date.now()}@example.com`,
+        password: 'password123',
+        name: 'Other User',
+      })
+      .expect(201);
+    otherAccessToken = otherRegister.body.accessToken;
+    tokenToUser[otherAccessToken] = { id: otherRegister.body.user.id, email: otherRegister.body.user.email }
 
     // Verify we got valid response
     if (!accessToken || !userId) {
@@ -290,32 +327,11 @@ describe('Workout Detail (e2e)', () => {
         .expect(401);
     });
 
-    it('should return 403 for session belonging to another user', async () => {
-      // Create another user
-      await request(app.getHttpServer()).post('/api/auth/register').send({
-        email: 'other-user@example.com',
-        password: 'password123',
-        name: 'Other User',
-      });
-
-      const otherLoginResponse = await request(app.getHttpServer())
-        .post('/api/auth/login')
-        .send({
-          email: 'other-user@example.com',
-          password: 'password123',
-        });
-
-      const otherAccessToken = otherLoginResponse.body.accessToken;
-
+    it('should return 404 when accessing a session owned by another user', async () => {
       await request(app.getHttpServer())
         .get(`/api/workouts/sessions/${sessionId}`)
         .set('Authorization', `Bearer ${otherAccessToken}`)
         .expect(404);
-
-      // Clean up other user
-      await prisma.user.deleteMany({
-        where: { email: 'other-user@example.com' },
-      });
     });
 
     it('should handle session without set logs', async () => {

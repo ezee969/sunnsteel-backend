@@ -81,17 +81,19 @@ export class CreateRoutineExerciseDto {
       DOUBLE_PROGRESSION: 'DOUBLE_PROGRESSION',
       DYNAMIC_DOUBLE_PROGRESSION: 'DYNAMIC_DOUBLE_PROGRESSION',
       PROGRAMMED_RTF: 'PROGRAMMED_RTF',
+      PROGRAMMED_RTF_HYPERTROPHY: 'PROGRAMMED_RTF_HYPERTROPHY',
     } as const,
     {
       message:
-        'progressionScheme must be NONE, DOUBLE_PROGRESSION, DYNAMIC_DOUBLE_PROGRESSION, or PROGRAMMED_RTF',
+        'progressionScheme must be NONE, DOUBLE_PROGRESSION, DYNAMIC_DOUBLE_PROGRESSION, PROGRAMMED_RTF, or PROGRAMMED_RTF_HYPERTROPHY',
     },
   )
   progressionScheme?:
     | 'NONE'
     | 'DOUBLE_PROGRESSION'
     | 'DYNAMIC_DOUBLE_PROGRESSION'
-    | 'PROGRAMMED_RTF';
+    | 'PROGRAMMED_RTF'
+    | 'PROGRAMMED_RTF_HYPERTROPHY';
 
   @IsOptional()
   @IsNumber()
@@ -103,16 +105,16 @@ export class CreateRoutineExerciseDto {
   @Type(() => CreateRoutineExerciseSetDto)
   sets: CreateRoutineExerciseSetDto[];
 
-  // RtF-specific fields when progressionScheme = PROGRAMMED_RTF
+  // RtF-specific fields when progressionScheme is any RtF variant
   @ValidateIf(
-    (o: CreateRoutineExerciseDto) => o.progressionScheme === 'PROGRAMMED_RTF',
+    (o: CreateRoutineExerciseDto) => o.progressionScheme === 'PROGRAMMED_RTF' || o.progressionScheme === 'PROGRAMMED_RTF_HYPERTROPHY',
   )
   @IsNumber()
   @Min(1)
   programTMKg?: number;
 
   @ValidateIf(
-    (o: CreateRoutineExerciseDto) => o.progressionScheme === 'PROGRAMMED_RTF',
+    (o: CreateRoutineExerciseDto) => o.progressionScheme === 'PROGRAMMED_RTF' || o.progressionScheme === 'PROGRAMMED_RTF_HYPERTROPHY',
   )
   @IsNumber()
   @Min(0.5)

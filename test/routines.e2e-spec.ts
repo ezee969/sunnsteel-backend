@@ -7,6 +7,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { JwtAuthGuard } from '../src/auth/guards/passport-jwt.guard';
+import { SupabaseJwtGuard } from '../src/auth/guards/supabase-jwt.guard';
 import { RoutinesService } from '../src/routines/routines.service';
 
 const mockUser = { userId: 'u1', email: 'u1@mail.com' };
@@ -24,6 +25,7 @@ describe('RoutinesController (e2e)', () => {
     create: jest.fn(),
     update: jest.fn(),
     findAll: jest.fn(),
+    findOne: jest.fn(),
     findFavorites: jest.fn(),
     findCompleted: jest.fn(),
     setFavorite: jest.fn(),
@@ -36,6 +38,8 @@ describe('RoutinesController (e2e)', () => {
     })
       .overrideGuard(JwtAuthGuard as any)
       .useValue(allowJwtGuard)
+      .overrideGuard(SupabaseJwtGuard as any)
+      .useValue({ canActivate: (ctx: any) => { const req = ctx.switchToHttp().getRequest(); req.user = { id: 'u1', email: 'u1@mail.com' }; return true as any } })
       .overrideProvider(RoutinesService)
       .useValue(routinesServiceMock)
       .compile();
@@ -220,6 +224,14 @@ describe('RoutinesController (e2e)', () => {
       .expect([]);
 
     expect(routinesServiceMock.findAll).toHaveBeenCalledWith('u1', {} as any);
+  });
+
+  it('GET /api/routines/:id with include=rtfGoals passes options to service', async () => {
+    (routinesServiceMock.findOne as any).mockResolvedValue({ id: 'r-rtf', name: 'Routine', rtfGoals: { week: 2 } })
+    await request(app.getHttpServer())
+      .get('/api/routines/r-rtf?include=rtfGoals&week=2')
+      .expect(200)
+    expect(routinesServiceMock.findOne).toHaveBeenCalledWith('u1', 'r-rtf', { includeRtFGoals: true, week: 2 })
   });
 
   it('POST /api/routines returns 400 when FIXED set is missing reps', async () => {

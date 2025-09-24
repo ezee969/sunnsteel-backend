@@ -19,6 +19,7 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json --runInBand",
+    "test:e2e:rtf": "jest --config ./test/jest-e2e.json --runTestsByPath test/routines-rtf-variants.e2e-spec.ts test/tm-adjustment-hypertrophy.e2e-spec.ts test/workouts-rtf-sets.e2e-spec.ts",
     "db:seed": "tsx prisma/seed.ts",
     "docs:check": "./scripts/update-docs.sh",
     "docs:update": "echo 'Run docs:check first, then update documentation manually'"
@@ -44,6 +45,8 @@
     "passport-http-bearer": "^1.0.1",
     "passport-jwt": "^4.0.1",
     "passport-local": "^1.0.0",
+    "prom-client": "^15.1.3",
+    "redis": "^4.6.13",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "uuid": "^11.0.5"

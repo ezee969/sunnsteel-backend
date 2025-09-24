@@ -52,8 +52,15 @@ export class RoutinesController {
   }
 
   @Get(':id')
-  async findOne(@Req() req: RequestWithUser, @Param('id') id: string) {
-    return this.routinesService.findOne(req.user.id, id);
+  async findOne(
+    @Req() req: RequestWithUser,
+    @Param('id') id: string,
+    @Query('include') include?: string,
+    @Query('week') week?: string,
+  ) {
+    const includeRtFGoals = include?.split(',').includes('rtfGoals')
+    const weekNum = week ? parseInt(week, 10) : undefined
+    return this.routinesService.findOne(req.user.id, id, { includeRtFGoals, week: weekNum })
   }
 
   @Patch(':id')

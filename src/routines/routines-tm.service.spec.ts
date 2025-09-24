@@ -2,8 +2,10 @@ import { Test, TestingModule } from '@nestjs/testing'
 import { HttpStatus } from '@nestjs/common'
 import { DatabaseService } from '../database/database.service'
 import { RoutinesService } from './routines.service'
+import { WorkoutsService } from '../workouts/workouts.service'
 import { CreateTmEventDto } from './dto/tm-adjustment.dto'
 import { RoutineOwnershipException, TmEventNotAllowedException } from './exceptions/routine-exceptions'
+import { RTF_WEEK_GOALS_CACHE } from '../cache/rtf-week-goals-cache.async'
 
 describe('RoutinesService - TM Adjustments', () => {
 	let service: RoutinesService
@@ -30,7 +32,17 @@ describe('RoutinesService - TM Adjustments', () => {
 							findMany: jest.fn()
 						}
 					}
-				}
+					},
+					{ provide: WorkoutsService, useValue: { getRtFWeekGoals: jest.fn() } },
+					{
+						provide: RTF_WEEK_GOALS_CACHE,
+						useValue: {
+							get: jest.fn().mockResolvedValue(null),
+							set: jest.fn().mockResolvedValue(undefined),
+							delete: jest.fn().mockResolvedValue(undefined),
+							invalidateRoutine: jest.fn().mockResolvedValue(undefined)
+						}
+					}
 			]
 		}).compile()
 
@@ -104,7 +116,7 @@ describe('RoutinesService - TM Adjustments', () => {
 
 			await expect(
 				service.createTmAdjustment(mockUser.id, 'non-existent-routine', createTmEventDto)
-			).rejects.toThrow('Routine not found, not accessible, or does not use PROGRAMMED_RTF')
+			).rejects.toThrow('Routine not found, not accessible, or does not use RTF progression schemes')
 		})
 
 		it('should validate delta calculation', async () => {
@@ -131,7 +143,7 @@ describe('RoutinesService - TM Adjustments', () => {
 
 			await expect(
 				service.createTmAdjustment(mockUser.id, mockRoutine.id, createTmEventDto)
-			).rejects.toThrow('Exercise not found in routine or does not use PROGRAMMED_RTF')
+			).rejects.toThrow('Exercise not found in routine or does not use RTF progression schemes')
 		})
 	})
 
