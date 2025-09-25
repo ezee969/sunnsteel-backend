@@ -18,6 +18,7 @@ import { WorkoutsService } from './workouts.service';
 import { UseInterceptors } from '@nestjs/common'
 import { RtfEtagInterceptor } from '../common/interceptors/rtf-etag.interceptor'
 import { StartWorkoutDto } from './dto/start-workout.dto';
+import { StartWorkoutResponseDto } from './dto/start-workout-response.dto';
 import { FinishWorkoutDto } from './dto/finish-workout.dto';
 import { UpsertSetLogDto } from './dto/upsert-set-log.dto';
 import { Request } from 'express';
@@ -33,7 +34,7 @@ export class WorkoutsController {
   constructor(private readonly workoutsService: WorkoutsService) {}
 
   @Post('sessions/start')
-  async start(@Req() req: RequestWithUser, @Body() dto: StartWorkoutDto) {
+  async start(@Req() req: RequestWithUser, @Body() dto: StartWorkoutDto): Promise<StartWorkoutResponseDto> {
     return this.workoutsService.startSession(req.user.id, dto);
   }
 

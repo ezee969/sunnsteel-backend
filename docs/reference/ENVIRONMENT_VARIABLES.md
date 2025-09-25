@@ -29,6 +29,12 @@ RTF_WEEK_GOALS_L1_TTL_MS=5000
 
 # RtF ETag (RTF-B12) enable/disable (1=on, 0=off)
 RTF_ETAG_ENABLED=1
+
+# Workout Session Auto-Expiration
+# In-progress sessions older than this (hours) are auto-marked ABORTED by maintenance task
+WORKOUT_SESSION_TIMEOUT_HOURS=48
+# Maintenance sweep interval in minutes (how often cleanup runs). Reasonable default: every 30 minutes
+WORKOUT_SESSION_SWEEP_INTERVAL_MIN=30
 ```
 
 ## Frontend (.env.local)

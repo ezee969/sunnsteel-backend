@@ -208,11 +208,14 @@ model WorkoutSession {
   durationSec   Int?
   notes         String?
   setLogs       SetLog[]
+  // Updated whenever a set log is created/updated/deleted (activity heartbeat)
+  lastActivityAt DateTime?
 
   createdAt     DateTime              @default(now())
   updatedAt     DateTime              @updatedAt
 
   @@index([userId, status, startedAt])
+  @@index([lastActivityAt])
 }
 
 // TM (Training Max) adjustments for Programmed RtF routines

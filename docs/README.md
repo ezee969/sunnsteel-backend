@@ -5,6 +5,7 @@ Area | Path | Purpose
 RtF Roadmap | roadmaps/RTF_ENHANCEMENTS.md | Active backend RtF tasks & status
 TM Adjustments History | history/TM_ADJUSTMENTS_COMPLETION.md | Completion narrative for TM feature
 Environment Variables | reference/ENVIRONMENT_VARIABLES.md | Complete environment setup guide
+Workout Sessions Lifecycle | reference/WORKOUT_SESSIONS.md | Single active invariant, idempotent start, auto-expiration
 
 Conventions:
 - Roadmaps: `docs/roadmaps/*`

@@ -9,6 +9,7 @@ import { IRtfWeekGoalsCacheAsync, RTF_WEEK_GOALS_CACHE } from '../cache/rtf-week
 import { RTF_STANDARD_WITH_DELOADS, RTF_HYPERTROPHY_WITH_DELOADS } from './rtf-schedules';
 import { Inject } from '@nestjs/common'
 import { StartWorkoutDto } from './dto/start-workout.dto';
+import { StartWorkoutResponseDto } from './dto/start-workout-response.dto';
 import { FinishWorkoutDto, FinishStatusDto } from './dto/finish-workout.dto';
 import { UpsertSetLogDto } from './dto/upsert-set-log.dto';
 
@@ -25,8 +26,19 @@ export class WorkoutsService {
     private readonly db: DatabaseService,
     @Inject(RTF_WEEK_GOALS_CACHE) private readonly rtfCache: IRtfWeekGoalsCacheAsync,
   ) {}
-
-  // --- Payload Versioning (RTF-B05) ---
+	/**
+	 * Heartbeat utility to bump lastActivityAt timestamp. Silent on failure
+	 * so it never blocks the primary mutation path.
+	 */
+	private async heartbeatSession(sessionId: string) {
+		try {
+			await this.db.workoutSession.update({
+				where: { id: sessionId },
+				data: { lastActivityAt: new Date() },
+				select: { id: true },
+			})
+		} catch {}
+	}  // --- Payload Versioning (RTF-B05) ---
   // Increment this when the shape of week goals or timeline responses changes
   private static readonly RTF_WEEK_GOALS_VERSION = 1
 
@@ -190,13 +202,17 @@ export class WorkoutsService {
     return session;
   }
 
-  async startSession(userId: string, dto: StartWorkoutDto) {
-    // Ensure no other active session exists
-    const active = await this.getActiveSession(userId);
-    if (active) {
-      throw new BadRequestException(
-        'You already have an active workout session',
-      );
+  /**
+   * Start a workout session if none active; if one already exists, return it with a reuse flag.
+   * Concurrency:
+   *  - Partial unique index (status=IN_PROGRESS) in DB guarantees invariant
+   *  - We avoid a UX-level 400 by returning the existing session (idempotent semantics)
+   *  - On race (P2002) we fetch the winner and return it.
+   */
+  async startSession(userId: string, dto: StartWorkoutDto): Promise<StartWorkoutResponseDto> {
+    const preExisting = await this.getActiveSession(userId)
+    if (preExisting) {
+      return { ...(preExisting as any), reused: true }
     }
 
     // Validate routine and day ownership/relationship
@@ -261,16 +277,28 @@ export class WorkoutsService {
       }
     }
 
-    const created = await this.db.workoutSession.create({
-      data: {
-        userId,
-        routineId: dto.routineId,
-        routineDayId: dto.routineDayId,
-        status: WorkoutSessionStatus.IN_PROGRESS,
-        notes: dto.notes,
-      },
-      select: this.sessionSelect(),
-    });
+    let created: any
+    try {
+      created = await this.db.workoutSession.create({
+        data: {
+          userId,
+          routineId: dto.routineId,
+          routineDayId: dto.routineDayId,
+          status: WorkoutSessionStatus.IN_PROGRESS,
+          notes: dto.notes,
+        },
+        select: this.sessionSelect(),
+      })
+       // Initial activity heartbeat (ignore failure)
+       try { await this.heartbeatSession(created.id) } catch {}
+    } catch (e: unknown) {
+      if (isPrismaErrorWithCode(e) && e.code === 'P2002') {
+        const existing = await this.getActiveSession(userId)
+        if (existing) return { ...(existing as any), reused: true }
+        throw new BadRequestException('Active workout session already exists')
+      }
+      throw e
+    }
 
     // Attach RtF plan for today if applicable
     if (hasProgram) {
@@ -417,10 +445,11 @@ export class WorkoutsService {
           timeZone: tz,
         },
         rtfPlans,
+        reused: false,
       } as const;
     }
 
-    return created;
+    return { ...(created as any), reused: false } as const;
   }
 
   async finishSession(userId: string, id: string, dto: FinishWorkoutDto) {
@@ -763,6 +792,9 @@ export class WorkoutsService {
       },
     });
 
+    // Heartbeat update (non-blocking)
+    await this.heartbeatSession(sessionId)
+
     return upserted;
   }
 
@@ -1056,6 +1088,8 @@ export class WorkoutsService {
         },
         select: { id: true },
       });
+      // Heartbeat on delete (non-blocking)
+      await this.heartbeatSession(sessionId)
       return deleted;
     } catch (err: unknown) {
       // P2025 = Record not found
@@ -1203,6 +1237,7 @@ export class WorkoutsService {
       endedAt: true,
       durationSec: true,
       notes: true,
+  lastActivityAt: true,
       createdAt: true,
       updatedAt: true,
       routine: {

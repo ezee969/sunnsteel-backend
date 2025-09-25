@@ -5,9 +5,11 @@ import {
   Body,
   UseGuards,
   Request,
+  Response,
   HttpStatus,
   HttpCode,
 } from '@nestjs/common';
+import { Response as ExpressResponse } from 'express';
 import { SupabaseService } from './supabase.service';
 import { SupabaseJwtGuard } from './guards/supabase-jwt.guard';
 import { DatabaseService } from '../database/database.service';
@@ -34,10 +36,22 @@ export class SupabaseAuthController {
    */
   @Post('verify')
   @HttpCode(HttpStatus.OK)
-  async verifyToken(@Body() { token }: SupabaseTokenDto) {
+  async verifyToken(
+    @Body() { token }: SupabaseTokenDto,
+    @Response({ passthrough: true }) res: ExpressResponse,
+  ) {
     try {
       const supabaseUser = await this.supabaseService.verifyToken(token);
       const user = await this.supabaseService.getOrCreateUser(supabaseUser);
+
+      // Set HttpOnly session cookie for middleware detection
+      res.cookie('ss_session', '1', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        path: '/',
+      });
 
       return {
         user: {
@@ -50,6 +64,8 @@ export class SupabaseAuthController {
         message: 'Token verified successfully',
       };
     } catch (error) {
+      // Clear session cookie on verification failure
+      res.clearCookie('ss_session', { path: '/' });
       throw error;
     }
   }
@@ -74,6 +90,16 @@ export class SupabaseAuthController {
         updatedAt: user.updatedAt,
       },
     };
+  }
+
+  /**
+   * Clear session cookie on logout
+   */
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  async logout(@Response({ passthrough: true }) res: ExpressResponse) {
+    res.clearCookie('ss_session', { path: '/' });
+    return { message: 'Logged out successfully' };
   }
 
   /**
