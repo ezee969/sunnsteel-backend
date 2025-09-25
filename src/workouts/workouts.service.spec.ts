@@ -84,15 +84,14 @@ describe('WorkoutsService', () => {
   });
 
   describe('startSession', () => {
-    it('throws if an active session exists', async () => {
-      // Spy getActiveSession to simplify
-      jest
-        .spyOn(service, 'getActiveSession')
-        .mockResolvedValue({ id: 's1' } as any);
-
-      await expect(
-        service.startSession('u1', { routineId: 'r1', routineDayId: 'd1' }),
-      ).rejects.toBeInstanceOf(BadRequestException);
+    it('returns existing active session with reused=true on uniqueness violation', async () => {
+      // Simulate DB uniqueness violation (one active session per user) then fetch existing
+      const existing = { id: 's1', status: WorkoutSessionStatus.IN_PROGRESS }
+      ;(dbMock.workoutSession.create as any).mockRejectedValue({ code: 'P2002' })
+      jest.spyOn(service, 'getActiveSession').mockResolvedValue(existing as any)
+      const res: any = await service.startSession('u1', { routineId: 'r1', routineDayId: 'd1' })
+      expect(res.id).toBe(existing.id)
+      expect(res.reused).toBe(true)
     });
 
     it('throws NotFound if routine day not found/belongs to user', async () => {
@@ -104,23 +103,16 @@ describe('WorkoutsService', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
     });
 
-    it('creates a new session when valid', async () => {
-      jest.spyOn(service, 'getActiveSession').mockResolvedValue(null);
-      (dbMock.routineDay.findFirst as any).mockResolvedValue({
-        id: 'd1',
-        routineId: 'r1',
-      });
-      const created = { id: 's1', status: WorkoutSessionStatus.IN_PROGRESS };
-      (dbMock.workoutSession.create as any).mockResolvedValue(created);
-
-      const res = await service.startSession('u1', {
-        routineId: 'r1',
-        routineDayId: 'd1',
-        notes: 'go!',
-      });
-
-      expect(res).toBe(created);
-      expect(dbMock.workoutSession.create).toHaveBeenCalled();
+    it('creates a new session when valid (reused=false)', async () => {
+      // No existing session path: simulate valid routine day
+      ;(dbMock.routineDay.findFirst as any).mockResolvedValue({ id: 'd1', routineId: 'r1' })
+      const created = { id: 's1', status: WorkoutSessionStatus.IN_PROGRESS }
+      ;(dbMock.workoutSession.create as any).mockResolvedValue(created)
+      const res: any = await service.startSession('u1', { routineId: 'r1', routineDayId: 'd1', notes: 'go!' })
+      expect(res.id).toBe(created.id)
+      expect(res.status).toBe(created.status)
+      expect(res.reused).toBe(false)
+      expect(dbMock.workoutSession.create).toHaveBeenCalled()
     });
   });
 
