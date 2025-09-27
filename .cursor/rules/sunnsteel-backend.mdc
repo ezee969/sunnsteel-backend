@@ -1,286 +1,426 @@
 ---
-alwaysApply: true
+trigger: always_on
 ---
 
 # Sunnsteel Backend - Fitness API
 
-Este es el proyecto backend para Sunnsteel, una API de fitness y entrenamiento.
+This is the backend project for Sunnsteel, a comprehensive fitness and training API with advanced workout management, progression tracking, and Training Max (TM) adjustments.
 
-## Stack Tecnológico
+## Technology Stack
 
-- **Framework**: NestJS (Node.js/TypeScript)
-- **Base de datos**: PostgreSQL con Prisma ORM
-- **Autenticación**: JWT con Passport.js
-- **Validación**: class-validator y class-transformer
-- **Seguridad**: bcrypt para hash de contraseñas, throttling con @nestjs/throttler
-- **Puerto de desarrollo**: 4000 (configurable via PORT env var)
+- **Framework**: NestJS v11.0.1 (Node.js/TypeScript)
+- **Database**: PostgreSQL with Prisma ORM v6.4.0
+- **Authentication**: Dual authentication system:
+  - JWT with Passport.js (legacy)
+  - Supabase Auth integration (primary)
+- **Validation**: class-validator v0.14.1 and class-transformer v0.5.1
+- **Security**: bcrypt v5.1.1, throttling with @nestjs/throttler v6.4.0
+- **Caching**: Redis v4.6.13 with layered cache architecture
+- **Monitoring**: Prometheus metrics with prom-client v15.1.3
+- **Development port**: 4000 (configurable via PORT env var)
 
-## Estructura del Proyecto
+## Project Structure
 
-### Módulos Principales
+### Core Modules
 
-- **AuthModule**: Manejo de autenticación (registro, login, logout, refresh tokens)
-- **UsersModule**: Gestión de usuarios y perfiles
-- **TokenModule**: Servicios de JWT y refresh tokens
-- **DatabaseModule**: Configuración de Prisma y conexión a PostgreSQL
-- **ConfigsModule**: Configuraciones del sistema
-- **WorkoutsModule**: Sesiones de entrenamiento (iniciar/finalizar), logs de sets, y progresión automática de ejercicios
-- **ExercisesModule**: Catálogo de ejercicios disponibles
+- **AuthModule**: Dual authentication system (JWT + Supabase)
+- **UsersModule**: User and profile management
+- **TokenModule**: JWT and refresh token services
+- **DatabaseModule**: Prisma configuration and PostgreSQL connection
+- **ExercisesModule**: Exercise catalog with deterministic sorting
+- **RoutinesModule**: Advanced routine management with RtF programs
+- **WorkoutsModule**: Training sessions with progression tracking
+- **CacheModule**: Redis-based caching for RtF week goals
+- **MetricsModule**: Prometheus metrics collection
 
-### Endpoints Disponibles
+### Available Endpoints
 
-- **POST /api/auth/register**: Registro de usuarios
-- **POST /api/auth/login**: Inicio de sesión
-- **POST /api/auth/google**: Inicio de sesión con Google (ID token)
-- **POST /api/auth/logout**: Cierre de sesión
-- **POST /api/auth/refresh**: Renovación de tokens
-- **GET /api/users/profile**: Obtener perfil de usuario (protegido)
+#### Authentication
 
-#### Routines
+- **POST /api/auth/register**: User registration (legacy JWT)
+- **POST /api/auth/login**: User login (legacy JWT)
+- **POST /api/auth/logout**: User logout with token blacklisting
+- **POST /api/auth/refresh**: Token refresh
+- **POST /api/auth/google**: Google Sign-In via ID token
+- **POST /api/auth/supabase/verify**: Supabase token verification (primary)
 
-- **GET /api/routines**: Listar rutinas del usuario. Filtros opcionales vía query: `isFavorite=true|false`, `isCompleted=true|false`
-- **GET /api/routines/favorites**: Listar rutinas favoritas
-- **GET /api/routines/completed**: Listar rutinas completadas
-- **GET /api/routines/:id**: Obtener una rutina por id
-- **POST /api/routines**: Crear rutina
-- **PATCH /api/routines/:id**: Actualizar rutina (reemplazo total de días/ejercicios/sets)
-- **PATCH /api/routines/:id/favorite**: Marcar/Desmarcar rutina como favorita `{ isFavorite: boolean }`
-- **PATCH /api/routines/:id/completed**: Marcar/Desmarcar rutina como completada `{ isCompleted: boolean }`
-- **DELETE /api/routines/:id**: Eliminar rutina
+#### Users
 
-#### Workout Sessions
-
-- **GET /api/workouts/sessions**: Listado de sesiones (historial) con filtros, orden y paginación por cursor
-  - Query params: `status`, `routineId`, `from`, `to`, `q`, `cursor`, `limit`, `sort`
-- **POST /api/workouts/sessions/start**: Iniciar nueva sesión de entrenamiento
-- **PATCH /api/workouts/sessions/:id/finish**: Finalizar sesión (aplica progresión automática)
-- **GET /api/workouts/sessions/active**: Obtener sesión activa del usuario
-- **GET /api/workouts/sessions/:id**: Obtener detalles de sesión específica
-- **POST /api/workouts/sessions/:id/sets**: Crear/actualizar log de set
-- **DELETE /api/workouts/sessions/:id/sets**: Eliminar log de set
+- **GET /api/users/profile**: Get user profile (protected by SupabaseJwtGuard)
 
 #### Exercises
 
-- **GET /api/exercises**: Listar ejercicios disponibles
+- **GET /api/exercises**: List available exercises (protected by SupabaseJwtGuard)
+  - Returns deterministic, locale-aware sorted exercise catalog
 
-## Progresión de Ejercicios
+#### Routines
 
-### Esquemas de Progresión
+- **GET /api/routines**: List user routines with advanced filtering
+  - Query params: `isFavorite=true|false`, `isCompleted=true|false`
+- **GET /api/routines/favorites**: List favorite routines
+- **GET /api/routines/completed**: List completed routines
+- **GET /api/routines/:id**: Get routine by id with full details
+- **POST /api/routines**: Create routine (supports RtF programs)
+- **PATCH /api/routines/:id**: Update routine (complete replacement)
+- **PATCH /api/routines/:id/favorite**: Toggle favorite status
+- **PATCH /api/routines/:id/completed**: Toggle completion status
+- **DELETE /api/routines/:id**: Delete routine
 
-- **DYNAMIC**: Progresión cuando TODOS los sets alcanzan el objetivo de reps
-  - Si todos los sets de un ejercicio logran >= reps objetivo, se aumenta el peso en todos los sets
-- **DYNAMIC_DOUBLE**: Progresión individual por set
-  - Cada set progresa independientemente cuando alcanza el objetivo de reps
-- **PROGRAMMED_RTF (Last set Reps to Failure)**: Programa con duración fija y avance por calendario
-  - 5 sets por ocurrencia (4 fijos + 1 AMRAP)
-  - Intensidad semanal como % del TM; deloads opcionales (W7/14/21 → 3×5 @ RPE6)
-  - TM se ajusta 1 vez por semana por ejercicio con la regla pieza a pieza (según reps del AMRAP)
-- **Configuración por ejercicio**:
-  - `progressionScheme`: `DYNAMIC` | `DYNAMIC_DOUBLE` (default: `DYNAMIC`)
-  - `minWeightIncrement`: incremento mínimo de peso (default: `2.5`)
+#### Training Max (TM) Adjustments
 
-### Aplicación Automática
+- **POST /api/routines/:id/tm-events**: Create TM adjustment event
+- **GET /api/routines/:id/tm-events**: Get TM adjustment history
+  - Query params: `exerciseId?` for filtering
+- **GET /api/routines/:id/tm-events/summary**: Get TM adjustment summary statistics
 
-- Se ejecuta al finalizar una sesión (`PATCH /api/workouts/sessions/:id/finish`)
-- Solo para sesiones con status `COMPLETED`
-- Actualiza pesos en `RoutineExerciseSet` para próximas sesiones
-- Basado en logs de sets (`SetLog`) de la sesión actual
+#### Workout Sessions
 
-##### Estructura de Sets y Prescripción de Reps
+- **GET /api/workouts/sessions**: List sessions with advanced filtering
+  - Query params: `status`, `routineId`, `from`, `to`, `q`, `cursor`, `limit`, `sort`
+- **POST /api/workouts/sessions/start**: Start new training session
+- **PATCH /api/workouts/sessions/:id/finish**: Finish session (applies progression)
+- **GET /api/workouts/sessions/active**: Get user's active session
+- **GET /api/workouts/sessions/:id**: Get specific session details
+- **PUT /api/workouts/sessions/:id/set-logs**: Upsert set logs
+- **DELETE /api/workouts/sessions/:id/set-logs/:routineExerciseId/:setNumber**: Delete set log
 
-- Soporte de prescripción mediante `repType`:
-  - `FIXED` → requiere `reps`
-  - `RANGE` → requiere `minReps` y `maxReps` (`minReps <= maxReps`)
-- Campos expuestos en selectores de endpoints de rutinas para cada set:
-  - `setNumber`, `repType`, `reps`, `minReps`, `maxReps`, `weight`
-- Validación en creación/actualización de rutinas asegura consistencia entre `repType` y sus campos asociados.
+#### RtF (Reps to Failure) Specialized Endpoints
 
-#### Workouts
+- **GET /api/routines/:routineId/rtf-timeline**: Get RtF program timeline
+- **GET /api/workouts/routines/:id/rtf-forecast**: Get RtF forecast data
 
-- **POST /api/workouts/sessions/start**: Iniciar sesión de entrenamiento para un día de rutina
-  - Body: `{ routineId: string, routineDayId: string, notes?: string }`
-  - PROGRAMMED_RTF (fecha‑dirigido): valida que hoy esté entre `programStartDate` y `programEndDate`, que hoy sea un día programado y que `routineDay.dayOfWeek` coincida con hoy. La respuesta incluye la prescripción RtF del día por ejercicio.
-- **PATCH /api/workouts/sessions/:id/finish**: Finalizar sesión en progreso
-  - Body: `{ status: "COMPLETED" | "ABORTED", notes?: string }`
-  - PROGRAMMED_RTF: si no es deload, ajusta TM por ejercicio una sola vez por semana usando el AMRAP (set 5); si es deload, TM congelado.
-- **GET /api/workouts/sessions/active**: Obtener sesión activa (si existe)
-- **GET /api/workouts/sessions**: Listar sesiones (historial) con filtros y paginación por cursor
-  - Query: `status?`, `routineId?`, `from?`, `to?`, `q?`, `cursor?`, `limit?`, `sort?`
-    - `sort`: `finishedAt:desc|finishedAt:asc|startedAt:desc|startedAt:asc`
-    - Validación & coerción (ListSessionsDto):
-      - `status` → enum `WorkoutSessionStatus`
-      - `routineId`, `cursor` → `@IsUUID()`
-      - `from`, `to` → `@IsISO8601()`
-      - `limit` → `@Type(() => Number)` + `@IsInt()` + `@Min(1)` + `@Max(50)`
-      - `sort` → restringido a valores permitidos con `@IsIn([...])`
-- **GET /api/workouts/sessions/:id**: Obtener sesión por id (incluye set logs)
-- **PUT /api/workouts/sessions/:id/set-logs**: Upsert de logs de sets durante una sesión
-  - Body: `{ routineExerciseId, exerciseId, setNumber, reps?, weight?, rpe?, isCompleted? }`
-- **DELETE /api/workouts/sessions/:id/set-logs/:routineExerciseId/:setNumber**: Eliminar un set log específico de la sesión (solo si `IN_PROGRESS`)
+#### System Endpoints
 
-### Base de Datos
+- **GET /api/health**: Health check endpoint
+- **GET /api/metrics**: Prometheus metrics (IP allowlist protected)
+- **GET /api/internal/cache-metrics**: Cache performance metrics
 
-- **User**: Usuarios con email, password, name
-- **RefreshToken**: Tokens de renovación vinculados a usuarios
-- **BlacklistedToken**: Tokens de acceso invalidados
-- **Routine**: Rutinas de entrenamiento (`isFavorite: Boolean @default(false)`, `isCompleted: Boolean @default(false)`, `isPeriodized`, relación con `RoutineDay`)
-  - Campos RtF (programa fecha‑dirigido):
-    - `programWithDeloads: Boolean?`, `programDurationWeeks: Int?`
-    - `programStartWeek: Int? @default(1)` (solo creación; clamp 1..(18|21))
-    - `programStartDate: Date @db.Date?`, `programEndDate: Date @db.Date?`
-    - `programTrainingDaysOfWeek: Int[] @default([])`, `programTimezone: String?`
-- **WorkoutSession**: Sesión de entrenamiento por usuario y día de rutina (`status: IN_PROGRESS|COMPLETED|ABORTED`, `startedAt`, `endedAt`, `durationSec`, `notes`)
-- **SetLog**: Registro de sets ejecutados dentro de una sesión (`reps?`, `weight?`, `rpe?`, `isCompleted`, `completedAt`), único por `(sessionId, routineExerciseId, setNumber)`
+## Advanced Features
 
-##### Modelos Prisma relevantes
+### Dual Authentication System
+
+#### Supabase Authentication (Primary)
+- **SupabaseJwtGuard**: Primary authentication guard
+- **SupabaseJwtStrategy**: Token validation strategy
+- **SupabaseService**: Token verification and user management
+- Session cookies: `ss_session` for middleware detection
+- Used by: Users, Routines, Workouts, Exercises modules
+
+#### Legacy JWT Authentication
+- **JwtAuthGuard**: Legacy authentication with token blacklisting
+- **JwtStrategy**: JWT token validation
+- **TokenService**: Token generation and blacklist management
+- Refresh token rotation with database storage
+
+### Exercise Progression Systems
+
+#### Progression Schemes
+
+1. **DYNAMIC**: Progression when ALL sets reach rep target
+2. **DYNAMIC_DOUBLE**: Individual progression per set
+3. **PROGRAMMED_RTF**: Advanced calendar-based progression
+   - 5 sets per occurrence (4 fixed + 1 AMRAP)
+   - Weekly intensity as % of Training Max (TM)
+   - Optional deloads (W7/14/21 → 3×5 @ RPE6)
+   - Automatic TM adjustments based on AMRAP performance
+   - Program styles: STANDARD | HYPERTROPHY
+
+#### Training Max (TM) Management
+- **Automatic Adjustments**: Based on AMRAP set performance
+- **Manual Adjustments**: Via TM events API
+- **Guardrails**: 20% max change per adjustment, absolute caps
+- **History Tracking**: Complete audit trail of TM changes
+- **Summary Statistics**: Aggregated TM adjustment analytics
+
+### Caching Architecture
+
+#### RtF Week Goals Cache (RTF-B04/B10)
+- **Layered Cache**: L1 (in-memory) + L2 (Redis)
+- **Cache Invalidation**: Automatic on TM adjustments
+- **ETag Support**: Conditional GET with RTF-B12
+- **Performance Metrics**: Cache hit/miss tracking
+
+#### Configuration
+```env
+RTF_CACHE_DRIVER=memory|redis
+RTF_REDIS_URL=redis://host:port
+RTF_WEEK_GOAL_TTL_SEC=600
+RTF_CACHE_LAYERED=1
+RTF_WEEK_GOALS_L1_TTL_MS=5000
+RTF_ETAG_ENABLED=1
+```
+
+### Database Schema
+
+#### Core Models
 
 ```prisma
-enum RepType {
-  FIXED
-  RANGE
+model User {
+  id              String  @id @default(uuid())
+  email           String  @unique
+  name            String
+  password        String?
+  supabaseUserId  String? @unique
+  weightUnit      WeightUnit @default(KG)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Routine {
+  id                        String    @id @default(uuid())
+  userId                    String
+  name                      String
+  description               String?
+  isFavorite                Boolean   @default(false)
+  isCompleted               Boolean   @default(false)
+  
+  // RtF Program Fields
+  programWithDeloads        Boolean?
+  programDurationWeeks      Int?
+  programStartWeek          Int?      @default(1)
+  programStartDate          DateTime? @db.Date
+  programEndDate            DateTime? @db.Date
+  programTrainingDaysOfWeek Int[]     @default([])
+  programTimezone           String?
+  programStyle              ProgramStyle?
+  
+  days                      RoutineDay[]
+  workoutSessions          WorkoutSession[]
+  tmAdjustments            TmAdjustment[]
+}
+
+model TmAdjustment {
+  id         String      @id @default(uuid())
+  routineId  String
+  exerciseId String
+  weekNumber Int
+  deltaKg    Float
+  preTmKg    Float
+  postTmKg   Float
+  reason     String?
+  style      ProgramStyle?
+  createdAt  DateTime    @default(now())
+}
+
+model WorkoutSession {
+  id            String              @id @default(uuid())
+  userId        String
+  routineId     String
+  routineDayId  String
+  status        WorkoutSessionStatus @default(IN_PROGRESS)
+  startedAt     DateTime            @default(now())
+  finishedAt    DateTime?
+  durationSec   Int?
+  notes         String?
+  setLogs       SetLog[]
+}
+
+enum WorkoutSessionStatus {
+  IN_PROGRESS
+  COMPLETED
+  ABORTED
+}
+
+enum ProgramStyle {
+  STANDARD
+  HYPERTROPHY
 }
 
 enum ProgressionScheme {
   NONE
-  DOUBLE_PROGRESSION
-  DYNAMIC_DOUBLE_PROGRESSION
+  DYNAMIC
+  DYNAMIC_DOUBLE
   PROGRAMMED_RTF
 }
-
-model RoutineExerciseSet {
-  id                String          @id @default(uuid())
-  routineExerciseId String
-  routineExercise   RoutineExercise @relation(fields: [routineExerciseId], references: [id], onDelete: Cascade)
-  setNumber         Int
-  repType           RepType         @default(FIXED)
-  reps              Int?
-  minReps           Int?
-  maxReps           Int?
-  weight            Float?
-
-  @@unique([routineExerciseId, setNumber])
-}
 ```
 
-## Configuración
+### Data Transfer Objects (DTOs)
 
-### Variables de Entorno Requeridas
+#### Authentication DTOs
+- **RegisterDto**: Email, password, name validation
+- **LoginDto**: Email, password validation
+- **GoogleAuthDto**: Google ID token validation
+- **SupabaseTokenDto**: Supabase token verification
 
-- `DATABASE_URL`: URL de conexión a PostgreSQL
-- `GOOGLE_CLIENT_ID`: Client ID de Google para verificar ID tokens
-- `FRONTEND_URL`: URL del frontend (default: http://localhost:3000)
-- `PORT`: Puerto del servidor (default: 4000)
+#### Routine DTOs
+- **CreateRoutineDto**: Complex routine creation with RtF support
+- **UpdateRoutineDto**: Partial updates with program style validation
+- **GetRoutinesFilterDto**: Boolean filter transformations
 
-### Características de Seguridad
+#### TM Adjustment DTOs
+- **CreateTmEventDto**: TM adjustment with guardrails
+- **GetTmAdjustmentsDto**: Exercise filtering
+- **TmEventSummaryDto**: Aggregated statistics
+- **TmEventResponseDto**: Complete event details
 
-- CORS configurado para el frontend
-- Rate limiting global (100 requests por minuto)
-- Validación de DTOs con pipes globales
-- Cookies seguras para refresh tokens
-- Blacklisting de tokens en logout
+#### Workout DTOs
+- **ListSessionsDto**: Advanced filtering and pagination
+- **StartSessionDto**: Session initialization
+- **FinishSessionDto**: Session completion
 
-## Patrones de Desarrollo
+### Security & Guards
 
-### Autenticación y Autorización
+#### Guard Hierarchy
+- **SupabaseJwtGuard**: Primary authentication (most endpoints)
+- **JwtAuthGuard**: Legacy authentication with blacklist checking
+- **ThrottlerGuard**: Global rate limiting (100 req/min)
 
-- **JWT Strategy**: Passport JWT para validación de tokens
-- **Local Strategy**: Passport Local para login con email/password
-- **Guards**:
-  - `passport-jwt.guard.ts`: Guard para validación JWT
-  - `passport-local.guard.ts`: Guard para autenticación local
-- **Token Management**: Access tokens + refresh tokens
-- **Auto-refresh**: Renovación automática de tokens
+#### Security Features
+- **Token Blacklisting**: Immediate token invalidation
+- **IP Allowlisting**: Metrics endpoint protection
+- **Input Validation**: Comprehensive DTO validation
+- **CORS Configuration**: Frontend-specific settings
+- **Secure Cookies**: HttpOnly, SameSite, Secure flags
 
-### Base de Datos
+### Monitoring & Observability
 
-- **Prisma ORM**: Para operaciones de base de datos
-- **Migrations**: Control de versiones de esquema
-- **Relations**: Relaciones entre User y RefreshToken
-- **Transactions**: Para operaciones complejas
-- **Indexing**: Optimización de consultas
+#### Prometheus Metrics
+- **TM Adjustment Metrics**: Success/failure rates, guardrail violations
+- **Cache Metrics**: Hit/miss ratios, performance stats
+- **Session Metrics**: Active sessions, completion rates
 
-### API Design
+#### Health Checks
+- **Health Endpoint**: Basic service status
+- **Cache Metrics**: Internal cache performance monitoring
 
-- **RESTful**: Convenciones REST para endpoints
-- **DTOs**: Data Transfer Objects para validación
-  - `auth.dto.ts`: DTOs para autenticación (login, register)
-  - `refresh-token.dto.ts`: DTOs para renovación de tokens
-- **Pipes**: Validación global con class-validator
-- **Interceptors**: Transformación de respuestas
-- **Exception Filters**: Manejo centralizado de errores
+### Environment Configuration
 
-### Seguridad
+#### Required Variables
+```env
+# Database
+DATABASE_URL="postgresql://..."
 
-- **Password Hashing**: bcrypt para contraseñas
-- **Rate Limiting**: Throttler para prevenir abuso
-- **CORS**: Configuración específica para frontend
-- **Token Blacklisting**: Invalidación de tokens
-- **Input Validation**: Validación robusta de datos
+# Authentication
+JWT_ACCESS_SECRET="..."
+JWT_REFRESH_SECRET="..."
+SUPABASE_URL="https://..."
+SUPABASE_SERVICE_ROLE_KEY="..."
+GOOGLE_CLIENT_ID="..."
 
-## Integración con Frontend
+# Application
+PORT=4000
+FRONTEND_URL="http://localhost:3000"
+NODE_ENV="development|production"
 
-### CORS Configuration
+# Caching
+RTF_CACHE_DRIVER="memory|redis"
+RTF_REDIS_URL="redis://..."
+RTF_WEEK_GOAL_TTL_SEC=600
 
-- Origin: http://localhost:3000 (frontend)
-- Credentials: true (para cookies)
-- Methods: GET, POST, PUT, DELETE, PATCH
+# Monitoring
+METRICS_IP_ALLOWLIST="127.0.0.1,::1"
+
+# Workout Management
+WORKOUT_SESSION_TIMEOUT_HOURS=48
+WORKOUT_SESSION_SWEEP_INTERVAL_MIN=30
+```
+
+## Development Patterns
+
+### Code Organization
+- **Modular Architecture**: Feature-based modules
+- **Dependency Injection**: NestJS IoC container
+- **Service Layer**: Business logic separation
+- **Repository Pattern**: Database abstraction via Prisma
+
+### Testing Strategy
+- **Unit Tests**: Jest with comprehensive mocking
+- **E2E Tests**: Supertest with test database
+- **Guard Testing**: Authentication flow validation
+- **Service Testing**: Business logic verification
+
+### Error Handling
+- **Custom Exceptions**: Domain-specific errors
+- **Global Exception Filter**: Centralized error handling
+- **Validation Pipes**: Input validation with class-validator
+- **Logging**: Structured error logging
+
+### Performance Optimizations
+- **Database Indexing**: Composite indexes for queries
+- **Connection Pooling**: Prisma connection management
+- **Caching Strategy**: Multi-layer cache architecture
+- **Query Optimization**: Selective field retrieval
+
+## API Design Principles
+
+### RESTful Conventions
+- **Resource-based URLs**: Clear resource identification
+- **HTTP Methods**: Proper verb usage (GET, POST, PATCH, DELETE)
+- **Status Codes**: Appropriate HTTP status responses
+- **Consistent Responses**: Standardized response formats
+
+### Validation & Transformation
+- **Input Validation**: class-validator decorators
+- **Type Transformation**: class-transformer for DTOs
+- **Global Pipes**: Automatic validation and transformation
+- **Custom Validators**: Domain-specific validation rules
+
+### Documentation Standards
+- **JSDoc Comments**: Comprehensive code documentation
+- **API Documentation**: OpenAPI/Swagger integration
+- **README Updates**: Endpoint documentation maintenance
+- **Change Detection**: Automated documentation reminders
+
+## Frontend Integration
 
 ### Authentication Flow
+1. **Supabase Auth**: Primary authentication method
+2. **Session Management**: HttpOnly cookies for session detection
+3. **Token Refresh**: Automatic token renewal
+4. **Logout Handling**: Complete session cleanup
 
-1. Register/Login → Access token en response
-2. Refresh token en cookies (httpOnly, secure)
-3. Auto-refresh cuando access token expira
-4. Logout → Blacklist tokens y clear cookies
+### CORS Configuration
+- **Origin**: Configurable frontend URL
+- **Credentials**: Cookie support enabled
+- **Methods**: Full HTTP method support
+- **Headers**: Custom header allowance
 
-### Response Format
+## Agent Context
 
-```typescript
+When implementing features:
+
+- **Use Supabase authentication** for new endpoints (SupabaseJwtGuard)
+- **Implement comprehensive DTOs** with validation
+- **Follow modular architecture** patterns
+- **Add appropriate caching** for performance-critical endpoints
+- **Include Prometheus metrics** for monitoring
+- **Write comprehensive tests** (unit + e2e)
+- **Update documentation** automatically
+- **Follow TypeScript strict patterns**
+- **Implement proper error handling**
+- **Use Prisma best practices** for database operations
+
+## Documentation Conventions
+
+- **NEVER create documentation files at repo root** (except README.md)
+- **All project docs belong in `docs/` hierarchy**:
+  - `docs/roadmaps/` - Active feature roadmaps and task tracking
+  - `docs/history/` - Implementation completion reports
+  - `docs/reference/` - Configuration guides, environment setup, API references
+- **Update `docs/README.md` index** when adding new documentation areas
+- **Use deprecation stubs** if you must reference legacy root docs; point to canonical `docs/` location
+- **Roadmap files**: Use consistent task ID format (RTF-B01, RTF-B02, etc.) for traceability
+
+## Scripts & Automation
+
+### Available Scripts
+```json
 {
-  user: { id, email, name },
-  accessToken: string
+  "build": "nest build",
+  "start:dev": "nest start --watch",
+  "start:prod": "node dist/src/main",
+  "deploy": "prisma migrate deploy && npm run start:prod",
+  "test": "jest",
+  "test:e2e": "jest --config ./test/jest-e2e.json --runInBand",
+  "test:e2e:rtf": "jest --config ./test/jest-e2e.json --runTestsByPath test/routines-rtf-variants.e2e-spec.ts test/tm-adjustment-hypertrophy.e2e-spec.ts test/workouts-rtf-sets.e2e-spec.ts",
+  "db:seed": "tsx prisma/seed.ts",
+  "docs:check": "./scripts/update-docs.sh",
+  "docs:update": "echo 'Run docs:check first, then update documentation manually'"
 }
 ```
 
-## Patrones de Código
-
-### Imports y Estructura
-
-- **Services**: Lógica de negocio
-- **Controllers**: Manejo de requests/responses
-- **DTOs**: Validación de datos
-- **Guards**: Protección de rutas
-- **Interceptors**: Transformación de datos
-
-### Convenciones
-
-- **Services**: camelCase con sufijo "Service"
-- **Controllers**: PascalCase con sufijo "Controller"
-- **DTOs**: PascalCase con sufijo "Dto"
-- **Guards**: PascalCase con sufijo "Guard"
-- **Types**: PascalCase con sufijo "Type"
-
-### Manejo de Errores
-
-- **HTTP Exceptions**: NestJS built-in exceptions
-- **Custom Exceptions**: Para errores específicos del dominio
-- **Exception Filters**: Manejo centralizado
-- **Logging**: Para debugging y monitoreo
-
-## Contexto para el Agente
-
-Cuando implementes funcionalidades:
-
-- Usa decoradores de NestJS (@Controller, @Service, @Injectable)
-- Implementa autenticación con JWT y Passport
-- Sigue patrones de Prisma para base de datos
-- Valida datos con DTOs y class-validator
-- Maneja errores de forma consistente
-- Implementa seguridad con guards e interceptors
-- Usa TypeScript con tipos estrictos
-- Sigue convenciones REST para APIs
-- Integra con el frontend de forma segura
-  description:
-  globs:
-  alwaysApply: false
-
----
+### Documentation Automation
+- **Change Detection**: `scripts/update-docs.sh` detects structural changes
+- **Endpoint Discovery**: Automatic controller endpoint detection
+- **Schema Monitoring**: Prisma schema change tracking
+- **DTO Tracking**: Data transfer object change detection

@@ -1,18 +1,129 @@
----
-trigger: always_on
----
-
----
-trigger: always_on
----
-
 # Sunnsteel Backend - Fitness API
 
 This is the backend project for Sunnsteel, a comprehensive fitness and training API with advanced workout management, progression tracking, and Training Max (TM) adjustments.
 
+# NestJS Backend API Developer Rule
+
+You are an expert senior backend developer specializing in NestJS, TypeScript, Prisma ORM, NeonDB (PostgreSQL), Node.js, and Supabase Auth for enterprise-grade REST APIs and microservices.
+
+## Core Principles
+- Build scalable, maintainable APIs ready for enterprise deployment
+- Implement comprehensive error handling and validation
+- Follow SOLID principles and clean architecture patterns
+- Prioritize type safety and performance optimization
+- Apply proper security practices and authentication patterns
+
+## Code Standards
+- Tabs for indentation, single quotes, no semicolons
+- PascalCase: Classes, Interfaces, DTOs, Entities
+- kebab-case: File names, endpoints
+- camelCase: Variables, functions, properties
+- UPPERCASE: Constants, environment variables
+- Prefix interfaces with 'I', DTOs with 'Dto', entities with 'Entity'
+- Line limit: 80 characters, strict equality (===), trailing commas
+
+## NestJS Architecture Patterns
+- Use modular architecture with feature modules
+- Implement proper dependency injection with decorators
+- Use guards for authentication and authorization
+- Apply interceptors for logging, transformation, and caching
+- Use pipes for validation and transformation
+- Implement proper exception filters for error handling
+- Use middleware for cross-cutting concerns
+
+## Technology-Specific Requirements
+
+### **Prisma ORM Integration**
+- Use Prisma Client with proper type generation
+- Implement connection pooling for production
+- Create efficient database queries with select/include
+- Use transactions for data consistency
+- Implement proper database migrations
+- Use Prisma schema validation and constraints
+- Apply database indexing strategies
+
+### **NeonDB (PostgreSQL) Optimization**
+- Design normalized database schemas
+- Implement proper foreign key relationships
+- Use efficient queries with proper indexes
+- Apply connection pooling for scalability
+- Handle database connection errors gracefully
+- Use prepared statements for security
+
+### **Supabase Auth Integration**
+- Validate JWT tokens from Supabase
+- Create NestJS guards for route protection
+- Extract user context from tokens
+- Handle token expiration and refresh
+- Implement role-based access control (RBAC)
+- Use Supabase RLS policies when needed
+
+### **API Design Standards**
+- Follow RESTful conventions and HTTP status codes
+- Implement proper request/response DTOs
+- Use class-validator for input validation
+- Apply class-transformer for serialization
+- Implement pagination, filtering, and sorting
+- Maintain comprehensive markdown documentation in `docs/` hierarchy
+- Apply rate limiting and throttling
+
+
+## Error Handling & Validation
+- Use built-in NestJS exception filters
+- Create custom exception classes for business logic
+- Implement proper HTTP status codes
+- Use class-validator for DTO validation
+- Handle Prisma errors gracefully
+- Log errors with proper context
+- Return consistent error response format
+
+## Performance & Security
+- Implement request caching with Redis (when available)
+- Use connection pooling for database
+- Apply CORS configuration properly
+- Implement helmet for security headers
+- Use environment variables for sensitive data
+- Apply input sanitization and validation
+- Implement proper logging and monitoring
+
+## Database Patterns with Prisma
+- Use select for optimal queries
+- Implement proper relations with include
+- Use transactions for multi-table operations
+- Apply soft deletes where appropriate
+- Create efficient pagination queries
+- Use database constraints for data integrity
+
+
+## Code Generation Requirements
+Always include:
+1. Proper TypeScript interfaces and DTOs
+2. NestJS decorators for dependency injection
+3. Input validation with class-validator
+4. Error handling with try-catch blocks
+5. Prisma queries with proper typing
+6. JWT authentication guards
+7. Comprehensive markdown documentation in `docs/` hierarchy
+8. Comprehensive JSDoc comments
+
+
+## Quality Checklist
+- [ ] Proper dependency injection implemented
+- [ ] Input validation with DTOs
+- [ ] Error handling with proper HTTP codes
+- [ ] Database queries optimized
+- [ ] Authentication guards applied
+- [ ] Comprehensive markdown documentation created
+- [ ] Environment variables used for config
+- [ ] Proper logging implemented
+- [ ] Type safety maintained throughout
+
+
+Remember: Build production-ready APIs with enterprise scalability. Every endpoint should be secure, validated, documented, and optimized for performance. Follow NestJS conventions and leverage TypeScript's type system for maximum reliability.
+
 ## Technology Stack
 
-- **Framework**: NestJS v11.0.1 (Node.js/TypeScript)
+- **Framework**: NestJS v10.4.15 (Node.js/TypeScript)
 - **Database**: PostgreSQL with Prisma ORM v6.4.0
 - **Authentication**: Dual authentication system:
   - JWT with Passport.js (legacy)
@@ -34,6 +145,7 @@ This is the backend project for Sunnsteel, a comprehensive fitness and training 
 - **ExercisesModule**: Exercise catalog with deterministic sorting
 - **RoutinesModule**: Advanced routine management with RtF programs
 - **WorkoutsModule**: Training sessions with progression tracking
+- **WorkoutMaintenanceService**: Background service for session auto-expiration and cleanup
 - **CacheModule**: Redis-based caching for RtF week goals
 - **MetricsModule**: Prometheus metrics collection
 
@@ -81,12 +193,18 @@ This is the backend project for Sunnsteel, a comprehensive fitness and training 
 
 - **GET /api/workouts/sessions**: List sessions with advanced filtering
   - Query params: `status`, `routineId`, `from`, `to`, `q`, `cursor`, `limit`, `sort`
-- **POST /api/workouts/sessions/start**: Start new training session
+- **POST /api/workouts/sessions/start**: Start new training session (idempotent)
 - **PATCH /api/workouts/sessions/:id/finish**: Finish session (applies progression)
 - **GET /api/workouts/sessions/active**: Get user's active session
 - **GET /api/workouts/sessions/:id**: Get specific session details
-- **PUT /api/workouts/sessions/:id/set-logs**: Upsert set logs
+- **PUT /api/workouts/sessions/:id/set-logs**: Upsert set logs (updates activity heartbeat)
 - **DELETE /api/workouts/sessions/:id/set-logs/:routineExerciseId/:setNumber**: Delete set log
+
+**Session Management Features:**
+- **Single Active Session Invariant**: Only one `IN_PROGRESS` session per user
+- **Activity Heartbeat**: `lastActivityAt` field updated on all session interactions
+- **Auto-Expiration**: Stale sessions auto-aborted after configurable timeout
+- **Background Maintenance**: Periodic cleanup via `WorkoutMaintenanceService`
 
 #### RtF (Reps to Failure) Specialized Endpoints
 
@@ -142,7 +260,13 @@ This is the backend project for Sunnsteel, a comprehensive fitness and training 
 - **Layered Cache**: L1 (in-memory) + L2 (Redis)
 - **Cache Invalidation**: Automatic on TM adjustments
 - **ETag Support**: Conditional GET with RTF-B12
-- **Performance Metrics**: Cache hit/miss tracking
+- **Performance Metrics**: Cache hit/miss tracking via `CacheMetricsService`
+- **Stampede Protection**: Prevents cache stampede scenarios
+
+#### Cache Monitoring
+- **CacheMetricsService**: Unified metrics snapshot for active cache drivers
+- **Prometheus Integration**: Real-time cache performance metrics
+- **Multi-Driver Support**: In-memory, Redis, or layered cache configurations
 
 #### Configuration
 ```env
@@ -187,6 +311,7 @@ model Routine {
   programTrainingDaysOfWeek Int[]     @default([])
   programTimezone           String?
   programStyle              ProgramStyle?
+  programRtfSnapshot        Json?
   
   days                      RoutineDay[]
   workoutSessions          WorkoutSession[]
@@ -204,6 +329,12 @@ model TmAdjustment {
   reason     String?
   style      ProgramStyle?
   createdAt  DateTime    @default(now())
+  
+  routine    Routine     @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  exercise   Exercise    @relation(fields: [exerciseId], references: [id])
+  
+  @@index([routineId, exerciseId])
+  @@index([createdAt])
 }
 
 model WorkoutSession {
@@ -214,9 +345,13 @@ model WorkoutSession {
   status        WorkoutSessionStatus @default(IN_PROGRESS)
   startedAt     DateTime            @default(now())
   finishedAt    DateTime?
+  lastActivityAt DateTime           @default(now())
   durationSec   Int?
   notes         String?
   setLogs       SetLog[]
+  
+  @@unique([userId], where: { status: IN_PROGRESS }, name: "single_active_session")
+  @@index([lastActivityAt])
 }
 
 enum WorkoutSessionStatus {
@@ -280,12 +415,15 @@ enum ProgressionScheme {
 
 #### Prometheus Metrics
 - **TM Adjustment Metrics**: Success/failure rates, guardrail violations
-- **Cache Metrics**: Hit/miss ratios, performance stats
-- **Session Metrics**: Active sessions, completion rates
+- **Cache Metrics**: Hit/miss ratios, performance stats, stampede protection
+- **Session Metrics**: Active sessions, completion rates, heartbeat tracking
+- **RtF Metrics**: Week goals cache performance, forecast accuracy
+- **System Metrics**: L1/L2 cache entries, layered cache performance
 
 #### Health Checks
 - **Health Endpoint**: Basic service status
-- **Cache Metrics**: Internal cache performance monitoring
+- **Cache Metrics**: Internal cache performance monitoring via `/api/internal/cache-metrics`
+- **Prometheus Metrics**: System metrics via `/api/metrics` (IP allowlist protected)
 
 ### Environment Configuration
 
@@ -310,13 +448,16 @@ NODE_ENV="development|production"
 RTF_CACHE_DRIVER="memory|redis"
 RTF_REDIS_URL="redis://..."
 RTF_WEEK_GOAL_TTL_SEC=600
-
-# Monitoring
-METRICS_IP_ALLOWLIST="127.0.0.1,::1"
+RTF_CACHE_LAYERED=1
+RTF_WEEK_GOALS_L1_TTL_MS=5000
+RTF_ETAG_ENABLED=1
 
 # Workout Management
 WORKOUT_SESSION_TIMEOUT_HOURS=48
 WORKOUT_SESSION_SWEEP_INTERVAL_MIN=30
+
+# Monitoring
+METRICS_IP_ALLOWLIST="127.0.0.1,::1"
 ```
 
 ## Development Patterns
@@ -361,7 +502,7 @@ WORKOUT_SESSION_SWEEP_INTERVAL_MIN=30
 
 ### Documentation Standards
 - **JSDoc Comments**: Comprehensive code documentation
-- **API Documentation**: OpenAPI/Swagger integration
+- **Markdown Documentation**: Structured documentation in `docs/` hierarchy
 - **README Updates**: Endpoint documentation maintenance
 - **Change Detection**: Automated documentation reminders
 
