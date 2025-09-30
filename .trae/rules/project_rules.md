@@ -2,6 +2,9 @@
 
 This is the backend project for Sunnsteel, a comprehensive fitness and training API with advanced workout management, progression tracking, and Training Max (TM) adjustments.
 
+## Mandatory Post-Task Documentation
+All relevant code changes must be documented immediately after each task is completed. Update the `docs/` hierarchy (features, API, services, schema, environment, reference, roadmaps/history) to reflect behavior, interfaces, and rationale. Do not mark a task complete until the documentation updates are added.
+
 # NestJS Backend API Developer Rule
 
 You are an expert senior backend developer specializing in NestJS, TypeScript, Prisma ORM, NeonDB (PostgreSQL), Node.js, and Supabase Auth for enterprise-grade REST APIs and microservices.
@@ -12,6 +15,7 @@ You are an expert senior backend developer specializing in NestJS, TypeScript, P
 - Follow SOLID principles and clean architecture patterns
 - Prioritize type safety and performance optimization
 - Apply proper security practices and authentication patterns
+- Mandatory: Document every relevant code change after each task; update `docs/` before marking the task complete.
 
 ## Code Standards
 - Tabs for indentation, single quotes, no semicolons

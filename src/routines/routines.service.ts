@@ -412,6 +412,10 @@ export class RoutinesService {
                 id: true,
                 order: true,
                 restSeconds: true,
+                progressionScheme: true,
+                minWeightIncrement: true,
+                programTMKg: true,
+                programRoundingKg: true,
                 exercise: { select: { id: true, name: true } },
                 sets: {
                   select: {

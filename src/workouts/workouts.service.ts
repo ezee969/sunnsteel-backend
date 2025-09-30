@@ -874,6 +874,12 @@ export class WorkoutsService {
               : 'STANDARD';
           const goal = this.getRtFGoalForWeek(week, withDeloads, variant);
           const isDeload = (goal as any).isDeload === true;
+          
+          // Calculate working weight based on Training Max and intensity
+          const tmKg = ex.programTMKg || 0;
+          const roundingKg = ex.programRoundingKg || 2.5;
+          const workingWeight = this.roundToNearest(tmKg * (goal as any).intensity, roundingKg);
+          
           if (isDeload) {
             if (variant === 'HYPERTROPHY') {
               const deload: any = goal;
@@ -889,6 +895,8 @@ export class WorkoutsService {
                 setsPlanned: deload.sets ?? 4,
                 amrapTarget: null,
                 amrapSetNumber: null,
+                workingWeightKg: this.roundToNearest(tmKg * (deload.intensity ?? 0.6), roundingKg),
+                trainingMaxKg: tmKg,
               });
             } else {
               goals.push({
@@ -903,6 +911,8 @@ export class WorkoutsService {
                 setsPlanned: 3,
                 amrapTarget: null,
                 amrapSetNumber: null,
+                workingWeightKg: this.roundToNearest(tmKg * 0.6, roundingKg),
+                trainingMaxKg: tmKg,
               });
             }
           } else {
@@ -919,6 +929,8 @@ export class WorkoutsService {
               setsPlanned: variant === 'HYPERTROPHY' ? 4 : 5,
               amrapTarget: g.amrapTarget,
               amrapSetNumber: variant === 'HYPERTROPHY' ? 4 : 5,
+              workingWeightKg: workingWeight,
+              trainingMaxKg: tmKg,
             });
           }
         }
