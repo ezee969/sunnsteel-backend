@@ -150,15 +150,7 @@ curl https://api.sunsteel.com/api/routines \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 ```
 
-## ❌ Deprecated (Do Not Use)
 
-| Endpoint | Replacement |
-|----------|-------------|
-| `POST /api/auth/register` | Supabase `signUp()` |
-| `POST /api/auth/login` | Supabase `signInWithPassword()` |
-| `POST /api/auth/google` | Supabase `signInWithOAuth()` |
-| `POST /api/auth/logout` | `/api/auth/supabase/logout` |
-| `POST /api/auth/refresh` | Supabase auto-refresh |
 
 ## 🔐 Headers
 
