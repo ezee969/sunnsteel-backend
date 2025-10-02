@@ -58,9 +58,12 @@ export class RoutinesController {
     @Query('include') include?: string,
     @Query('week') week?: string,
   ) {
-    const includeRtFGoals = include?.split(',').includes('rtfGoals')
-    const weekNum = week ? parseInt(week, 10) : undefined
-    return this.routinesService.findOne(req.user.id, id, { includeRtFGoals, week: weekNum })
+    const includeRtFGoals = include?.split(',').includes('rtfGoals');
+    const weekNum = week ? parseInt(week, 10) : undefined;
+    return this.routinesService.findOne(req.user.id, id, {
+      includeRtFGoals,
+      week: weekNum,
+    });
   }
 
   @Patch(':id')
@@ -96,7 +99,7 @@ export class RoutinesController {
   }
 
   // TM Adjustment endpoints
-  
+
   /**
    * Create a new TM adjustment event
    * POST /routines/:id/tm-events
@@ -105,17 +108,19 @@ export class RoutinesController {
   async createTmAdjustment(
     @Req() req: RequestWithUser,
     @Param('id') routineId: string,
-    @Body() dto: CreateTmEventDto
+    @Body() dto: CreateTmEventDto,
   ) {
     const result = await this.routinesService.createTmAdjustment(
-      req.user.id, 
-      routineId, 
-      dto
+      req.user.id,
+      routineId,
+      dto,
     );
 
     // Log significant adjustments for monitoring (hardcoded threshold: 15kg)
     if (Math.abs(dto.deltaKg) > 15) {
-      console.warn(`Large TM adjustment detected: ${dto.deltaKg}kg for routine ${routineId}, exercise ${dto.exerciseId}`);
+      console.warn(
+        `Large TM adjustment detected: ${dto.deltaKg}kg for routine ${routineId}, exercise ${dto.exerciseId}`,
+      );
     }
 
     return result;
@@ -131,14 +136,14 @@ export class RoutinesController {
     @Param('id') routineId: string,
     @Query('exerciseId') exerciseId?: string,
     @Query('minWeek') minWeek?: string,
-    @Query('maxWeek') maxWeek?: string
+    @Query('maxWeek') maxWeek?: string,
   ) {
     return this.routinesService.getTmAdjustments(
       req.user.id,
       routineId,
       exerciseId,
       minWeek ? parseInt(minWeek, 10) : undefined,
-      maxWeek ? parseInt(maxWeek, 10) : undefined
+      maxWeek ? parseInt(maxWeek, 10) : undefined,
     );
   }
 
@@ -149,7 +154,7 @@ export class RoutinesController {
   @Get(':id/tm-events/summary')
   async getTmAdjustmentSummary(
     @Req() req: RequestWithUser,
-    @Param('id') routineId: string
+    @Param('id') routineId: string,
   ) {
     return this.routinesService.getTmAdjustmentSummary(req.user.id, routineId);
   }

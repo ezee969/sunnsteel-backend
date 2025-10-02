@@ -1,0 +1,10 @@
+{
+  "preset": "jest-puppeteer",
+  "testEnvironment": "node",
+  "testMatch": [
+    "**/test/**/*.test.js"
+  ],
+  "setupFilesAfterEnv": [
+    "<rootDir>/test/setup.js"
+  ]
+}

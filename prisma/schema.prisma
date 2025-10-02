@@ -144,6 +144,7 @@ model RoutineExercise {
   // Programmed Reps-to-Failure (RtF) specific config (applies when progressionScheme = PROGRAMMED_RTF)
   programTMKg             Float?
   programRoundingKg       Float               @default(2.5)
+  programStyle            ProgramStyle?       // STANDARD or HYPERTROPHY for PROGRAMMED_RTF exercises
   // To ensure at most one TM adjustment per calendar week per exercise instance
   programLastAdjustedWeek Int?
   sets         RoutineExerciseSet[]

@@ -39,7 +39,13 @@ describe('RoutinesController (e2e)', () => {
       .overrideGuard(JwtAuthGuard as any)
       .useValue(allowJwtGuard)
       .overrideGuard(SupabaseJwtGuard as any)
-      .useValue({ canActivate: (ctx: any) => { const req = ctx.switchToHttp().getRequest(); req.user = { id: 'u1', email: 'u1@mail.com' }; return true as any } })
+      .useValue({
+        canActivate: (ctx: any) => {
+          const req = ctx.switchToHttp().getRequest();
+          req.user = { id: 'u1', email: 'u1@mail.com' };
+          return true as any;
+        },
+      })
       .overrideProvider(RoutinesService)
       .useValue(routinesServiceMock)
       .compile();
@@ -227,11 +233,18 @@ describe('RoutinesController (e2e)', () => {
   });
 
   it('GET /api/routines/:id with include=rtfGoals passes options to service', async () => {
-    (routinesServiceMock.findOne as any).mockResolvedValue({ id: 'r-rtf', name: 'Routine', rtfGoals: { week: 2 } })
+    (routinesServiceMock.findOne as any).mockResolvedValue({
+      id: 'r-rtf',
+      name: 'Routine',
+      rtfGoals: { week: 2 },
+    });
     await request(app.getHttpServer())
       .get('/api/routines/r-rtf?include=rtfGoals&week=2')
-      .expect(200)
-    expect(routinesServiceMock.findOne).toHaveBeenCalledWith('u1', 'r-rtf', { includeRtFGoals: true, week: 2 })
+      .expect(200);
+    expect(routinesServiceMock.findOne).toHaveBeenCalledWith('u1', 'r-rtf', {
+      includeRtFGoals: true,
+      week: 2,
+    });
   });
 
   it('POST /api/routines returns 400 when FIXED set is missing reps', async () => {

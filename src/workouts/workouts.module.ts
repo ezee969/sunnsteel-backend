@@ -1,9 +1,9 @@
-import { Module } from '@nestjs/common'
-import { WorkoutsService } from './workouts.service'
-import { WorkoutMaintenanceService } from './workout-maintenance.service'
-import { WorkoutsController } from './workouts.controller'
-import { DatabaseModule } from '../database/database.module'
-import { CacheModule } from '../cache/cache.module'
+import { Module } from '@nestjs/common';
+import { WorkoutsService } from './workouts.service';
+import { WorkoutMaintenanceService } from './workout-maintenance.service';
+import { WorkoutsController } from './workouts.controller';
+import { DatabaseModule } from '../database/database.module';
+import { CacheModule } from '../cache/cache.module';
 
 @Module({
   imports: [DatabaseModule, CacheModule],

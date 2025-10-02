@@ -15,8 +15,8 @@ import {
 import { JwtAuthGuard } from '../auth/guards/passport-jwt.guard';
 import { SupabaseJwtGuard } from '../auth/guards/supabase-jwt.guard';
 import { WorkoutsService } from './workouts.service';
-import { UseInterceptors } from '@nestjs/common'
-import { RtfEtagInterceptor } from '../common/interceptors/rtf-etag.interceptor'
+import { UseInterceptors } from '@nestjs/common';
+import { RtfEtagInterceptor } from '../common/interceptors/rtf-etag.interceptor';
 import { StartWorkoutDto } from './dto/start-workout.dto';
 import { StartWorkoutResponseDto } from './dto/start-workout-response.dto';
 import { FinishWorkoutDto } from './dto/finish-workout.dto';
@@ -34,7 +34,10 @@ export class WorkoutsController {
   constructor(private readonly workoutsService: WorkoutsService) {}
 
   @Post('sessions/start')
-  async start(@Req() req: RequestWithUser, @Body() dto: StartWorkoutDto): Promise<StartWorkoutResponseDto> {
+  async start(
+    @Req() req: RequestWithUser,
+    @Body() dto: StartWorkoutDto,
+  ): Promise<StartWorkoutResponseDto> {
     return this.workoutsService.startSession(req.user.id, dto);
   }
 
@@ -109,7 +112,7 @@ export class WorkoutsController {
     @Req() req: RequestWithUser,
     @Param('routineId') routineId: string,
   ) {
-    return this.workoutsService.getRtFTimeline(req.user.id, routineId)
+    return this.workoutsService.getRtFTimeline(req.user.id, routineId);
   }
 
   // RtF forecast (projected future intensities/reps) (RTF-B06)
@@ -117,8 +120,8 @@ export class WorkoutsController {
   @UseInterceptors(RtfEtagInterceptor)
   async getRtFForecast(
     @Req() req: RequestWithUser,
-    @Param('routineId') routineId: string
+    @Param('routineId') routineId: string,
   ) {
-    return this.workoutsService.getRtFForecast(req.user.id, routineId)
+    return this.workoutsService.getRtFForecast(req.user.id, routineId);
   }
 }

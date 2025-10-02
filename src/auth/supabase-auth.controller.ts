@@ -120,7 +120,7 @@ export class SupabaseAuthController {
       throw new Error('User not found or already migrated');
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password!);
+    const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
       throw new Error('Invalid password');
     }

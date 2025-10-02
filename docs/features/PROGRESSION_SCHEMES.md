@@ -6,17 +6,21 @@ Exercise-specific progression tracking system for the Sunnsteel Backend API.
 
 Progression schemes define how individual exercises advance in weight, reps, or intensity over time. **Each exercise within a routine has its own progression scheme**, allowing for granular control over training progression.
 
+**Updated January 2025**: The system now uses a unified `PROGRAMMED_RTF` progression scheme with exercise-level `programStyle` differentiation for RtF variants.
+
 ## Key Principles
 
 ### Exercise-Level Progression
 - **Individual Control**: Each exercise can have a different progression scheme
 - **Granular Management**: Progression is tracked per exercise, not per routine
 - **Flexible Programming**: Mix different progression types within a single routine
+- **Style Differentiation**: RtF exercises use `programStyle` for Standard/Hypertrophy variants
 
 ### Routine-Level Classification
 - **Deprecated Pattern**: Routines should NOT be classified by a single progression scheme
 - **Correct Approach**: Routines contain exercises, each with their own progression scheme
 - **Data Storage**: `progressionScheme` is stored at the `RoutineExercise` level
+- **Style Storage**: `programStyle` is stored at the `RoutineExercise` level for RtF exercises
 
 ## Progression Scheme Types
 
@@ -25,30 +29,39 @@ Progression schemes define how individual exercises advance in weight, reps, or 
 - **Use Case**: Maintenance phases, rehabilitation, or static training
 - **Behavior**: Weight and reps remain constant
 
-### 2. DOUBLE_PROGRESSION
+### 2. DYNAMIC
 - **Purpose**: Traditional double progression system
 - **Mechanism**: Increase reps first, then weight when rep target is reached
 - **Example**: 3x8-12 → increase weight when all sets reach 12 reps
 
-### 3. DYNAMIC_DOUBLE_PROGRESSION
+### 3. DYNAMIC_DOUBLE
 - **Purpose**: Individual set progression
 - **Mechanism**: Each set progresses independently
 - **Flexibility**: Allows for uneven progression across sets
 
-### 4. PROGRAMMED_RTF
-- **Purpose**: Reps-to-Failure programming (Standard variant)
+### 4. PROGRAMMED_RTF ⭐ UNIFIED SCHEME
+- **Purpose**: Reps-to-Failure programming with style variants
+- **Style Variants**: Controlled by `programStyle` field
+  - **STANDARD**: Traditional 5+1 set structure (4 fixed + 1 AMRAP)
+  - **HYPERTROPHY**: Volume-focused 3+1 set structure (2 fixed + 1 AMRAP)
 - **Features**:
   - Calendar-based progression
   - Weekly intensity targets
   - Automatic Training Max adjustments
   - AMRAP (As Many Reps As Possible) sets
+  - Exercise-level style differentiation
 
-### 5. PROGRAMMED_RTF_HYPERTROPHY
-- **Purpose**: Reps-to-Failure programming (Hypertrophy variant)
-- **Features**:
-  - Higher volume focus
-  - Modified intensity curves
-  - Hypertrophy-optimized rep ranges
+#### Program Style Differentiation
+
+**STANDARD Style** (`programStyle: 'STANDARD'`):
+- 5 sets per occurrence (4 fixed + 1 AMRAP)
+- Traditional strength-focused progression
+- Higher intensity, lower volume
+
+**HYPERTROPHY Style** (`programStyle: 'HYPERTROPHY'`):
+- 3 sets per occurrence (2 fixed + 1 AMRAP)
+- Volume-focused progression
+- Moderate intensity, higher frequency
 
 ## Database Schema
 
@@ -59,17 +72,27 @@ model RoutineExercise {
   routineDayId      String
   exerciseId        String
   progressionScheme ProgressionScheme @default(NONE)
+  programStyle      ProgramStyle?     // Required for PROGRAMMED_RTF exercises
   // ... other fields
 }
 
 enum ProgressionScheme {
   NONE
-  DOUBLE_PROGRESSION
-  DYNAMIC_DOUBLE_PROGRESSION
-  PROGRAMMED_RTF
-  PROGRAMMED_RTF_HYPERTROPHY
+  DYNAMIC
+  DYNAMIC_DOUBLE
+  PROGRAMMED_RTF                    // Unified RtF scheme
+}
+
+enum ProgramStyle {
+  STANDARD
+  HYPERTROPHY
 }
 ```
+
+### Validation Rules
+- `programStyle` is **required** when `progressionScheme = 'PROGRAMMED_RTF'`
+- `programStyle` is **ignored** for other progression schemes
+- Mixed-style routines are fully supported (different exercises can have different styles)
 
 ## API Implementation
 
@@ -77,22 +100,29 @@ enum ProgressionScheme {
 
 **Endpoint**: `POST /api/routines`
 
-**Request Structure**:
+**Request Structure** (Updated for Unified Scheme):
 ```json
 {
-  "name": "Push/Pull/Legs",
+  "name": "Mixed Style Routine",
   "days": [
     {
-      "name": "Push Day",
+      "name": "Upper Body",
       "exercises": [
         {
           "exerciseId": "bench-press-id",
-          "progressionScheme": "DOUBLE_PROGRESSION",
+          "progressionScheme": "DYNAMIC",
           "sets": [...]
         },
         {
           "exerciseId": "overhead-press-id", 
           "progressionScheme": "PROGRAMMED_RTF",
+          "programStyle": "STANDARD",
+          "sets": [...]
+        },
+        {
+          "exerciseId": "lateral-raise-id",
+          "progressionScheme": "PROGRAMMED_RTF", 
+          "programStyle": "HYPERTROPHY",
           "sets": [...]
         }
       ]
@@ -105,18 +135,18 @@ enum ProgressionScheme {
 
 **Endpoint**: `GET /api/routines/:id`
 
-**Response Structure**:
+**Response Structure** (Updated):
 ```json
 {
   "id": "routine-id",
-  "name": "Push/Pull/Legs",
+  "name": "Mixed Style Routine",
   "days": [
     {
       "exercises": [
         {
           "id": "exercise-1",
-          "progressionScheme": "DOUBLE_PROGRESSION",
-          "programTMKg": null,
+          "progressionScheme": "DYNAMIC",
+          "programStyle": null,
           "exercise": {
             "name": "Bench Press"
           },
@@ -125,9 +155,20 @@ enum ProgressionScheme {
         {
           "id": "exercise-2", 
           "progressionScheme": "PROGRAMMED_RTF",
+          "programStyle": "STANDARD",
           "programTMKg": 100.0,
           "exercise": {
             "name": "Overhead Press"
+          },
+          "sets": [...]
+        },
+        {
+          "id": "exercise-3",
+          "progressionScheme": "PROGRAMMED_RTF",
+          "programStyle": "HYPERTROPHY",
+          "programTMKg": 80.0,
+          "exercise": {
+            "name": "Lateral Raise"
           },
           "sets": [...]
         }
@@ -137,27 +178,33 @@ enum ProgressionScheme {
 }
 ```
 
-## Frontend Integration
+## Frontend Integration (Pending Updates)
 
-### ExerciseCard Component
+### Current Status ⚠️ NEEDS UPDATE
 
-The `ExerciseCard` component uses the exercise-level `progressionScheme` to:
+The frontend components still reference the old dual progression scheme approach and need to be updated to work with the unified `PROGRAMMED_RTF` + `programStyle` implementation.
 
-1. **Display Progression Badge**: Shows the specific progression type
-2. **Conditional Rendering**: Different UI for RtF vs traditional schemes
-3. **RtF Integration**: Fetches week goals for PROGRAMMED_RTF exercises
-4. **Variant Display**: Shows STANDARD vs HYPERTROPHY variants
+### ExerciseCard Component (Needs Update)
 
-**Key Implementation**:
+The `ExerciseCard` component should be updated to:
+
+1. **Display Progression Badge**: Show unified `PROGRAMMED_RTF` with style indicator
+2. **Style Differentiation**: Display `programStyle` for RtF exercises
+3. **Mixed-Style Support**: Handle routines with different exercise styles
+4. **Conditional Rendering**: Different UI based on `programStyle`
+
+**Updated Implementation Needed**:
 ```typescript
-// Determine if this is an RtF exercise based on progressionScheme
-const isRtfExercise = exercise.progressionScheme && 
-  isRtfProgressionScheme(exercise.progressionScheme);
+// Determine if this is an RtF exercise
+const isRtfExercise = exercise.progressionScheme === 'PROGRAMMED_RTF';
 
-// Display progression scheme badge
+// Display progression scheme with style
 {exercise.progressionScheme && (
   <Badge variant="outline" className="text-xs">
-    {exercise.progressionScheme.replace(/_/g, ' ')}
+    {exercise.progressionScheme === 'PROGRAMMED_RTF' 
+      ? `RtF ${exercise.programStyle || 'STANDARD'}`
+      : exercise.progressionScheme.replace(/_/g, ' ')
+    }
   </Badge>
 )}
 ```

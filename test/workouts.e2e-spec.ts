@@ -61,7 +61,13 @@ describe('Workouts e2e (mocked service)', () => {
       .overrideGuard(JwtAuthGuard as any)
       .useValue(allowJwtGuard)
       .overrideGuard(SupabaseJwtGuard as any)
-      .useValue({ canActivate: (ctx: any) => { const req = ctx.switchToHttp().getRequest(); req.user = { id: 'user-1', email: 'user@example.com' }; return true as any } })
+      .useValue({
+        canActivate: (ctx: any) => {
+          const req = ctx.switchToHttp().getRequest();
+          req.user = { id: 'user-1', email: 'user@example.com' };
+          return true as any;
+        },
+      })
       .compile();
 
     app = moduleRef.createNestApplication();

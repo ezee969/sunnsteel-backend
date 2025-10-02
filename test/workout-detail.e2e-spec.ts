@@ -1,14 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
-import { SupabaseJwtGuard } from '../src/auth/guards/supabase-jwt.guard';
 import { SupabaseService } from '../src/auth/supabase.service';
 import * as request from 'supertest';
 import { AppModule } from './../src/app.module';
 import { DatabaseService } from '../src/database/database.service';
 
 // Shared token registry for SupabaseService mock
-const tokenToUser: Record<string, { id: string; email: string }> = {}
-let supabaseServiceMock: Partial<SupabaseService>
+const tokenToUser: Record<string, { id: string; email: string }> = {};
+let supabaseServiceMock: Partial<SupabaseService>;
 
 describe('Workout Detail (e2e)', () => {
   let app: INestApplication;
@@ -27,17 +26,24 @@ describe('Workout Detail (e2e)', () => {
     supabaseServiceMock = {
       verifyToken: jest.fn().mockImplementation((token: string) => {
         const mapped = tokenToUser[token];
-        if (!mapped) throw new Error('invalid')
-        return { id: mapped.id, email: mapped.email, user_metadata: { name: mapped.email.split('@')[0] } } as any
+        if (!mapped) throw new Error('invalid');
+        return {
+          id: mapped.id,
+          email: mapped.email,
+          user_metadata: { name: mapped.email.split('@')[0] },
+        } as any;
       }),
       getOrCreateUser: jest.fn().mockImplementation((supabaseUser: any) => {
         return prisma.user.upsert({
           where: { email: supabaseUser.email },
           update: {},
-          create: { email: supabaseUser.email, name: supabaseUser.user_metadata?.name || 'wd' }
-        })
-      })
-    }
+          create: {
+            email: supabaseUser.email,
+            name: supabaseUser.user_metadata?.name || 'wd',
+          },
+        });
+      }),
+    };
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     })
@@ -74,7 +80,10 @@ describe('Workout Detail (e2e)', () => {
 
     accessToken = registerResponse.body.accessToken;
     userId = registerResponse.body.user.id;
-    tokenToUser[accessToken] = { id: userId, email: registerResponse.body.user.email }
+    tokenToUser[accessToken] = {
+      id: userId,
+      email: registerResponse.body.user.email,
+    };
 
     // Pre-create secondary user for ownership test
     const otherRegister = await request(app.getHttpServer())
@@ -86,7 +95,10 @@ describe('Workout Detail (e2e)', () => {
       })
       .expect(201);
     otherAccessToken = otherRegister.body.accessToken;
-    tokenToUser[otherAccessToken] = { id: otherRegister.body.user.id, email: otherRegister.body.user.email }
+    tokenToUser[otherAccessToken] = {
+      id: otherRegister.body.user.id,
+      email: otherRegister.body.user.email,
+    };
 
     // Verify we got valid response
     if (!accessToken || !userId) {

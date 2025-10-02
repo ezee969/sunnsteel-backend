@@ -1,0 +1,1 @@
+SELECT id, name FROM "Exercise" WHERE name IN ('Bench Press', 'Lateral Raises', 'Squat') ORDER BY name;

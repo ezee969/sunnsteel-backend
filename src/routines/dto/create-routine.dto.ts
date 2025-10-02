@@ -81,19 +81,17 @@ export class CreateRoutineExerciseDto {
       DOUBLE_PROGRESSION: 'DOUBLE_PROGRESSION',
       DYNAMIC_DOUBLE_PROGRESSION: 'DYNAMIC_DOUBLE_PROGRESSION',
       PROGRAMMED_RTF: 'PROGRAMMED_RTF',
-      PROGRAMMED_RTF_HYPERTROPHY: 'PROGRAMMED_RTF_HYPERTROPHY',
     } as const,
     {
       message:
-        'progressionScheme must be NONE, DOUBLE_PROGRESSION, DYNAMIC_DOUBLE_PROGRESSION, PROGRAMMED_RTF, or PROGRAMMED_RTF_HYPERTROPHY',
+        'progressionScheme must be NONE, DOUBLE_PROGRESSION, DYNAMIC_DOUBLE_PROGRESSION, or PROGRAMMED_RTF',
     },
   )
   progressionScheme?:
     | 'NONE'
     | 'DOUBLE_PROGRESSION'
     | 'DYNAMIC_DOUBLE_PROGRESSION'
-    | 'PROGRAMMED_RTF'
-    | 'PROGRAMMED_RTF_HYPERTROPHY';
+    | 'PROGRAMMED_RTF';
 
   @IsOptional()
   @IsNumber()
@@ -105,20 +103,30 @@ export class CreateRoutineExerciseDto {
   @Type(() => CreateRoutineExerciseSetDto)
   sets: CreateRoutineExerciseSetDto[];
 
-  // RtF-specific fields when progressionScheme is any RtF variant
+  // RtF-specific fields when progressionScheme is PROGRAMMED_RTF
   @ValidateIf(
-    (o: CreateRoutineExerciseDto) => o.progressionScheme === 'PROGRAMMED_RTF' || o.progressionScheme === 'PROGRAMMED_RTF_HYPERTROPHY',
+    (o: CreateRoutineExerciseDto) => o.progressionScheme === 'PROGRAMMED_RTF',
   )
   @IsNumber()
   @Min(1)
   programTMKg?: number;
 
   @ValidateIf(
-    (o: CreateRoutineExerciseDto) => o.progressionScheme === 'PROGRAMMED_RTF' || o.progressionScheme === 'PROGRAMMED_RTF_HYPERTROPHY',
+    (o: CreateRoutineExerciseDto) => o.progressionScheme === 'PROGRAMMED_RTF',
   )
   @IsNumber()
   @Min(0.5)
   programRoundingKg?: number; // defaults to 2.5 if omitted
+
+  // Program style for PROGRAMMED_RTF exercises (unified scheme)
+  @ValidateIf(
+    (o: CreateRoutineExerciseDto) => o.progressionScheme === 'PROGRAMMED_RTF',
+  )
+  @IsEnum(['STANDARD', 'HYPERTROPHY'], {
+    message:
+      'programStyle must be STANDARD or HYPERTROPHY for PROGRAMMED_RTF exercises',
+  })
+  programStyle?: 'STANDARD' | 'HYPERTROPHY';
 }
 
 export class CreateRoutineDayDto {

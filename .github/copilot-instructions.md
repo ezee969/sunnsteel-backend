@@ -1,28 +1,16 @@
-- After every change in the code follow the auto-documentation rules in the file:
-    - `.cursor/rules/auto-documentation.mdc`
-
-- For project architecture, check the following files:
-    - `.cursor/rules/sunsteel-project.mdc`
-    - `./README.md`
-
-- For testing:
-    - `.windsurf/rules/sunsteel-project-testing.md`
-
 - For documentation conventions and project references:
     - `docs/README.md` - Documentation index
-    - `docs/roadmaps/RTF_ENHANCEMENTS.md` - Active RtF roadmap
-    - `docs/reference/ENVIRONMENT_VARIABLES.md` - Environment setup
-    - `docs/history/` - Completion reports and historical records
 
 ## Documentation Conventions
 - **NEVER create documentation files at repo root** (except README.md)
-- **All project docs belong in `docs/` hierarchy**:
-  - `docs/roadmaps/` - Active feature roadmaps and task tracking
-  - `docs/history/` - Implementation completion reports
-  - `docs/reference/` - Configuration guides, environment setup, API references
+- **All project docs belong in `docs/` hierarchy**
 - **Update `docs/README.md` index** when adding new documentation areas
 - **Use deprecation stubs** if you must reference legacy root docs; point to canonical `docs/` location
 - **Roadmap files**: Use consistent task ID format (RTF-B01, RTF-B02, etc.) for traceability
+
+## Rules & Guidelines
+The project is executed in Windows 11.
+Never try to mount the project by yourself, always ask the user to do it.
 
 # GitHub Copilot NestJS Backend API Developer Rule
 

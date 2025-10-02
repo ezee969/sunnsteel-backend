@@ -2,8 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { RoutinesService } from './routines.service';
 import { DatabaseService } from '../database/database.service';
-import { WorkoutsService } from '../workouts/workouts.service'
-import { RTF_WEEK_GOALS_CACHE } from '../cache/rtf-week-goals-cache.async'
+import { WorkoutsService } from '../workouts/workouts.service';
+import { RTF_WEEK_GOALS_CACHE } from '../cache/rtf-week-goals-cache.async';
 
 const makeDbMock = () => {
   const routine = {
@@ -40,8 +40,8 @@ describe('RoutinesService', () => {
     dbMock = makeDbMock();
 
     const workoutsServiceMock = {
-      getRtFWeekGoals: jest.fn().mockResolvedValue({ week: 1, goals: [] })
-    } as unknown as jest.Mocked<WorkoutsService>
+      getRtFWeekGoals: jest.fn().mockResolvedValue({ week: 1, goals: [] }),
+    } as unknown as jest.Mocked<WorkoutsService>;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -58,7 +58,7 @@ describe('RoutinesService', () => {
           },
         },
       ],
-    }).compile()
+    }).compile();
 
     service = module.get<RoutinesService>(RoutinesService);
   });
@@ -91,6 +91,7 @@ describe('RoutinesService', () => {
                 restSeconds: 60,
                 sets: [{ setNumber: 1, repType: 'FIXED', reps: 8 }],
                 progressionScheme: 'PROGRAMMED_RTF',
+                programStyle: 'STANDARD',
                 programTMKg: 100,
                 programRoundingKg: 2.5,
               },
@@ -130,6 +131,7 @@ describe('RoutinesService', () => {
                 restSeconds: 60,
                 sets: [{ setNumber: 1, repType: 'FIXED', reps: 8 }],
                 progressionScheme: 'PROGRAMMED_RTF',
+                programStyle: 'STANDARD',
                 programTMKg: 100,
                 programRoundingKg: 2.5,
               },
@@ -168,6 +170,7 @@ describe('RoutinesService', () => {
                 restSeconds: 60,
                 sets: [{ setNumber: 1, repType: 'FIXED', reps: 8 }],
                 progressionScheme: 'PROGRAMMED_RTF',
+                programStyle: 'STANDARD',
                 programTMKg: 100,
                 programRoundingKg: 2.5,
               },
@@ -213,6 +216,7 @@ describe('RoutinesService', () => {
                 restSeconds: 60,
                 sets: [{ setNumber: 1, repType: 'FIXED', reps: 8 }],
                 progressionScheme: 'PROGRAMMED_RTF',
+                programStyle: 'STANDARD',
                 programTMKg: 100,
                 programRoundingKg: 2.5,
               },
@@ -258,6 +262,7 @@ describe('RoutinesService', () => {
                 restSeconds: 60,
                 sets: [{ setNumber: 1, repType: 'FIXED', reps: 8 }],
                 progressionScheme: 'PROGRAMMED_RTF',
+                programStyle: 'STANDARD',
                 programTMKg: 100,
                 programRoundingKg: 2.5,
               },
@@ -728,20 +733,19 @@ describe('RoutinesService', () => {
       exercises: [
         {
           exerciseId: 'e1',
-            order: 0,
-            restSeconds: 60,
-            progressionScheme: scheme as any,
-            programTMKg: 100,
-            programRoundingKg: 2.5,
-            sets: [
-              { setNumber: 1, repType: 'FIXED', reps: 5 },
-            ],
+          order: 0,
+          restSeconds: 60,
+          progressionScheme: scheme as any,
+          programStyle: 'STANDARD',
+          programTMKg: 100,
+          programRoundingKg: 2.5,
+          sets: [{ setNumber: 1, repType: 'FIXED', reps: 5 }],
         },
       ],
-    })
+    });
 
     it('create: sets programRtfSnapshot when RtF exercise present (with deloads)', async () => {
-      ;(dbMock.routine.create as any).mockResolvedValue({ id: 'r1' })
+      (dbMock.routine.create as any).mockResolvedValue({ id: 'r1' });
       const dto: any = {
         name: 'r',
         description: 'd',
@@ -749,23 +753,23 @@ describe('RoutinesService', () => {
         programStartDate: '2025-01-06', // Monday
         programTimezone: 'UTC',
         days: [baseDayRtF()],
-      }
+      };
 
-      await service.create('u1', dto)
+      await service.create('u1', dto);
 
-      const args = (dbMock.routine.create as any).mock.calls[0][0]
-      const snap = args.data.programRtfSnapshot
-      expect(snap).toBeDefined()
-      expect(snap.withDeloads).toBe(true)
-      expect(snap.weeks).toBe(21)
-      expect(Array.isArray(snap.standard)).toBe(true)
-      expect(Array.isArray(snap.hypertrophy)).toBe(true)
-      expect(snap.standard.length).toBe(21)
-      expect(snap.hypertrophy.length).toBe(21)
-    })
+      const args = (dbMock.routine.create as any).mock.calls[0][0];
+      const snap = args.data.programRtfSnapshot;
+      expect(snap).toBeDefined();
+      expect(snap.withDeloads).toBe(true);
+      expect(snap.weeks).toBe(21);
+      expect(Array.isArray(snap.standard)).toBe(true);
+      expect(Array.isArray(snap.hypertrophy)).toBe(true);
+      expect(snap.standard.length).toBe(21);
+      expect(snap.hypertrophy.length).toBe(21);
+    });
 
     it('create: sets 18-week snapshot when programWithDeloads=false', async () => {
-      ;(dbMock.routine.create as any).mockResolvedValue({ id: 'r1' })
+      (dbMock.routine.create as any).mockResolvedValue({ id: 'r1' });
       const dto: any = {
         name: 'r',
         description: 'd',
@@ -773,22 +777,22 @@ describe('RoutinesService', () => {
         programStartDate: '2025-01-06',
         programTimezone: 'UTC',
         days: [baseDayRtF()],
-      }
+      };
 
-      await service.create('u1', dto)
-      const args = (dbMock.routine.create as any).mock.calls[0][0]
-      const snap = args.data.programRtfSnapshot
-      expect(snap).toBeDefined()
-      expect(snap.withDeloads).toBe(false)
-      expect(snap.weeks).toBe(18)
-      expect(snap.standard.length).toBe(18)
-      expect(snap.hypertrophy.length).toBe(18)
+      await service.create('u1', dto);
+      const args = (dbMock.routine.create as any).mock.calls[0][0];
+      const snap = args.data.programRtfSnapshot;
+      expect(snap).toBeDefined();
+      expect(snap.withDeloads).toBe(false);
+      expect(snap.weeks).toBe(18);
+      expect(snap.standard.length).toBe(18);
+      expect(snap.hypertrophy.length).toBe(18);
       // Ensure weeks are reindexed (no deloads) — last week should be 18
-      expect(snap.standard[snap.standard.length - 1].week).toBe(18)
-    })
+      expect(snap.standard[snap.standard.length - 1].week).toBe(18);
+    });
 
     it('create: leaves programRtfSnapshot null when no RtF exercises', async () => {
-      ;(dbMock.routine.create as any).mockResolvedValue({ id: 'r1' })
+      (dbMock.routine.create as any).mockResolvedValue({ id: 'r1' });
       const dto: any = {
         name: 'r',
         description: 'd',
@@ -807,17 +811,17 @@ describe('RoutinesService', () => {
             ],
           },
         ],
-      }
+      };
 
-      await service.create('u1', dto)
-      const args = (dbMock.routine.create as any).mock.calls[0][0]
-      expect(args.data.programRtfSnapshot).toBeNull()
-    })
+      await service.create('u1', dto);
+      const args = (dbMock.routine.create as any).mock.calls[0][0];
+      expect(args.data.programRtfSnapshot).toBeNull();
+    });
 
     it('update: sets programRtfSnapshot when RtF exercise present in new days', async () => {
-      ;(dbMock.routine.findFirst as any).mockResolvedValue({ id: 'r1' })
-      ;(dbMock.routineDay.deleteMany as any).mockResolvedValue({ count: 1 })
-      ;(dbMock.routine.update as any).mockResolvedValue({ id: 'r1' })
+      (dbMock.routine.findFirst as any).mockResolvedValue({ id: 'r1' });
+      (dbMock.routineDay.deleteMany as any).mockResolvedValue({ count: 1 });
+      (dbMock.routine.update as any).mockResolvedValue({ id: 'r1' });
       const dto: any = {
         name: 'r',
         description: 'd',
@@ -825,19 +829,19 @@ describe('RoutinesService', () => {
         programStartDate: '2025-01-06',
         programTimezone: 'UTC',
         days: [baseDayRtF()],
-      }
+      };
 
-      await service.update('u1', 'r1', dto)
-      const args = (dbMock.routine.update as any).mock.calls[0][0]
-      const snap = args.data.programRtfSnapshot
-      expect(snap).toBeDefined()
-      expect(snap.weeks).toBe(21)
-    })
+      await service.update('u1', 'r1', dto);
+      const args = (dbMock.routine.update as any).mock.calls[0][0];
+      const snap = args.data.programRtfSnapshot;
+      expect(snap).toBeDefined();
+      expect(snap.weeks).toBe(21);
+    });
 
     it('update: clears programRtfSnapshot when RtF removed', async () => {
-      ;(dbMock.routine.findFirst as any).mockResolvedValue({ id: 'r1' })
-      ;(dbMock.routineDay.deleteMany as any).mockResolvedValue({ count: 1 })
-      ;(dbMock.routine.update as any).mockResolvedValue({ id: 'r1' })
+      (dbMock.routine.findFirst as any).mockResolvedValue({ id: 'r1' });
+      (dbMock.routineDay.deleteMany as any).mockResolvedValue({ count: 1 });
+      (dbMock.routine.update as any).mockResolvedValue({ id: 'r1' });
       const dto: any = {
         name: 'r2',
         description: 'd2',
@@ -856,13 +860,13 @@ describe('RoutinesService', () => {
             ],
           },
         ],
-      }
+      };
 
-      await service.update('u1', 'r1', dto)
-      const args = (dbMock.routine.update as any).mock.calls[0][0]
-      expect(args.data.programRtfSnapshot).toBeNull()
-    })
-  })
+      await service.update('u1', 'r1', dto);
+      const args = (dbMock.routine.update as any).mock.calls[0][0];
+      expect(args.data.programRtfSnapshot).toBeNull();
+    });
+  });
 
   describe('remove', () => {
     it('throws NotFound when routine not owned', async () => {
