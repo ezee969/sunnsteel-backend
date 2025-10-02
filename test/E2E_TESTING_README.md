@@ -36,46 +36,55 @@ npm run test:e2e
 
 ---
 
-### 2. Manual Testing with Thunder Client
+### 2. Manual Testing with HTTP File
 
-**Files:** 
-- `thunder-tests/routine-creation-e2e.json` - Request collection
-- `thunder-tests/thunderEnvironment.json` - Environment variables
+**File:** `test/api-manual-tests.http`
 
-**Setup:**
-1. Install [Thunder Client](https://marketplace.visualstudio.com/items?itemName=rangav.vscode-thunder-client) in VS Code
-2. Open Thunder Client from sidebar
-3. Import the collection from `thunder-tests/routine-creation-e2e.json`
-4. Select "Sunsteel Development" environment
+This file contains all the manual testing requests in standard HTTP format, compatible with multiple free tools.
+
+**Option A: REST Client Extension (Recommended - Free)**
+1. Install [REST Client](https://marketplace.visualstudio.com/items?itemName=humao.rest-client) in VS Code
+2. Open `test/api-manual-tests.http`
+3. Click "Send Request" above any request
+4. Variables like `{{accessToken}}` are auto-populated from previous responses
+
+**Option B: Thunder Client Individual Requests (Free)**
+1. Install [Thunder Client](https://marketplace.visualstudio.com/items?itemName=rangav.vscode-thunder-client)
+2. Create individual requests (collections require paid version)
+3. Copy-paste requests from `api-manual-tests.http`
+4. Manually copy `accessToken` from register response to subsequent requests
 
 **Flow:**
-1. **Register User** → Creates new test user, saves `accessToken` and `userId`
-2. **Create ULPPL Routine** → Posts routine using bearer token, saves `routineId`
-3. **Get All Routines** → Verifies routine appears in list
-4. **Get Routine by ID** → Retrieves full routine details
-5. **Delete Routine** → Cleanup test data
+1. **STEP 1: Register User** → Creates test user, returns `accessToken`
+2. **STEP 2: Create Simple Routine** → Basic routine with NONE progression
+3. **STEP 3: Create Complex Routine** → PROGRAMMED_RTF + DYNAMIC_DOUBLE_PROGRESSION
+4. **STEP 4: Get All Routines** → List user's routines
+5. **STEP 5: Get Specific Routine** → Retrieve by ID
+6. **STEP 6: Delete Routine** → Cleanup
 
-**Environment Variables (auto-populated):**
-- `baseUrl`: API base URL (default: `http://localhost:3000/api`)
-- `accessToken`: JWT bearer token (set after login/register)
-- `userId`: Current user ID
-- `routineId`: Created routine ID
+**Helper Endpoints:**
+- Get all exercises
+- Filter exercises by muscle group
+- Login endpoint (if user already exists)
+
+**Variables:**
+```http
+@baseUrl = http://localhost:3000/api
+@email = test-user@example.com
+@password = testPassword123
+@accessToken = {{register.response.body.accessToken}}
+```
 
 ---
 
-### 3. Alternative: Postman Collection
+### 3. Alternative Tools
 
-If you prefer Postman, you can convert the Thunder Client collection or create similar requests:
-
-**Postman Setup:**
-1. Create new collection "Routine Creation E2E"
-2. Add environment with variables: `baseUrl`, `accessToken`, `routineId`
-3. Add requests following the Thunder Client structure
-4. Use Tests tab to auto-save response values:
-   ```javascript
-   pm.environment.set("accessToken", pm.response.json().accessToken);
-   pm.environment.set("routineId", pm.response.json().id);
-   ```
+The `.http` file format is compatible with:
+- **Postman** - Import as collection
+- **Insomnia** - Open HTTP file directly
+- **curl** - Copy commands from file
+- **HTTPie** - Convert to HTTPie syntax
+- **Any HTTP client** - Standard format
 
 ---
 

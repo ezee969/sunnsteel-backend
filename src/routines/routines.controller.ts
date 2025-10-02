@@ -11,7 +11,6 @@ import {
   Query,
 } from '@nestjs/common';
 import { RoutinesService } from './routines.service';
-import { JwtAuthGuard } from '../auth/guards/passport-jwt.guard';
 import { SupabaseJwtGuard } from '../auth/guards/supabase-jwt.guard';
 import { CreateRoutineDto } from './dto/create-routine.dto';
 import { UpdateRoutineDto } from './dto/update-routine.dto';

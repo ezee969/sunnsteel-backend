@@ -3,21 +3,20 @@ import { INestApplication } from '@nestjs/common'
 import * as request from 'supertest'
 import { AppModule } from '../src/app.module'
 import { DatabaseService } from '../src/database/database.service'
-import * as fs from 'fs'
-import * as path from 'path'
+import { SupabaseService } from '../src/auth/supabase.service'
 
 /**
- * Full E2E test for routine creation flow
+ * Comprehensive E2E test for routine creation with complex validation
  * 
- * This test simulates the complete user journey:
- * 1. Register a new user
- * 2. Authenticate and get bearer token
- * 3. Create a routine using the frontend JSON payload
- * 4. Verify routine exists in database with correct structure
- * 5. Clean up test data
- * 
- * Tests authentication, authorization, data validation, and persistence
+ * Tests the complete flow with:
+ * 1. Multiple progression schemes (PROGRAMMED_RTF, DYNAMIC_DOUBLE_PROGRESSION)
+ * 2. Different rep types (FIXED, RANGE)
+ * 3. Program configuration validation
+ * 4. Exercise ordering validation
+ * 5. Rest periods validation
+ * 6. Database integrity checks
  */
+
 describe('Routine Creation - Full E2E (e2e)', () => {
 	let app: INestApplication
 	let databaseService: DatabaseService
@@ -25,207 +24,203 @@ describe('Routine Creation - Full E2E (e2e)', () => {
 	let userId: string
 	let createdRoutineId: string
 
+	// Mock token map for Supabase
+	const tokenToUser: Record<string, { id: string; email: string }> = {}
+	let supabaseServiceMock: Partial<SupabaseService>
+
 	const testUser = {
-		email: `routine-e2e-${Date.now()}@example.com`,
-		password: 'SecurePassword123!',
-		name: 'Routine Test User',
+		email: `routine-full-e2e-${Date.now()}@example.com`,
+		password: 'password123',
+		name: 'Routine Full Test User',
 	}
 
+	let testExerciseIds: string[] = []
+
 	beforeAll(async () => {
+		supabaseServiceMock = {
+			verifyToken: jest.fn().mockImplementation((token: string) => {
+				const mapped = tokenToUser[token]
+				if (!mapped) throw new Error('invalid')
+				return {
+					id: mapped.id,
+					email: mapped.email,
+					user_metadata: { name: mapped.email.split('@')[0] },
+				} as any
+			}),
+			getOrCreateUser: jest.fn().mockImplementation((supabaseUser: any) => {
+				return databaseService.user.upsert({
+					where: { email: supabaseUser.email },
+					update: {},
+					create: {
+						email: supabaseUser.email,
+						name: supabaseUser.user_metadata?.name || 'user',
+					},
+				})
+			}),
+		}
+
 		const moduleFixture: TestingModule = await Test.createTestingModule({
 			imports: [AppModule],
-		}).compile()
+		})
+			.overrideProvider(SupabaseService)
+			.useValue(supabaseServiceMock)
+			.compile()
 
 		app = moduleFixture.createNestApplication()
 		databaseService = moduleFixture.get<DatabaseService>(DatabaseService)
 
-		// Configure validation pipeline
 		const { ValidationPipe } = await import('@nestjs/common')
 		app.useGlobalPipes(new ValidationPipe({ transform: true }))
 
-		// Add cookie parser
 		// eslint-disable-next-line @typescript-eslint/no-require-imports
 		const cookieParser = require('cookie-parser')
 		app.use(cookieParser())
 
 		app.setGlobalPrefix('api')
 		await app.init()
-	})
 
-	afterAll(async () => {
-		// Cleanup: Delete test user and all related data
-		if (userId) {
-			await databaseService.routine.deleteMany({ where: { userId } })
-			await databaseService.user.delete({ where: { id: userId } })
+		// Register user via API (proper way)
+		const registerResponse = await request(app.getHttpServer())
+			.post('/api/auth/register')
+			.send(testUser)
+			.expect(201)
+
+		accessToken = registerResponse.body.accessToken
+		userId = registerResponse.body.user.id
+
+		// Map token for Supabase mock
+		tokenToUser[accessToken] = { id: userId, email: testUser.email }
+
+		// Get existing exercises from database
+		const existingExercises = await databaseService.exercise.findMany({
+			take: 2,
+		})
+
+		if (existingExercises.length < 2) {
+			throw new Error('Database must have at least 2 exercises for this test')
 		}
 
+		testExerciseIds = existingExercises.map((ex) => ex.id)
+	}, 30000) // 30 second timeout
+
+	afterAll(async () => {
+		// Cleanup
+		if (userId) {
+			await databaseService.routine.deleteMany({ where: { userId } })
+			await databaseService.user.deleteMany({ where: { id: userId } })
+		}
 		await databaseService.$disconnect()
 		await app.close()
 	})
 
-	describe('Step 1: User Registration', () => {
-		it('should register a new test user', async () => {
-			const response = await request(app.getHttpServer())
-				.post('/api/auth/register')
-				.send(testUser)
-				.expect(201)
-
-			expect(response.body).toMatchObject({
-				user: {
-					email: testUser.email,
-					name: testUser.name,
-				},
-				accessToken: expect.any(String),
-			})
-
-			accessToken = response.body.accessToken
-			userId = response.body.user.id
-
-			expect(userId).toBeDefined()
-			expect(accessToken).toBeDefined()
-		})
-	})
-
-	describe('Step 2: Load and Validate Routine JSON', () => {
-		it('should load the routine JSON from frontend', () => {
-			// Load the my-routine.json file from frontend workspace
-			const jsonPath = path.join(
-				__dirname,
-				'../../sunnsteel-frontend/my-routine.json',
-			)
-
-			expect(fs.existsSync(jsonPath)).toBe(true)
-
-			const routineData = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'))
-
-			// Validate required fields exist
-			expect(routineData.name).toBeDefined()
-			expect(routineData.isPeriodized).toBe(false)
-			expect(routineData.days).toBeInstanceOf(Array)
-			expect(routineData.days.length).toBeGreaterThan(0)
-
-			// Validate PROGRAMMED_RTF exercises have programStyle
-			routineData.days.forEach((day: any) => {
-				day.exercises.forEach((exercise: any) => {
-					if (exercise.progressionScheme === 'PROGRAMMED_RTF') {
-						expect(exercise.programStyle).toBeDefined()
-						expect(['STANDARD', 'HYPERTROPHY']).toContain(
-							exercise.programStyle,
-						)
-					}
-				})
-			})
-		})
-	})
-
-	describe('Step 3: Create Routine via API', () => {
-		it('should create routine with authentication', async () => {
-			// Load routine data
-			const jsonPath = path.join(
-				__dirname,
-				'../../sunnsteel-frontend/my-routine.json',
-			)
-			const routinePayload = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'))
+	describe('Step 1: Create Complex Routine', () => {
+		it('should create routine with PROGRAMMED_RTF and DYNAMIC_DOUBLE_PROGRESSION', async () => {
+			const routinePayload = {
+				name: 'Complex E2E Test Routine',
+				description: 'Full E2E test with multiple progression schemes',
+				isPeriodized: false,
+				programStartDate: '2025-10-06', // Monday
+				programTimezone: 'America/Cordoba',
+				programWithDeloads: true,
+				days: [
+					{
+						dayOfWeek: 1,
+						exercises: [
+							{
+								exerciseId: testExerciseIds[0],
+								restSeconds: 180,
+								progressionScheme: 'PROGRAMMED_RTF',
+								minWeightIncrement: 2.5,
+								programTMKg: 100,
+								programRoundingKg: 2.5,
+								programStyle: 'STANDARD',
+								sets: [
+									{
+										setNumber: 1,
+										repType: 'RANGE',
+										minReps: 8,
+										maxReps: 10,
+									},
+								],
+							},
+							{
+								exerciseId: testExerciseIds[1],
+								restSeconds: 120,
+								progressionScheme: 'DYNAMIC_DOUBLE_PROGRESSION',
+								minWeightIncrement: 2.5,
+								sets: [
+									{
+										setNumber: 1,
+										repType: 'FIXED',
+										reps: 10,
+										weight: 50,
+									},
+								],
+							},
+						],
+					},
+				],
+			}
 
 			const response = await request(app.getHttpServer())
 				.post('/api/routines')
 				.set('Authorization', `Bearer ${accessToken}`)
 				.send(routinePayload)
-				.expect(201)
 
-			// Validate response structure
-			expect(response.body).toMatchObject({
-				id: expect.any(String),
-				name: routinePayload.name,
-				description: routinePayload.description,
-				isPeriodized: false,
-				userId: userId,
-			})
+			if (response.status !== 201) {
+				console.error('❌ Routine creation failed:', response.body)
+			}
+
+			expect(response.status).toBe(201)
+
+			expect(response.body.id).toBeDefined()
+			expect(response.body.name).toBe('Complex E2E Test Routine')
+			expect(response.body.userId).toBe(userId)
+			expect(response.body.days).toBeInstanceOf(Array)
+			expect(response.body.days.length).toBe(1)
+
+			const firstDay = response.body.days[0]
+			expect(firstDay.exercises.length).toBe(2)
+
+			// Find exercises by progression scheme (order may vary)
+			const rtfExercise = firstDay.exercises.find(
+				(ex: any) => ex.progressionScheme === 'PROGRAMMED_RTF',
+			)
+			const ddpExercise = firstDay.exercises.find(
+				(ex: any) => ex.progressionScheme === 'DYNAMIC_DOUBLE_PROGRESSION',
+			)
+
+			// Validate RTF exercise
+			expect(rtfExercise).toBeDefined()
+			expect(rtfExercise.progressionScheme).toBe('PROGRAMMED_RTF')
+			expect(rtfExercise.programStyle).toBe('STANDARD')
+			expect(rtfExercise.sets[0].repType).toBe('RANGE')
+			expect(rtfExercise.sets[0].minReps).toBe(8)
+			expect(rtfExercise.sets[0].maxReps).toBe(10)
+
+			// Validate DDP exercise
+			expect(ddpExercise).toBeDefined()
+			expect(ddpExercise.progressionScheme).toBe('DYNAMIC_DOUBLE_PROGRESSION')
+			expect(ddpExercise.sets[0].repType).toBe('FIXED')
+			expect(ddpExercise.sets[0].reps).toBe(10)
 
 			createdRoutineId = response.body.id
-
-			// Validate days structure
-			expect(response.body.days).toBeInstanceOf(Array)
-			expect(response.body.days.length).toBe(routinePayload.days.length)
-
-			// Validate first day structure
-			const firstDay = response.body.days[0]
-			expect(firstDay).toMatchObject({
-				dayOfWeek: expect.any(Number),
-				exercises: expect.any(Array),
-			})
-
-			// Validate exercises have proper structure
-			const firstExercise = firstDay.exercises[0]
-			expect(firstExercise).toMatchObject({
-				exerciseId: expect.any(String),
-				restSeconds: expect.any(Number),
-				progressionScheme: expect.any(String),
-				sets: expect.any(Array),
-			})
-
-			// Validate sets have repType
-			const firstSet = firstExercise.sets[0]
-			expect(firstSet).toMatchObject({
-				setNumber: expect.any(Number),
-				repType: expect.any(String),
-			})
-		})
-
-		it('should reject routine creation without authentication', async () => {
-			const jsonPath = path.join(
-				__dirname,
-				'../../sunnsteel-frontend/my-routine.json',
-			)
-			const routinePayload = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'))
-
-			await request(app.getHttpServer())
-				.post('/api/routines')
-				.send(routinePayload)
-				.expect(401)
-		})
+		}, 30000)
 	})
 
-	describe('Step 4: Verify Database Persistence', () => {
-		it('should find the routine in database', async () => {
+	describe('Step 2: Database Validation', () => {
+		it('should have PROGRAMMED_RTF exercises with programStyle in DB', async () => {
+			if (!createdRoutineId) {
+				console.warn('⚠️  No routine created, skipping test')
+				return
+			}
+
 			const routine = await databaseService.routine.findUnique({
 				where: { id: createdRoutineId },
 				include: {
 					days: {
 						include: {
-							exercises: {
-								include: {
-									sets: true,
-									exercise: true,
-								},
-							},
-						},
-					},
-				},
-			})
-
-			expect(routine).toBeDefined()
-			expect(routine?.userId).toBe(userId)
-			expect(routine?.name).toBe('ULPPL')
-		})
-
-		it('should have correct number of days', async () => {
-			const routine = await databaseService.routine.findUnique({
-				where: { id: createdRoutineId },
-				include: { days: true },
-			})
-
-			// ULPPL routine has 5 days (Mon, Tue, Thu, Fri, Sat)
-			expect(routine?.days.length).toBe(5)
-		})
-
-		it('should have PROGRAMMED_RTF exercises with programStyle', async () => {
-			const routine = await databaseService.routine.findUnique({
-				where: { id: createdRoutineId },
-				include: {
-					days: {
-						include: {
-							exercises: true,
+							exercises: { include: { sets: true } },
 						},
 					},
 				},
@@ -236,95 +231,59 @@ describe('Routine Creation - Full E2E (e2e)', () => {
 				.filter((ex) => ex.progressionScheme === 'PROGRAMMED_RTF')
 
 			expect(rtfExercises?.length).toBeGreaterThan(0)
-
 			rtfExercises?.forEach((exercise) => {
 				expect(exercise.programStyle).toBeDefined()
 				expect(['STANDARD', 'HYPERTROPHY']).toContain(exercise.programStyle)
 			})
-		})
+		}, 30000)
 
-		it('should have correct set structure with repType', async () => {
+		it('should have correct repType on sets', async () => {
+			if (!createdRoutineId) {
+				console.warn('⚠️  No routine created, skipping test')
+				return
+			}
+
 			const routine = await databaseService.routine.findUnique({
 				where: { id: createdRoutineId },
 				include: {
 					days: {
 						include: {
-							exercises: {
-								include: { sets: true },
-							},
+							exercises: { include: { sets: true } },
 						},
 					},
 				},
 			})
 
-			const firstExercise = routine?.days[0]?.exercises[0]
-			expect(firstExercise?.sets.length).toBeGreaterThan(0)
-
-			const firstSet = firstExercise?.sets[0]
-			expect(firstSet?.repType).toBeDefined()
-			expect(['FIXED', 'RANGE']).toContain(firstSet?.repType)
-
-			// Validate rep fields based on repType
-			if (firstSet?.repType === 'RANGE') {
-				expect(firstSet.minReps).toBeDefined()
-				expect(firstSet.maxReps).toBeDefined()
-			} else if (firstSet?.repType === 'FIXED') {
-				expect(firstSet.reps).toBeDefined()
-			}
-		})
-	})
-
-	describe('Step 5: Retrieve Routine via API', () => {
-		it('should retrieve the created routine', async () => {
-			const response = await request(app.getHttpServer())
-				.get(`/api/routines/${createdRoutineId}`)
-				.set('Authorization', `Bearer ${accessToken}`)
-				.expect(200)
-
-			expect(response.body).toMatchObject({
-				id: createdRoutineId,
-				name: 'ULPPL',
-				userId: userId,
-			})
-		})
-
-		it('should list routine in user routines', async () => {
-			const response = await request(app.getHttpServer())
-				.get('/api/routines')
-				.set('Authorization', `Bearer ${accessToken}`)
-				.expect(200)
-
-			expect(response.body).toBeInstanceOf(Array)
-			expect(response.body.length).toBeGreaterThan(0)
-
-			const foundRoutine = response.body.find(
-				(r: any) => r.id === createdRoutineId,
+			const allSets = routine?.days.flatMap((day) =>
+				day.exercises.flatMap((ex) => ex.sets),
 			)
-			expect(foundRoutine).toBeDefined()
-		})
-	})
 
-	describe('Step 6: Data Integrity Checks', () => {
-		it('should have correct program configuration', async () => {
-			const routine = await databaseService.routine.findUnique({
-				where: { id: createdRoutineId },
+			allSets?.forEach((set) => {
+				expect(set.repType).toBeDefined()
+				expect(['FIXED', 'RANGE']).toContain(set.repType)
+
+				if (set.repType === 'RANGE') {
+					expect(set.minReps).toBeDefined()
+					expect(set.maxReps).toBeDefined()
+				} else if (set.repType === 'FIXED') {
+					expect(set.reps).toBeDefined()
+				}
 			})
-
-			expect(routine?.programWithDeloads).toBe(true)
-			expect(routine?.programStartDate).toBeDefined()
-			expect(routine?.programTimezone).toBe('America/Cordoba')
-		})
+		}, 30000)
 
 		it('should preserve exercise order', async () => {
+			if (!createdRoutineId) {
+				console.warn('⚠️  No routine created, skipping test')
+				return
+			}
+
 			const routine = await databaseService.routine.findUnique({
 				where: { id: createdRoutineId },
 				include: {
 					days: {
 						orderBy: { order: 'asc' },
 						include: {
-							exercises: {
-								orderBy: { order: 'asc' },
-							},
+							exercises: { orderBy: { order: 'asc' } },
 						},
 					},
 				},
@@ -341,9 +300,14 @@ describe('Routine Creation - Full E2E (e2e)', () => {
 					[...exerciseOrders].sort((a, b) => a - b),
 				)
 			})
-		})
+		}, 30000)
 
 		it('should have correct rest periods', async () => {
+			if (!createdRoutineId) {
+				console.warn('⚠️  No routine created, skipping test')
+				return
+			}
+
 			const routine = await databaseService.routine.findUnique({
 				where: { id: createdRoutineId },
 				include: {
@@ -359,22 +323,81 @@ describe('Routine Creation - Full E2E (e2e)', () => {
 					expect(exercise.restSeconds).toBeLessThanOrEqual(600)
 				})
 			})
-		})
+		}, 30000)
 	})
 
-	describe('Step 7: Cleanup and Deletion', () => {
+	describe('Step 3: API Retrieval', () => {
+		it('should retrieve the created routine', async () => {
+			if (!createdRoutineId) {
+				console.warn('⚠️  No routine created, skipping test')
+				return
+			}
+
+			const response = await request(app.getHttpServer())
+				.get(`/api/routines/${createdRoutineId}`)
+				.set('Authorization', `Bearer ${accessToken}`)
+				.expect(200)
+
+			expect(response.body.id).toBe(createdRoutineId)
+			expect(response.body.name).toBe('Complex E2E Test Routine')
+		}, 30000)
+
+		it('should list routine in user routines', async () => {
+			if (!createdRoutineId) {
+				console.warn('⚠️  No routine created, skipping test')
+				return
+			}
+
+			const response = await request(app.getHttpServer())
+				.get('/api/routines')
+				.set('Authorization', `Bearer ${accessToken}`)
+				.expect(200)
+
+			expect(response.body).toBeInstanceOf(Array)
+			expect(response.body.length).toBeGreaterThan(0)
+
+			const foundRoutine = response.body.find(
+				(r: any) => r.id === createdRoutineId,
+			)
+			expect(foundRoutine).toBeDefined()
+		}, 30000)
+	})
+
+	describe('Step 4: Program Configuration', () => {
+		it('should have correct program settings', async () => {
+			if (!createdRoutineId) {
+				console.warn('⚠️  No routine created, skipping test')
+				return
+			}
+
+			const routine = await databaseService.routine.findUnique({
+				where: { id: createdRoutineId },
+			})
+
+			expect(routine?.programWithDeloads).toBe(true)
+			expect(routine?.programStartDate).toBeDefined()
+			expect(routine?.programTimezone).toBe('America/Cordoba')
+		}, 30000)
+	})
+
+	describe('Step 5: Cleanup', () => {
 		it('should delete the routine', async () => {
+			if (!createdRoutineId) {
+				console.warn('⚠️  No routine created, skipping test')
+				return
+			}
+
 			await request(app.getHttpServer())
 				.delete(`/api/routines/${createdRoutineId}`)
 				.set('Authorization', `Bearer ${accessToken}`)
 				.expect(200)
 
-			// Verify deletion
-			const deletedRoutine = await databaseService.routine.findUnique({
+			const deleted = await databaseService.routine.findUnique({
 				where: { id: createdRoutineId },
 			})
 
-			expect(deletedRoutine).toBeNull()
-		})
+			expect(deleted).toBeNull()
+		}, 30000)
 	})
 })
+

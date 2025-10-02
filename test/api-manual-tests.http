@@ -1,0 +1,144 @@
+### 
+### Sunsteel API Manual Testing
+### Use VS Code REST Client extension (free) or copy these into Thunder Client individual requests
+###
+
+@baseUrl = http://localhost:3000/api
+@email = test-user@example.com
+@password = SecurePassword123!
+
+### STEP 1: Register User
+# @name register
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}",
+  "name": "Test User"
+}
+
+### Extract token from response (REST Client only - for Thunder Client, copy manually)
+@accessToken = {{register.response.body.accessToken}}
+
+###
+### STEP 2: Create Routine (Simple)
+# Use the token from Step 1
+POST {{baseUrl}}/routines
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "name": "Manual Test Routine",
+  "description": "Testing via HTTP client",
+  "isPeriodized": false,
+  "days": [
+    {
+      "dayOfWeek": 1,
+      "exercises": [
+        {
+          "exerciseId": "USE_AN_EXERCISE_ID_FROM_YOUR_DB",
+          "restSeconds": 120,
+          "progressionScheme": "NONE",
+          "sets": [
+            {
+              "setNumber": 1,
+              "repType": "FIXED",
+              "reps": 10,
+              "weight": 50
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+
+###
+### STEP 3: Create Complex Routine (PROGRAMMED_RTF + DDP)
+POST {{baseUrl}}/routines
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "name": "Complex Test Routine",
+  "description": "Testing PROGRAMMED_RTF and DYNAMIC_DOUBLE_PROGRESSION",
+  "isPeriodized": false,
+  "programStartDate": "2025-10-06",
+  "programTimezone": "America/Cordoba",
+  "programWithDeloads": true,
+  "days": [
+    {
+      "dayOfWeek": 1,
+      "exercises": [
+        {
+          "exerciseId": "EXERCISE_ID_1",
+          "restSeconds": 180,
+          "progressionScheme": "PROGRAMMED_RTF",
+          "minWeightIncrement": 2.5,
+          "programTMKg": 100,
+          "programRoundingKg": 2.5,
+          "programStyle": "STANDARD",
+          "sets": [
+            {
+              "setNumber": 1,
+              "repType": "RANGE",
+              "minReps": 8,
+              "maxReps": 10
+            }
+          ]
+        },
+        {
+          "exerciseId": "EXERCISE_ID_2",
+          "restSeconds": 120,
+          "progressionScheme": "DYNAMIC_DOUBLE_PROGRESSION",
+          "minWeightIncrement": 2.5,
+          "sets": [
+            {
+              "setNumber": 1,
+              "repType": "FIXED",
+              "reps": 10,
+              "weight": 50
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+
+###
+### STEP 4: Get All Routines
+GET {{baseUrl}}/routines
+Authorization: Bearer {{accessToken}}
+
+###
+### STEP 5: Get Specific Routine (replace with actual ID)
+GET {{baseUrl}}/routines/ROUTINE_ID_HERE
+Authorization: Bearer {{accessToken}}
+
+###
+### STEP 6: Delete Routine (replace with actual ID)
+DELETE {{baseUrl}}/routines/ROUTINE_ID_HERE
+Authorization: Bearer {{accessToken}}
+
+###
+### HELPER: Get Exercises (to find exercise IDs)
+GET {{baseUrl}}/exercises
+Authorization: Bearer {{accessToken}}
+
+###
+### HELPER: Get Exercises by Muscle Group
+GET {{baseUrl}}/exercises?primaryMuscles=PECTORAL
+Authorization: Bearer {{accessToken}}
+
+###
+### HELPER: Login (if you already have a user)
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}

@@ -7,7 +7,6 @@ This section covers the system architecture, design patterns, and technical deci
 - **[System Overview](SYSTEM_OVERVIEW.md)** - High-level architecture and components
 - **[Module Architecture](MODULE_ARCHITECTURE.md)** - NestJS module organization
 - **[Database Design](DATABASE_DESIGN.md)** - Schema design and relationships
-- **[Authentication Flow](AUTHENTICATION_FLOW.md)** - Dual auth system architecture
 - **[Caching Strategy](CACHING_STRATEGY.md)** - Multi-layer cache architecture
 - **[Security Model](SECURITY_MODEL.md)** - Security patterns and practices
 - **[Performance Considerations](PERFORMANCE.md)** - Optimization strategies
@@ -19,10 +18,10 @@ This section covers the system architecture, design patterns, and technical deci
 - Clear separation of concerns
 - Dependency injection with NestJS IoC
 
-### **Dual Authentication System**
-- Primary: Supabase Auth integration
-- Legacy: JWT with Passport.js
-- Seamless migration strategy
+### **Authentication System**
+- Supabase Auth integration
+- JWT Bearer token validation
+- User synchronization with local database
 
 ### **Multi-Layer Caching**
 - L1: In-memory cache
@@ -44,9 +43,9 @@ Client Request → Guards → Controllers → Services → Database
 
 ## 📊 Technology Stack
 
-- **Framework**: NestJS v10.4.15
+- **Framework**: NestJS v11.0.1
 - **Database**: PostgreSQL with Prisma ORM
-- **Authentication**: Supabase Auth + JWT
+- **Authentication**: Supabase Auth with JWT Bearer tokens
 - **Caching**: Redis with layered architecture
 - **Monitoring**: Prometheus metrics
 

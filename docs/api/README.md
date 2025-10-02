@@ -5,12 +5,17 @@ Complete reference for the Sunnsteel Backend API endpoints, authentication, and 
 ## 📋 Documentation Index
 
 ### **Core API Reference**
-- **[Authentication](AUTHENTICATION.md)** ✅ - Auth endpoints and flows
 - **[Users](USERS.md)** ✅ - User management endpoints
 - **[Exercises](EXERCISES.md)** - Exercise catalog endpoints
 - **[Routines](ROUTINES.md)** - Routine management endpoints
 - **[Workouts](WORKOUTS.md)** - Workout session endpoints
 - **[Training Max](TRAINING_MAX.md)** - TM adjustment endpoints
+
+### **Authentication**
+See **[Authentication Documentation](../authentication/)** for complete authentication guide:
+- [Supabase Auth Implementation](../authentication/SUPABASE_AUTH.md)
+- [Quick Reference](../authentication/QUICK_REFERENCE.md)
+- [Migration Guide](../authentication/MIGRATION_GUIDE.md)
 
 ### **API Guides**
 - **[Quick Reference](QUICK_REFERENCE.md)** - Common endpoints cheat sheet
@@ -33,15 +38,15 @@ Production: https://api.sunnsteel.com/api
 
 ## 🔐 Authentication
 
-All API endpoints require authentication via:
-- **Supabase JWT** (recommended)
-- **Legacy JWT** (deprecated)
+All API endpoints require authentication via Supabase JWT Bearer tokens:
 
 ```bash
 # Example authenticated request
-curl -H "Authorization: Bearer <token>" \
+curl -H "Authorization: Bearer <supabase_token>" \
      https://api.sunnsteel.com/api/users/profile
 ```
+
+For complete authentication documentation, see [Authentication Guide](../authentication/SUPABASE_AUTH.md).
 
 ## 📊 Response Format
 
@@ -58,7 +63,7 @@ All API responses follow a consistent format:
 ## 🔗 Quick Links
 
 - **[Getting Started](../getting-started/README.md)** - Setup and first API call
-- **[Authentication Flow](../architecture/AUTHENTICATION_FLOW.md)** - Auth architecture
+- **[Authentication](../authentication/SUPABASE_AUTH.md)** - Supabase auth architecture
 - **[Postman Collection](POSTMAN_COLLECTION.md)** - Import ready-to-use requests
 
 ---

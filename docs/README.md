@@ -27,9 +27,15 @@ This directory contains comprehensive documentation for the Sunnsteel Backend AP
 |----------|---------|--------|
 | [architecture/README.md](./architecture/README.md) | System architecture overview | ✅ Complete |
 | [architecture/DATABASE_SCHEMA.md](./architecture/DATABASE_SCHEMA.md) | Complete ERD, table definitions, relationships | 📋 Planned |
-| [architecture/AUTHENTICATION.md](./architecture/AUTHENTICATION.md) | Authentication flows and security implementation | 📋 Planned |
-| [architecture/CACHING.md](./architecture/CACHING.md) | Caching architecture and Redis integration | 📋 Planned |
 | [architecture/SECURITY.md](./architecture/SECURITY.md) | Security architecture and threat model | 📋 Planned |
+
+## 🔐 Authentication & Authorization
+
+| Document | Purpose | Status |
+|----------|---------|--------|
+| [authentication/SUPABASE_AUTH.md](./authentication/SUPABASE_AUTH.md) | Supabase authentication implementation and usage | ✅ Complete |
+| [authentication/MIGRATION_GUIDE.md](./authentication/MIGRATION_GUIDE.md) | Migration from legacy Passport.js to Supabase | ✅ Complete |
+| [architecture/CACHING.md](./architecture/CACHING.md) | Caching architecture and Redis integration | 📋 Planned |
 
 ## 📡 API Documentation
 
@@ -114,7 +120,7 @@ This directory contains comprehensive documentation for the Sunnsteel Backend AP
 
 ## 📊 Implementation Status
 
-**Current Progress**: 5 of 53 planned documents complete (9.4%)
+**Current Progress**: 7 of 53 planned documents complete (13.2%)
 
 ### Status Legend
 - ✅ **Complete**: Documentation is finished and up-to-date
@@ -133,6 +139,16 @@ This directory contains comprehensive documentation for the Sunnsteel Backend AP
 
 This documentation is actively maintained and updated. For the latest implementation timeline and priorities, see [IMPLEMENTATION_TIMELINE.md](./IMPLEMENTATION_TIMELINE.md).
 
-**Last Updated**: January 2025  
-**Next Review**: February 2025  
+**Last Updated**: October 2, 2025  
+**Next Review**: November 2025  
 **Documentation Owner**: Backend Development Team
+
+---
+
+## 🎉 Recent Updates
+
+**October 2, 2025 - Auth System Cleanup Complete**
+- ✅ Migrated from Passport.js to Supabase authentication
+- ✅ Deprecated legacy auth endpoints
+- ✅ Created comprehensive authentication documentation
+- 📚 See: [AUTH_CLEANUP_COMPLETE.md](../AUTH_CLEANUP_COMPLETE.md) for executive summary

@@ -11,6 +11,14 @@ import { UserIdentification } from './types/user-identification.type';
 import { OAuth2Client } from 'google-auth-library';
 import * as crypto from 'crypto';
 
+/**
+ * @deprecated This service is deprecated in favor of SupabaseService.
+ * 
+ * Legacy authentication methods using bcrypt passwords and custom JWT tokens
+ * have been replaced with Supabase authentication.
+ * 
+ * Use `SupabaseService` for all authentication needs.
+ */
 @Injectable()
 export class AuthService {
   constructor(
@@ -20,7 +28,11 @@ export class AuthService {
 
   private googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
-  async register(registerDto: RegisterDto) {
+	/**
+	 * @deprecated Use Supabase client-side signup instead.
+	 * This method creates users with bcrypt passwords which is no longer used.
+	 */
+	async register(registerDto: RegisterDto) {
     const { email, password, name } = registerDto;
 
     const existingUser = await this.usersService.findByEmail(email);
@@ -47,7 +59,11 @@ export class AuthService {
     };
   }
 
-  async validateUser(
+	/**
+	 * @deprecated Use Supabase authentication instead.
+	 * This method validates bcrypt passwords which is no longer used.
+	 */
+	async validateUser(
     email: string,
     password: string,
   ): Promise<UserIdentification | null> {
@@ -68,7 +84,11 @@ export class AuthService {
     };
   }
 
-  async login(user: UserIdentification) {
+	/**
+	 * @deprecated Use Supabase authentication instead.
+	 * This method generates custom JWT tokens which is no longer used.
+	 */
+	async login(user: UserIdentification) {
     const tokens = await this.tokenService.generateTokens(user.id, user.email);
 
     return {
@@ -81,10 +101,11 @@ export class AuthService {
     };
   }
 
-  /**
-   * Google Sign-In via ID token verification
-   */
-  async loginWithGoogle(idToken: string) {
+	/**
+	 * @deprecated Use Supabase OAuth providers instead.
+	 * Google Sign-In via ID token verification (legacy)
+	 */
+	async loginWithGoogle(idToken: string) {
     if (!idToken) {
       throw new UnauthorizedException('Missing Google ID token');
     }
@@ -126,7 +147,11 @@ export class AuthService {
     };
   }
 
-  async logout(refreshToken: string, accessToken: string) {
+	/**
+	 * @deprecated Use Supabase signOut instead.
+	 * This method revokes custom JWT tokens which is no longer used.
+	 */
+	async logout(refreshToken: string, accessToken: string) {
     // Revoke refresh token
     await this.tokenService.revokeRefreshToken(refreshToken);
 
@@ -134,7 +159,11 @@ export class AuthService {
     await this.tokenService.blacklistAccessToken(accessToken);
   }
 
-  async refreshTokens(refreshToken: string) {
+	/**
+	 * @deprecated Use Supabase session refresh instead.
+	 * This method refreshes custom JWT tokens which is no longer used.
+	 */
+	async refreshTokens(refreshToken: string) {
     try {
       const payload = await this.tokenService.verifyRefreshToken(refreshToken);
       const user = await this.usersService.findByEmail(payload.email);

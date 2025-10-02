@@ -12,7 +12,6 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { JwtAuthGuard } from '../auth/guards/passport-jwt.guard';
 import { SupabaseJwtGuard } from '../auth/guards/supabase-jwt.guard';
 import { WorkoutsService } from './workouts.service';
 import { UseInterceptors } from '@nestjs/common';
