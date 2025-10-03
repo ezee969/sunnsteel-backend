@@ -217,6 +217,12 @@ app.enableCors({
 })
 ```
 
+## 🔑 Token Acquisition (Manual Testing)
+
+- Use `npm run token:supabase` to fetch and inject a Supabase JWT into `test/api-manual-tests.http`.
+- Ensure `.env` defines: `SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `TEST_USER_EMAIL`, `TEST_USER_PASSWORD`.
+- Details and troubleshooting: `docs/reference/ENVIRONMENT_VARIABLES.md`.
+
 ## 📚 Full Documentation
 
 - **Implementation Guide:** `docs/authentication/SUPABASE_AUTH.md`

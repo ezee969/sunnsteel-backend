@@ -70,6 +70,19 @@ npm run lint
 npm run format
 ```
 
+## 🧪 Manual API Testing
+
+- Manual test file: `test/api-manual-tests.http`
+- Fetch Supabase token helper: `npm run token:supabase` (runs `scripts/get-supabase-token.ps1`)
+- Required env vars: `SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `TEST_USER_EMAIL`, `TEST_USER_PASSWORD`
+- Steps:
+  1. Configure env in `.env`.
+  2. Run `npm run token:supabase` to inject token into the manual test file.
+  3. In your HTTP client, execute “Step 1: Verify Token” to set `@supabaseToken`.
+  4. Call protected endpoints using `Authorization: Bearer {{supabaseToken}}`.
+
+- Details: See `docs/reference/ENVIRONMENT_VARIABLES.md` and `docs/authentication/SUPABASE_AUTH.md`.
+
 ## 📊 Development Metrics
 
 - **Test Coverage**: >90% target

@@ -1,4 +1,4 @@
-### 
+﻿### 
 ### Sunsteel API Manual Testing
 ### Use VS Code REST Client extension (free) or copy these into Thunder Client individual requests
 ###
@@ -8,7 +8,10 @@
 @password = SecurePassword123!
 
 # Supply a valid Supabase JWT (from frontend login) for manual testing
-@supabaseToken = YOUR_SUPABASE_JWT_HERE
+@supabaseToken = eyJhbGciOiJIUzI1NiIsImtpZCI6ImF2ZkhJQzdTaU9BN1RDcUYiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2R2cW9yc2dyb2xreXZscWN1anh0LnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiJlZDM3YzZhNC0zNzYxLTQ2M2EtYjE2Ny0wMWJhN2IxZjI2Y2MiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzU5NTEyMTYzLCJpYXQiOjE3NTk1MDg1NjMsImVtYWlsIjoiZXplLm9saXZlcm85NkBvdXRsb29rLmNvbSIsInBob25lIjoiIiwiYXBwX21ldGFkYXRhIjp7InByb3ZpZGVyIjoiZW1haWwiLCJwcm92aWRlcnMiOlsiZW1haWwiXX0sInVzZXJfbWV0YWRhdGEiOnsiZW1haWwiOiJlemUub2xpdmVybzk2QG91dGxvb2suY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsIm5hbWUiOiJUZXN0IFVzZXIiLCJwaG9uZV92ZXJpZmllZCI6ZmFsc2UsInN1YiI6ImVkMzdjNmE0LTM3NjEtNDYzYS1iMTY3LTAxYmE3YjFmMjZjYyJ9LCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImFhbCI6ImFhbDEiLCJhbXIiOlt7Im1ldGhvZCI6InBhc3N3b3JkIiwidGltZXN0YW1wIjoxNzU5NTA4NTYzfV0sInNlc3Npb25faWQiOiJkOGJmZmZlOS02YTA2LTRhODYtYTMyYS05ZGE0OTI3ZmUyZDkiLCJpc19hbm9ueW1vdXMiOmZhbHNlfQ.vuKwujyhySKo6CVhnhgmQDWQ03fP8suPiPle6X3oAds
+
+# Optional helper: set a valid Exercise ID after listing exercises
+@exerciseId = 86dedb40-0f3e-4be7-985b-0bc21e846e11
 
 ### STEP 1: Verify Supabase Token
 # @name verify-supabase
@@ -22,6 +25,15 @@ Content-Type: application/json
 # Note:
 # - Replace {{supabaseToken}} with a real Supabase JWT (Bearer token).
 # - Subsequent requests use Authorization: Bearer {{supabaseToken}}.
+
+###
+### STEP 1A: List Exercises (Get a valid exerciseId)
+# Requires a valid Supabase token from Step 1
+GET {{baseUrl}}/exercises
+Authorization: Bearer {{supabaseToken}}
+
+# After running this, copy any returned `id` value
+# and set it in the variable above: `@exerciseId = <id>`
 
 ###
 ### STEP 2: Create Routine (Simple)
@@ -39,7 +51,7 @@ Authorization: Bearer {{supabaseToken}}
       "dayOfWeek": 1,
       "exercises": [
         {
-          "exerciseId": "USE_AN_EXERCISE_ID_FROM_YOUR_DB",
+          "exerciseId": "{{exerciseId}}",
           "restSeconds": 120,
           "progressionScheme": "NONE",
           "sets": [
@@ -62,52 +74,7 @@ POST {{baseUrl}}/routines
 Content-Type: application/json
 Authorization: Bearer {{supabaseToken}}
 
-{
-  "name": "Complex Test Routine",
-  "description": "Testing PROGRAMMED_RTF and DYNAMIC_DOUBLE_PROGRESSION",
-  "isPeriodized": false,
-  "programStartDate": "2025-10-06",
-  "programTimezone": "America/Cordoba",
-  "programWithDeloads": true,
-  "days": [
-    {
-      "dayOfWeek": 1,
-      "exercises": [
-        {
-          "exerciseId": "EXERCISE_ID_1",
-          "restSeconds": 180,
-          "progressionScheme": "PROGRAMMED_RTF",
-          "minWeightIncrement": 2.5,
-          "programTMKg": 100,
-          "programRoundingKg": 2.5,
-          "programStyle": "STANDARD",
-          "sets": [
-            {
-              "setNumber": 1,
-              "repType": "RANGE",
-              "minReps": 8,
-              "maxReps": 10
-            }
-          ]
-        },
-        {
-          "exerciseId": "EXERCISE_ID_2",
-          "restSeconds": 120,
-          "progressionScheme": "DYNAMIC_DOUBLE_PROGRESSION",
-          "minWeightIncrement": 2.5,
-          "sets": [
-            {
-              "setNumber": 1,
-              "repType": "FIXED",
-              "reps": 10,
-              "weight": 50
-            }
-          ]
-        }
-      ]
-    }
-  ]
-}
+
 
 ###
 ### STEP 4: Get All Routines
@@ -121,7 +88,7 @@ Authorization: Bearer {{supabaseToken}}
 
 ###
 ### STEP 6: Delete Routine (replace with actual ID)
-DELETE {{baseUrl}}/routines/ROUTINE_ID_HERE
+DELETE {{baseUrl}}/routines/2a8d37bd-5cc3-43d2-b121-d87f1084033f
 Authorization: Bearer {{supabaseToken}}
 
 ###
@@ -145,3 +112,4 @@ GET {{baseUrl}}/auth/supabase/health
 
 ### HELPER: Logout (clears session cookie)
 POST {{baseUrl}}/auth/supabase/logout
+
