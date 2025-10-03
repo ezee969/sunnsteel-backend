@@ -3,30 +3,32 @@
 ### Use VS Code REST Client extension (free) or copy these into Thunder Client individual requests
 ###
 
-@baseUrl = http://localhost:3000/api
+@baseUrl = http://localhost:4000/api
 @email = test-user@example.com
 @password = SecurePassword123!
 
-### STEP 1: Register User
-# @name register
-POST {{baseUrl}}/auth/register
+# Supply a valid Supabase JWT (from frontend login) for manual testing
+@supabaseToken = YOUR_SUPABASE_JWT_HERE
+
+### STEP 1: Verify Supabase Token
+# @name verify-supabase
+POST {{baseUrl}}/auth/supabase/verify
 Content-Type: application/json
 
 {
-  "email": "{{email}}",
-  "password": "{{password}}",
-  "name": "Test User"
+  "token": "{{supabaseToken}}"
 }
 
-### Extract token from response (REST Client only - for Thunder Client, copy manually)
-@accessToken = {{register.response.body.accessToken}}
+# Note:
+# - Replace {{supabaseToken}} with a real Supabase JWT (Bearer token).
+# - Subsequent requests use Authorization: Bearer {{supabaseToken}}.
 
 ###
 ### STEP 2: Create Routine (Simple)
 # Use the token from Step 1
 POST {{baseUrl}}/routines
 Content-Type: application/json
-Authorization: Bearer {{accessToken}}
+Authorization: Bearer {{supabaseToken}}
 
 {
   "name": "Manual Test Routine",
@@ -58,7 +60,7 @@ Authorization: Bearer {{accessToken}}
 ### STEP 3: Create Complex Routine (PROGRAMMED_RTF + DDP)
 POST {{baseUrl}}/routines
 Content-Type: application/json
-Authorization: Bearer {{accessToken}}
+Authorization: Bearer {{supabaseToken}}
 
 {
   "name": "Complex Test Routine",
@@ -110,35 +112,36 @@ Authorization: Bearer {{accessToken}}
 ###
 ### STEP 4: Get All Routines
 GET {{baseUrl}}/routines
-Authorization: Bearer {{accessToken}}
+Authorization: Bearer {{supabaseToken}}
 
 ###
 ### STEP 5: Get Specific Routine (replace with actual ID)
 GET {{baseUrl}}/routines/ROUTINE_ID_HERE
-Authorization: Bearer {{accessToken}}
+Authorization: Bearer {{supabaseToken}}
 
 ###
 ### STEP 6: Delete Routine (replace with actual ID)
 DELETE {{baseUrl}}/routines/ROUTINE_ID_HERE
-Authorization: Bearer {{accessToken}}
+Authorization: Bearer {{supabaseToken}}
 
 ###
 ### HELPER: Get Exercises (to find exercise IDs)
 GET {{baseUrl}}/exercises
-Authorization: Bearer {{accessToken}}
+Authorization: Bearer {{supabaseToken}}
 
 ###
 ### HELPER: Get Exercises by Muscle Group
 GET {{baseUrl}}/exercises?primaryMuscles=PECTORAL
-Authorization: Bearer {{accessToken}}
+Authorization: Bearer {{supabaseToken}}
 
 ###
-### HELPER: Login (if you already have a user)
-# @name login
-POST {{baseUrl}}/auth/login
-Content-Type: application/json
+### HELPER: Profile (requires Supabase Bearer token)
+# @name profile
+GET {{baseUrl}}/auth/supabase/profile
+Authorization: Bearer {{supabaseToken}}
 
-{
-  "email": "{{email}}",
-  "password": "{{password}}"
-}
+### HELPER: Health
+GET {{baseUrl}}/auth/supabase/health
+
+### HELPER: Logout (clears session cookie)
+POST {{baseUrl}}/auth/supabase/logout
