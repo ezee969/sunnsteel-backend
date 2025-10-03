@@ -1,154 +1,80 @@
-# Sunnsteel Backend - Documentation Index
+# Sunnsteel Backend — Optimized Documentation Index
 
-This directory contains comprehensive documentation for the Sunnsteel Backend API. The documentation is organized into logical sections to support different user needs and workflows.
+A comprehensive, hierarchical index of all backend documentation. Each entry includes type, purpose, and last update for quick navigation and governance.
 
-## 📋 Documentation Plan & Guidelines
+## Overview & Governance
+- `./CONTENT_OUTLINES.md` — Type: Plan — Purpose: Detailed content outlines across sections — Last Updated: 2025-10-02
+- `./STYLE_GUIDELINES.md` — Type: Style Guide — Purpose: Writing, structure, formatting, and templates — Last Updated: 2025-10-02
 
-| Document | Purpose |
-|----------|---------|
-| [DOCUMENTATION_PLAN.md](./DOCUMENTATION_PLAN.md) | Master documentation strategy and structure |
-| [CONTENT_OUTLINES.md](./CONTENT_OUTLINES.md) | Detailed content specifications for each section |
-| [IMPLEMENTATION_TIMELINE.md](./IMPLEMENTATION_TIMELINE.md) | 10-week implementation schedule with priorities |
-| [STYLE_GUIDELINES.md](./STYLE_GUIDELINES.md) | Style standards and templates for consistent documentation |
+## Getting Started
+| Resource | Path | Type | Purpose | Last Updated |
+|----------|------|------|---------|--------------|
+| Onboarding Guide | `./getting-started/README.md` | Guide | New developer overview and flow | 2025-09-27 |
+| Installation | `./getting-started/INSTALLATION.md` | Guide | Prereqs, environment, DB init | 2025-09-27 |
+| Quick Start | `./getting-started/QUICK_START.md` | Guide | 5-minute setup and first API calls | 2025-09-27 |
 
-## 🚀 Getting Started
+## Architecture
+| Resource | Path | Type | Purpose | Last Updated |
+|----------|------|------|---------|--------------|
+| Architecture Overview | `./architecture/README.md` | Overview | System design and patterns | 2025-10-02 |
 
-| Document | Purpose | Status |
-|----------|---------|--------|
-| [getting-started/README.md](./getting-started/README.md) | New developer onboarding guide | ✅ Complete |
-| [getting-started/INSTALLATION.md](./getting-started/INSTALLATION.md) | Prerequisites, environment setup, database initialization | ✅ Complete |
-| [getting-started/QUICK_START.md](./getting-started/QUICK_START.md) | 5-minute setup guide and first API calls | ✅ Complete |
-| [getting-started/DEVELOPMENT.md](./getting-started/DEVELOPMENT.md) | Development environment and workflow setup | 📋 Planned |
-| [getting-started/TROUBLESHOOTING.md](./getting-started/TROUBLESHOOTING.md) | Common setup issues and solutions | 📋 Planned |
+## Authentication
+| Resource | Path | Type | Purpose | Last Updated |
+|----------|------|------|---------|--------------|
+| Quick Reference | `./authentication/QUICK_REFERENCE.md` | Reference | Supabase/JWT key flows and tips | 2025-10-02 |
+| Supabase Auth | `./authentication/SUPABASE_AUTH.md` | Guide | Supabase integration, flows, and migration | 2025-10-02 |
 
-## 🏗️ Architecture
+## API
+| Resource | Path | Type | Purpose | Last Updated |
+|----------|------|------|---------|--------------|
+| API Overview | `./api/README.md` | Overview | Conventions, standards, getting started | 2025-10-02 |
+| Users API | `./api/USERS.md` | Reference | User management endpoints | 2025-09-27 |
 
-| Document | Purpose | Status |
-|----------|---------|--------|
-| [architecture/README.md](./architecture/README.md) | System architecture overview | ✅ Complete |
-| [architecture/DATABASE_SCHEMA.md](./architecture/DATABASE_SCHEMA.md) | Complete ERD, table definitions, relationships | 📋 Planned |
-| [architecture/SECURITY.md](./architecture/SECURITY.md) | Security architecture and threat model | 📋 Planned |
+## Modules
+| Resource | Path | Type | Purpose | Last Updated |
+|----------|------|------|---------|--------------|
+| Module Overview | `./modules/README.md` | Overview | Module architecture and scope | 2025-09-27 |
 
-## 🔐 Authentication & Authorization
+## Features
+| Resource | Path | Type | Purpose | Last Updated |
+|----------|------|------|---------|--------------|
+| Features Overview | `./features/README.md` | Overview | Advanced features summary | 2025-09-27 |
+| Progression Schemes | `./features/PROGRESSION_SCHEMES.md` | Reference | RtF progression scheme catalog | 2025-10-02 |
 
-| Document | Purpose | Status |
-|----------|---------|--------|
-| [authentication/SUPABASE_AUTH.md](./authentication/SUPABASE_AUTH.md) | Supabase authentication implementation and usage | ✅ Complete |
-| [authentication/MIGRATION_GUIDE.md](./authentication/MIGRATION_GUIDE.md) | Migration from legacy Passport.js to Supabase | ✅ Complete |
-| [architecture/CACHING.md](./architecture/CACHING.md) | Caching architecture and Redis integration | 📋 Planned |
+## Development
+| Resource | Path | Type | Purpose | Last Updated |
+|----------|------|------|---------|--------------|
+| Development Overview | `./development/README.md` | Overview | Processes, workflows, and tooling | 2025-09-27 |
 
-## 📡 API Documentation
+## Deployment
+| Resource | Path | Type | Purpose | Last Updated |
+|----------|------|------|---------|--------------|
+| Deployment Overview | `./deployment/README.md` | Overview | Deployment processes and environments | 2025-09-27 |
 
-| Document | Purpose | Status |
-|----------|---------|--------|
-| [api/README.md](./api/README.md) | API overview, conventions, and standards | ✅ Complete |
-| [api/AUTHENTICATION.md](./api/AUTHENTICATION.md) | Authentication endpoints and flows | ✅ Complete |
-| [api/USERS.md](./api/USERS.md) | User management endpoints | ✅ Complete |
-| [api/EXERCISES.md](./api/EXERCISES.md) | Exercise catalog endpoints | 📋 Planned |
-| [api/ROUTINES.md](./api/ROUTINES.md) | Routine management and RtF endpoints | 📋 Planned |
-| [api/WORKOUTS.md](./api/WORKOUTS.md) | Workout session and tracking endpoints | 📋 Planned |
-| [api/METRICS.md](./api/METRICS.md) | Metrics and monitoring endpoints | 📋 Planned |
-| [api/SCHEMAS.md](./api/SCHEMAS.md) | Request/response schemas and validation | 📋 Planned |
-| [api/ERROR_CODES.md](./api/ERROR_CODES.md) | Complete error code reference | 📋 Planned |
+## Reference
+| Resource | Path | Type | Purpose | Last Updated |
+|----------|------|------|---------|--------------|
+| Environment Variables | `./reference/ENVIRONMENT_VARIABLES.md` | Reference | Complete environment setup guide | 2025-09-25 |
+| Workout Sessions | `./reference/WORKOUT_SESSIONS.md` | Reference | Session lifecycle and invariants | 2025-09-25 |
 
-## 🧩 Module Documentation
+## Navigation Aids
+- Consistent relative links from `./docs/README.md`.
+- Category grouping mirrors repository directories for discoverability.
+- Use the Style Guide to standardize new docs; outline new content via CONTENT_OUTLINES.
 
-| Document | Purpose | Status |
-|----------|---------|--------|
-| [modules/README.md](./modules/README.md) | Module architecture overview | ✅ Complete |
+## Maintenance & Updates
+- Weekly link check and quarterly structure review.
+- Update “Last Updated” based on file modification timestamps.
+- Add new docs under the closest category and append entries here.
 
-| Module | Purpose | Status |
-|--------|---------|--------|
-| [modules/auth/](./modules/auth/) | Authentication module (JWT + Supabase) | 📋 Planned |
-| [modules/users/](./modules/users/) | User management and profiles | 📋 Planned |
-| [modules/exercises/](./modules/exercises/) | Exercise catalog management | 📋 Planned |
-| [modules/routines/](./modules/routines/) | Routine management and RtF programs | 📋 Planned |
-| [modules/workouts/](./modules/workouts/) | Workout sessions and tracking | 📋 Planned |
-| [modules/cache/](./modules/cache/) | Caching system and Redis integration | 📋 Planned |
-| [modules/metrics/](./modules/metrics/) | Prometheus metrics and monitoring | 📋 Planned |
+## Consolidation Assessment
+- Content overlap: Minimal. CONTENT_OUTLINES (planning) and STYLE_GUIDELINES (standards) serve distinct roles not covered by a single index.
+- Maintenance overhead: Low. Keeping plan and style separated prevents README bloat and reduces churn when guidelines evolve.
+- User navigation: Better with a central index plus specialized documents. The index remains concise; deep guidance lives where appropriate.
+- Discoverability: Improved. A single index points to all resources; dedicated planning/style docs are easier to locate and maintain.
 
-## ⚡ Advanced Features
+Recommendation: Do not consolidate into a single README. Retain `CONTENT_OUTLINES.md` and `STYLE_GUIDELINES.md` as separate governance documents, with this optimized README acting as the unified entry point and map.
 
-| Document | Purpose | Status |
-|----------|---------|--------|
-| [features/README.md](./features/README.md) | Advanced features overview | ✅ Complete |
-| [features/RTF_SYSTEM.md](./features/RTF_SYSTEM.md) | Reps-to-Failure system implementation | 📋 Planned |
-| [features/TRAINING_MAX.md](./features/TRAINING_MAX.md) | Training Max calculations and adjustments | 📋 Planned |
-| [features/SESSION_MANAGEMENT.md](./features/SESSION_MANAGEMENT.md) | Workout session lifecycle and management | 📋 Planned |
-| [features/BACKGROUND_SERVICES.md](./features/BACKGROUND_SERVICES.md) | Background maintenance and scheduled tasks | 📋 Planned |
-
-## 🛠️ Development & Operations
-
-| Document | Purpose | Status |
-|----------|---------|--------|
-| [development/README.md](./development/README.md) | Development processes overview | ✅ Complete |
-| [development/TESTING.md](./development/TESTING.md) | Testing strategy and procedures | 📋 Planned |
-| [development/CODE_STYLE.md](./development/CODE_STYLE.md) | Coding standards and best practices | 📋 Planned |
-| [development/CONTRIBUTING.md](./development/CONTRIBUTING.md) | Contribution guidelines and workflow | 📋 Planned |
-
-## 🚀 Deployment & Operations
-
-| Document | Purpose | Status |
-|----------|---------|--------|
-| [deployment/README.md](./deployment/README.md) | Deployment processes overview | ✅ Complete |
-| [deployment/PRODUCTION.md](./deployment/PRODUCTION.md) | Production deployment procedures | 📋 Planned |
-| [deployment/MONITORING.md](./deployment/MONITORING.md) | Observability and alerting setup | 📋 Planned |
-| [deployment/SCALING.md](./deployment/SCALING.md) | Scaling strategies and performance | 📋 Planned |
-
-## 📚 Reference Documentation
-
-| Document | Purpose | Status |
-|----------|---------|--------|
-| [reference/ENVIRONMENT_VARIABLES.md](./reference/ENVIRONMENT_VARIABLES.md) | Complete environment setup guide | ✅ Complete |
-| [reference/WORKOUT_SESSIONS.md](./reference/WORKOUT_SESSIONS.md) | Session lifecycle and invariants | ✅ Complete |
-| [reference/CONFIGURATION.md](./reference/CONFIGURATION.md) | Configuration options and feature flags | 📋 Planned |
-| [reference/GLOSSARY.md](./reference/GLOSSARY.md) | Technical terminology and definitions | 📋 Planned |
-
-## 🗺️ Roadmaps & Planning
-
-| Document | Purpose | Status |
-|----------|---------|--------|
-| [roadmaps/RTF_ENHANCEMENTS.md](./roadmaps/RTF_ENHANCEMENTS.md) | Active RtF backend tasks and status | ✅ Complete |
-| [roadmaps/PERFORMANCE_IMPROVEMENTS.md](./roadmaps/PERFORMANCE_IMPROVEMENTS.md) | Performance optimization roadmap | 📋 Planned |
-
-## 📖 Historical Records
-
-| Document | Purpose | Status |
-|----------|---------|--------|
-| [history/TM_ADJUSTMENTS_COMPLETION.md](./history/TM_ADJUSTMENTS_COMPLETION.md) | TM feature implementation narrative | ✅ Complete |
-| [history/ARCHITECTURE_DECISIONS.md](./history/ARCHITECTURE_DECISIONS.md) | Architecture Decision Records (ADRs) | 📋 Planned |
-
-## 📊 Implementation Status
-
-**Current Progress**: 7 of 53 planned documents complete (13.2%)
-
-### Status Legend
-- ✅ **Complete**: Documentation is finished and up-to-date
-- 🚧 **In Progress**: Currently being written or updated
-- 📋 **Planned**: Scheduled for implementation per timeline
-- ⏸️ **Deferred**: Lower priority, scheduled for later phases
-
-### Quick Links
-- **New Developers**: Start with [Getting Started](#-getting-started) section
-- **API Integration**: See [API Documentation](#-api-documentation)
-- **System Understanding**: Review [Architecture](#️-architecture) docs
-- **Feature Implementation**: Check [Module Documentation](#-module-documentation)
-- **Advanced Features**: Explore [Advanced Features](#-advanced-features)
-
-## 🔄 Maintenance
-
-This documentation is actively maintained and updated. For the latest implementation timeline and priorities, see [IMPLEMENTATION_TIMELINE.md](./IMPLEMENTATION_TIMELINE.md).
-
-**Last Updated**: October 2, 2025  
-**Next Review**: November 2025  
-**Documentation Owner**: Backend Development Team
-
----
-
-## 🎉 Recent Updates
-
-**October 2, 2025 - Auth System Cleanup Complete**
-- ✅ Migrated from Passport.js to Supabase authentication
-- ✅ Deprecated legacy auth endpoints
-- ✅ Created comprehensive authentication documentation
-- 📚 See: [AUTH_CLEANUP_COMPLETE.md](../AUTH_CLEANUP_COMPLETE.md) for executive summary
+—
+Last Updated: 2025-10-02
+Documentation Owner: Backend Development Team
