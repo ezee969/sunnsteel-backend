@@ -40,8 +40,20 @@ export class SupabaseAuthController {
     @Body() { token }: SupabaseTokenDto,
     @Response({ passthrough: true }) res: ExpressResponse,
   ) {
+    const startTime = Date.now();
+    let isNewUser = false;
+
     try {
+      console.log('[Signup Analytics] Token verification started');
+      
       const supabaseUser = await this.supabaseService.verifyToken(token);
+      
+      // Check if user exists before getOrCreate to track new signups
+      const existingUser = await this.supabaseService.getUserBySupabaseId(
+        supabaseUser.id,
+      );
+      isNewUser = !existingUser;
+
       const user = await this.supabaseService.getOrCreateUser(supabaseUser);
 
       // Set HttpOnly session cookie for middleware detection
@@ -52,6 +64,26 @@ export class SupabaseAuthController {
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
         path: '/',
       });
+
+      const duration = Date.now() - startTime;
+
+      // Log signup analytics
+      if (isNewUser) {
+        console.log('[Signup Analytics] New user created', {
+          userId: user.id,
+          email: user.email,
+          supabaseUserId: user.supabaseUserId,
+          duration: `${duration}ms`,
+          timestamp: new Date().toISOString(),
+        });
+      } else {
+        console.log('[Signup Analytics] Existing user verified', {
+          userId: user.id,
+          email: user.email,
+          duration: `${duration}ms`,
+          timestamp: new Date().toISOString(),
+        });
+      }
 
       return {
         user: {
@@ -64,8 +96,26 @@ export class SupabaseAuthController {
         message: 'Token verified successfully',
       };
     } catch (error) {
+      const duration = Date.now() - startTime;
+
+      // Log verification failure with full details
+      console.error('[Signup Analytics] Token verification failed', {
+        error: error.message,
+        stack: error.stack,
+        name: error.name,
+        code: error.code,
+        meta: error.meta,
+        duration: `${duration}ms`,
+        timestamp: new Date().toISOString(),
+        isNewUser,
+      });
+
       // Clear session cookie on verification failure
       res.clearCookie('ss_session', { path: '/' });
+      
+      // Log the full error for debugging
+      console.error('[Signup Analytics] Full error object:', error);
+      
       throw error;
     }
   }

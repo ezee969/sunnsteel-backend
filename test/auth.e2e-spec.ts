@@ -4,7 +4,16 @@ import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { DatabaseService } from '../src/database/database.service';
 
-describe('Auth (e2e)', () => {
+/**
+ * @deprecated These tests are for the legacy Passport.js authentication system.
+ * 
+ * The application has migrated to Supabase authentication.
+ * See `supabase-auth.e2e-spec.ts` for current authentication tests.
+ * 
+ * These tests are kept for reference but are skipped by default.
+ * They test the deprecated `/auth/register` and `/auth/login` endpoints.
+ */
+describe.skip('Auth (e2e) - DEPRECATED', () => {
   let app: INestApplication;
   let databaseService: DatabaseService;
 
