@@ -4,12 +4,14 @@ import * as request from 'supertest';
 import { AppModule } from '../../src/app.module';
 import { DatabaseService } from '../../src/database/database.service';
 import { SupabaseJwtGuard } from '../../src/auth/guards/supabase-jwt.guard';
-import { JwtAuthGuard } from '../../src/auth/guards/passport-jwt.guard';
 
 describe('Unified PROGRAMMED_RTF Implementation (e2e)', () => {
   let app: INestApplication;
   let prisma: DatabaseService;
   let userId: string;
+  let benchId: string;
+  let lateralId: string;
+  let squatId: string;
 
   const mockUser = {
     id: 'unified-rtf-test-user',
@@ -28,8 +30,6 @@ describe('Unified PROGRAMMED_RTF Implementation (e2e)', () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     })
-      .overrideGuard(JwtAuthGuard as any)
-      .useValue(allowSupabaseGuard)
       .overrideGuard(SupabaseJwtGuard as any)
       .useValue(allowSupabaseGuard)
       .compile();
@@ -49,6 +49,41 @@ describe('Unified PROGRAMMED_RTF Implementation (e2e)', () => {
     });
     userId = testUser.id;
     mockUser.id = userId; // Update mock user with actual ID
+    // Prepare exercises (use existing or create minimal ones)
+    const existing = await prisma.exercise.findMany({ take: 3 });
+    if (existing.length >= 3) {
+      benchId = existing[0].id;
+      lateralId = existing[1].id;
+      squatId = existing[2].id;
+    } else {
+      const ts = Date.now();
+      const bench = await prisma.exercise.create({
+        data: {
+          name: `Bench Unified ${ts}`,
+          primaryMuscles: ['PECTORAL'],
+          secondaryMuscles: ['TRICEPS'],
+          equipment: 'barbell',
+        },
+      });
+      const lateral = await prisma.exercise.create({
+        data: {
+          name: `Lateral Raises Unified ${ts}`,
+          primaryMuscles: ['MEDIAL_DELTOIDS'],
+          equipment: 'dumbbell',
+        },
+      });
+      const squat = await prisma.exercise.create({
+        data: {
+          name: `Squat Unified ${ts}`,
+          primaryMuscles: ['QUADRICEPS'],
+          secondaryMuscles: ['GLUTES'],
+          equipment: 'barbell',
+        },
+      });
+      benchId = bench.id;
+      lateralId = lateral.id;
+      squatId = squat.id;
+    }
   }, 30000);
 
   afterAll(async () => {
@@ -79,7 +114,7 @@ describe('Unified PROGRAMMED_RTF Implementation (e2e)', () => {
             order: 0,
             exercises: [
               {
-                exerciseId: '14001b37-31bc-40db-8396-bdcc603e31b3', // Bench Press
+                exerciseId: benchId,
                 order: 0,
                 restSeconds: 180,
                 progressionScheme: 'PROGRAMMED_RTF',
@@ -96,7 +131,7 @@ describe('Unified PROGRAMMED_RTF Implementation (e2e)', () => {
                 ],
               },
               {
-                exerciseId: 'a1d5a1bb-9625-4a4d-99f0-653cfc432b31', // Lateral Raises
+                exerciseId: lateralId,
                 order: 1,
                 restSeconds: 120,
                 progressionScheme: 'PROGRAMMED_RTF',
@@ -111,7 +146,7 @@ describe('Unified PROGRAMMED_RTF Implementation (e2e)', () => {
                 ],
               },
               {
-                exerciseId: '127b63f4-5f04-4b51-9c4d-5ebae1b28f16', // Squat
+                exerciseId: squatId,
                 order: 2,
                 restSeconds: 180,
                 progressionScheme: 'DYNAMIC_DOUBLE_PROGRESSION',

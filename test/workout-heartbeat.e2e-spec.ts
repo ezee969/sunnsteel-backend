@@ -4,7 +4,6 @@ import * as request from 'supertest';
 import { AppModule } from './../src/app.module';
 import { DatabaseService } from '../src/database/database.service';
 import { WorkoutSessionStatus } from '@prisma/client';
-import { JwtAuthGuard } from '../src/auth/guards/passport-jwt.guard';
 import { SupabaseJwtGuard } from '../src/auth/guards/supabase-jwt.guard';
 
 const mockUser = { id: 'test-user-heartbeat', email: 'heartbeat@test.com' };
@@ -25,8 +24,6 @@ describe('Workout Session Heartbeat (e2e)', () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     })
-      .overrideGuard(JwtAuthGuard as any)
-      .useValue(allowAuthGuards)
       .overrideGuard(SupabaseJwtGuard as any)
       .useValue(allowAuthGuards)
       .compile();

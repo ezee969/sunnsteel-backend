@@ -2,134 +2,12 @@
 trigger: always_on
 ---
 
-# Sunnsteel Backend - Fitness API
+# Sunnsteel Backend - Part 2 - Fitness API
 
-This is the backend project for Sunnsteel, a comprehensive fitness and training API with advanced workout management, progression tracking, and Training Max (TM) adjustments.
-
-## Technology Stack
-
-- **Framework**: NestJS v11.0.1 (Node.js/TypeScript)
-- **Database**: PostgreSQL with Prisma ORM v6.4.0
-- **Authentication**: Dual authentication system:
-  - Supabase Auth integration (primary)
-- **Validation**: class-validator v0.14.1 and class-transformer v0.5.1
-- **Security**: bcrypt v5.1.1, throttling with @nestjs/throttler v6.4.0
-- **Caching**: Redis v4.6.13 with layered cache architecture
-- **Monitoring**: Prometheus metrics with prom-client v15.1.3
-- **Development port**: 4000 (configurable via PORT env var)
-
-## Project Structure
-
-### Core Modules
-
-- **AuthModule**: Dual authentication system (JWT + Supabase)
-- **UsersModule**: User and profile management
-- **TokenModule**: JWT and refresh token services
-- **DatabaseModule**: Prisma configuration and PostgreSQL connection
-- **ExercisesModule**: Exercise catalog with deterministic sorting
-- **RoutinesModule**: Advanced routine management with RtF programs
-- **WorkoutsModule**: Training sessions with progression tracking
-- **CacheModule**: Redis-based caching for RtF week goals
-- **MetricsModule**: Prometheus metrics collection
-
-### Available Endpoints
-
-#### Authentication
-
-- **POST /api/auth/logout**: User logout with token blacklisting
-- **POST /api/auth/refresh**: Token refresh
-- **POST /api/auth/google**: Google Sign-In via ID token
-- **POST /api/auth/supabase/verify**: Supabase token verification (primary)
-
-#### Users
-
-- **GET /api/users/profile**: Get user profile (protected by SupabaseJwtGuard)
-
-#### Exercises
-
-- **GET /api/exercises**: List available exercises (protected by SupabaseJwtGuard)
-  - Returns deterministic, locale-aware sorted exercise catalog
-
-#### Routines
-
-- **GET /api/routines**: List user routines with advanced filtering
-  - Query params: `isFavorite=true|false`, `isCompleted=true|false`
-- **GET /api/routines/favorites**: List favorite routines
-- **GET /api/routines/completed**: List completed routines
-- **GET /api/routines/:id**: Get routine by id with full details
-- **POST /api/routines**: Create routine (supports RtF programs)
-- **PATCH /api/routines/:id**: Update routine (complete replacement)
-- **PATCH /api/routines/:id/favorite**: Toggle favorite status
-- **PATCH /api/routines/:id/completed**: Toggle completion status
-- **DELETE /api/routines/:id**: Delete routine
-
-#### Training Max (TM) Adjustments
-
-- **POST /api/routines/:id/tm-events**: Create TM adjustment event
-- **GET /api/routines/:id/tm-events**: Get TM adjustment history
-  - Query params: `exerciseId?` for filtering
-- **GET /api/routines/:id/tm-events/summary**: Get TM adjustment summary statistics
-
-#### Workout Sessions
-
-- **GET /api/workouts/sessions**: List sessions with advanced filtering
-  - Query params: `status`, `routineId`, `from`, `to`, `q`, `cursor`, `limit`, `sort`
-- **POST /api/workouts/sessions/start**: Start new training session
-- **PATCH /api/workouts/sessions/:id/finish**: Finish session (applies progression)
-- **GET /api/workouts/sessions/active**: Get user's active session
-- **GET /api/workouts/sessions/:id**: Get specific session details
-- **PUT /api/workouts/sessions/:id/set-logs**: Upsert set logs
-- **DELETE /api/workouts/sessions/:id/set-logs/:routineExerciseId/:setNumber**: Delete set log
-
-#### RtF (Reps to Failure) Specialized Endpoints
-
-- **GET /api/routines/:routineId/rtf-timeline**: Get RtF program timeline
-- **GET /api/workouts/routines/:id/rtf-forecast**: Get RtF forecast data
-
-#### System Endpoints
-
-- **GET /api/health**: Health check endpoint
-- **GET /api/metrics**: Prometheus metrics (IP allowlist protected)
-- **GET /api/internal/cache-metrics**: Cache performance metrics
-
-## Advanced Features
-
-### Dual Authentication System
-
-#### Supabase Authentication (Primary)
-- **SupabaseJwtGuard**: Primary authentication guard
-- **SupabaseJwtStrategy**: Token validation strategy
-- **SupabaseService**: Token verification and user management
-- Session cookies: `ss_session` for middleware detection
-- Used by: Users, Routines, Workouts, Exercises modules
-
-### Exercise Progression Systems
-
-#### Progression Schemes
-
-1. **DYNAMIC**: Progression when ALL sets reach rep target
-2. **DYNAMIC_DOUBLE**: Individual progression per set
-3. **PROGRAMMED_RTF**: Advanced calendar-based progression
-   - 5 sets per occurrence (4 fixed + 1 AMRAP)
-   - Weekly intensity as % of Training Max (TM)
-   - Optional deloads (W7/14/21 → 3×5 @ RPE6)
-   - Automatic TM adjustments based on AMRAP performance
-   - Program styles: STANDARD | HYPERTROPHY
-
-#### Training Max (TM) Management
-- **Automatic Adjustments**: Based on AMRAP set performance
-- **Manual Adjustments**: Via TM events API
-- **Guardrails**: 20% max change per adjustment, absolute caps
-- **History Tracking**: Complete audit trail of TM changes
-- **Summary Statistics**: Aggregated TM adjustment analytics
-
-### Caching Architecture
-
-#### RtF Week Goals Cache (RTF-B04/B10)
-- **Layered Cache**: L1 (in-memory) + L2 (Redis)
-- **Cache Invalidation**: Automatic on TM adjustments
-- **ETag Support**: Conditional GET with RTF-B12
-- **Performance Metrics**: Cache hit/miss tracking
+#### Cache Monitoring
+- **CacheMetricsService**: Unified metrics snapshot for active cache drivers
+- **Prometheus Integration**: Real-time cache performance metrics
+- **Multi-Driver Support**: In-memory, Redis, or layered cache configurations
 
 #### Configuration
 ```env
@@ -174,6 +52,7 @@ model Routine {
   programTrainingDaysOfWeek Int[]     @default([])
   programTimezone           String?
   programStyle              ProgramStyle?
+  programRtfSnapshot        Json?
   
   days                      RoutineDay[]
   workoutSessions          WorkoutSession[]
@@ -191,6 +70,12 @@ model TmAdjustment {
   reason     String?
   style      ProgramStyle?
   createdAt  DateTime    @default(now())
+  
+  routine    Routine     @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  exercise   Exercise    @relation(fields: [exerciseId], references: [id])
+  
+  @@index([routineId, exerciseId])
+  @@index([createdAt])
 }
 
 model WorkoutSession {
@@ -201,9 +86,13 @@ model WorkoutSession {
   status        WorkoutSessionStatus @default(IN_PROGRESS)
   startedAt     DateTime            @default(now())
   finishedAt    DateTime?
+  lastActivityAt DateTime           @default(now())
   durationSec   Int?
   notes         String?
   setLogs       SetLog[]
+  
+  @@unique([userId], where: { status: IN_PROGRESS }, name: "single_active_session")
+  @@index([lastActivityAt])
 }
 
 enum WorkoutSessionStatus {
@@ -264,12 +153,15 @@ enum ProgressionScheme {
 
 #### Prometheus Metrics
 - **TM Adjustment Metrics**: Success/failure rates, guardrail violations
-- **Cache Metrics**: Hit/miss ratios, performance stats
-- **Session Metrics**: Active sessions, completion rates
+- **Cache Metrics**: Hit/miss ratios, performance stats, stampede protection
+- **Session Metrics**: Active sessions, completion rates, heartbeat tracking
+- **RtF Metrics**: Week goals cache performance, forecast accuracy
+- **System Metrics**: L1/L2 cache entries, layered cache performance
 
 #### Health Checks
 - **Health Endpoint**: Basic service status
-- **Cache Metrics**: Internal cache performance monitoring
+- **Cache Metrics**: Internal cache performance monitoring via `/api/internal/cache-metrics`
+- **Prometheus Metrics**: System metrics via `/api/metrics` (IP allowlist protected)
 
 ### Environment Configuration
 
@@ -294,13 +186,16 @@ NODE_ENV="development|production"
 RTF_CACHE_DRIVER="memory|redis"
 RTF_REDIS_URL="redis://..."
 RTF_WEEK_GOAL_TTL_SEC=600
-
-# Monitoring
-METRICS_IP_ALLOWLIST="127.0.0.1,::1"
+RTF_CACHE_LAYERED=1
+RTF_WEEK_GOALS_L1_TTL_MS=5000
+RTF_ETAG_ENABLED=1
 
 # Workout Management
 WORKOUT_SESSION_TIMEOUT_HOURS=48
 WORKOUT_SESSION_SWEEP_INTERVAL_MIN=30
+
+# Monitoring
+METRICS_IP_ALLOWLIST="127.0.0.1,::1"
 ```
 
 ## Development Patterns
@@ -345,7 +240,7 @@ WORKOUT_SESSION_SWEEP_INTERVAL_MIN=30
 
 ### Documentation Standards
 - **JSDoc Comments**: Comprehensive code documentation
-- **API Documentation**: OpenAPI/Swagger integration
+- **Markdown Documentation**: Structured documentation in `docs/` hierarchy
 - **README Updates**: Endpoint documentation maintenance
 - **Change Detection**: Automated documentation reminders
 

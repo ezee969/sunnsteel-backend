@@ -107,6 +107,7 @@ describe('RtF Forecast e2e (mocked) (RTF-B06/B09 integration)', () => {
     expect(workoutsServiceMock.getRtFForecast).toHaveBeenCalledWith(
       'user-1',
       'r1',
+      false,
     );
     // Spot check first week structure
     expect(res.body.forecast[0]).toEqual(

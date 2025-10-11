@@ -2,7 +2,7 @@
 
 ## Overview
 
-The SunSteel API uses **Supabase Authentication** for all user authentication and authorization. This replaces the legacy Passport.js-based authentication system.
+The SunSteel API uses **Supabase Authentication** for all user authentication and authorization.
 
 ## Architecture
 
@@ -377,25 +377,6 @@ USING (auth.uid() = user_id);
 - Trust client-side token validation
 - Expose `SUPABASE_SERVICE_ROLE_KEY` to frontend
 - Use custom JWT signing (let Supabase handle it)
-
-## Migration from Legacy Auth
-
-### Deprecated Endpoints
-
-The following legacy endpoints are **deprecated** and should not be used:
-
-- ❌ `POST /api/auth/register` - Use Supabase `signUp()`
-- ❌ `POST /api/auth/login` - Use Supabase `signInWithPassword()`
-- ❌ `POST /api/auth/google` - Use Supabase `signInWithOAuth()`
-- ❌ `POST /api/auth/logout` - Use `/api/auth/supabase/logout`
-- ❌ `POST /api/auth/refresh` - Use Supabase session refresh
-
-### Migration Steps
-
-1. **Frontend:** Replace auth calls with Supabase client methods
-2. **API Requests:** Add `Authorization: Bearer <token>` header
-3. **Protected Routes:** Ensure `SupabaseJwtGuard` is used
-4. **User Linking:** Existing users auto-link via email on first Supabase login
 
 ## Testing
 

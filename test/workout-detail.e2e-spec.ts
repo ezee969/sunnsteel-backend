@@ -68,44 +68,33 @@ describe('Workout Detail (e2e)', () => {
 
     await app.init();
 
-    // Create test user and login
-    const registerResponse = await request(app.getHttpServer())
-      .post('/api/auth/register')
-      .send({
-        email: `workout-detail-${Date.now()}@example.com`,
-        password: 'password123',
+    // Create primary test user directly in DB and assign mocked token
+    const primaryEmail = `workout-detail-${Date.now()}@example.com`;
+    const createdUser = await prisma.user.create({
+      data: {
+        email: primaryEmail,
         name: 'Workout Detail Test User',
-      })
-      .expect(201);
+      },
+    });
+    userId = createdUser.id;
+    accessToken = `token-${Date.now()}`;
+    tokenToUser[accessToken] = { id: userId, email: primaryEmail };
 
-    accessToken = registerResponse.body.accessToken;
-    userId = registerResponse.body.user.id;
-    tokenToUser[accessToken] = {
-      id: userId,
-      email: registerResponse.body.user.email,
-    };
-
-    // Pre-create secondary user for ownership test
-    const otherRegister = await request(app.getHttpServer())
-      .post('/api/auth/register')
-      .send({
-        email: `other-${Date.now()}@example.com`,
-        password: 'password123',
+    // Pre-create secondary user and assign mocked token
+    const otherEmail = `other-${Date.now()}@example.com`;
+    const otherUser = await prisma.user.create({
+      data: {
+        email: otherEmail,
         name: 'Other User',
-      })
-      .expect(201);
-    otherAccessToken = otherRegister.body.accessToken;
+      },
+    });
+    otherAccessToken = `token2-${Date.now()}`;
     tokenToUser[otherAccessToken] = {
-      id: otherRegister.body.user.id,
-      email: otherRegister.body.user.email,
+      id: otherUser.id,
+      email: otherEmail,
     };
 
-    // Verify we got valid response
-    if (!accessToken || !userId) {
-      throw new Error(
-        `Invalid register response: ${JSON.stringify(registerResponse.body)}`,
-      );
-    }
+    if (!accessToken || !userId) throw new Error('User/token creation failed');
 
     // Verify user still exists before creating dependent entities
     const userCheck = await prisma.user.findUnique({ where: { id: userId } });

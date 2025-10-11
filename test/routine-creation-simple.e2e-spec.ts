@@ -76,16 +76,13 @@ describe('Routine Creation - Simple E2E (e2e)', () => {
 		app.setGlobalPrefix('api')
 		await app.init()
 
-		// Register user via API (proper way)
-		const registerResponse = await request(app.getHttpServer())
-			.post('/api/auth/register')
-			.send(testUser)
-			.expect(201)
-
-		accessToken = registerResponse.body.accessToken
-		userId = registerResponse.body.user.id
-
-		// Map token for Supabase mock
+		// Create user directly in DB and issue a mocked Supabase token
+		const created = await databaseService.user.create({
+			data: { email: testUser.email, name: testUser.name },
+		})
+		userId = created.id
+		accessToken = `token-${Date.now()}`
+		// Map token for Supabase mock so SupabaseJwtGuard authenticates
 		tokenToUser[accessToken] = { id: userId, email: testUser.email }
 	}, 30000) // 30 second timeout
 

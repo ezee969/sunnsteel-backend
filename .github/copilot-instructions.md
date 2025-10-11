@@ -5,7 +5,6 @@
 - **NEVER create documentation files at repo root** (except README.md)
 - **All project docs belong in `docs/` hierarchy**
 - **Update `docs/README.md` index** when adding new documentation areas
-- **Use deprecation stubs** if you must reference legacy root docs; point to canonical `docs/` location
 - **Roadmap files**: Use consistent task ID format (RTF-B01, RTF-B02, etc.) for traceability
 
 ## Rules & Guidelines

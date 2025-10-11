@@ -1,10 +1,14 @@
+// Local input type replacing legacy RegisterDto
+interface CreateUserInput {
+  email: string;
+  password: string;
+  name: string;
+}
 // Utility
 import * as bcrypt from 'bcrypt';
 import { Injectable } from '@nestjs/common';
 // Services
 import { DatabaseService } from 'src/database/database.service';
-// Types
-import { RegisterDto } from 'src/auth/dto/auth.dto';
 import { UserWithoutPassword } from './types/user.type';
 
 @Injectable()
@@ -43,7 +47,7 @@ export class UsersService {
     email,
     password,
     name,
-  }: RegisterDto): Promise<UserWithoutPassword> {
+  }: CreateUserInput): Promise<UserWithoutPassword> {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     return this.db.user.create({

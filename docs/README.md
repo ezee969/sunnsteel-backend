@@ -56,6 +56,7 @@ A comprehensive, hierarchical index of all backend documentation. Each entry inc
 |----------|------|------|---------|--------------|
 | Environment Variables | `./reference/ENVIRONMENT_VARIABLES.md` | Reference | Complete environment setup guide | 2025-09-25 |
 | Workout Sessions | `./reference/WORKOUT_SESSIONS.md` | Reference | Session lifecycle and invariants | 2025-09-25 |
+| Routine Forwarding (Frontend Integration) | `./reference/FRONTEND_ROUTINE_FORWARDING.md` | Guide | How to integrate programStartWeek, timeline/forecast remaining-only | 2025-10-11 |
 
 ## Navigation Aids
 - Consistent relative links from `./docs/README.md`.

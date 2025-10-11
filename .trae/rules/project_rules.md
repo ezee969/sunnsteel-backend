@@ -130,7 +130,6 @@ Remember: Build production-ready APIs with enterprise scalability. Every endpoin
 - **Framework**: NestJS v10.4.15 (Node.js/TypeScript)
 - **Database**: PostgreSQL with Prisma ORM v6.4.0
 - **Authentication**: Dual authentication system:
-  - JWT with Passport.js (legacy)
   - Supabase Auth integration (primary)
 - **Validation**: class-validator v0.14.1 and class-transformer v0.5.1
 - **Security**: bcrypt v5.1.1, throttling with @nestjs/throttler v6.4.0
@@ -157,8 +156,6 @@ Remember: Build production-ready APIs with enterprise scalability. Every endpoin
 
 #### Authentication
 
-- **POST /api/auth/register**: User registration (legacy JWT)
-- **POST /api/auth/login**: User login (legacy JWT)
 - **POST /api/auth/logout**: User logout with token blacklisting
 - **POST /api/auth/refresh**: Token refresh
 - **POST /api/auth/google**: Google Sign-In via ID token
@@ -231,12 +228,6 @@ Remember: Build production-ready APIs with enterprise scalability. Every endpoin
 - **SupabaseService**: Token verification and user management
 - Session cookies: `ss_session` for middleware detection
 - Used by: Users, Routines, Workouts, Exercises modules
-
-#### Legacy JWT Authentication
-- **JwtAuthGuard**: Legacy authentication with token blacklisting
-- **JwtStrategy**: JWT token validation
-- **TokenService**: Token generation and blacklist management
-- Refresh token rotation with database storage
 
 ### Exercise Progression Systems
 
@@ -380,8 +371,6 @@ enum ProgressionScheme {
 ### Data Transfer Objects (DTOs)
 
 #### Authentication DTOs
-- **RegisterDto**: Email, password, name validation
-- **LoginDto**: Email, password validation
 - **GoogleAuthDto**: Google ID token validation
 - **SupabaseTokenDto**: Supabase token verification
 
@@ -405,7 +394,6 @@ enum ProgressionScheme {
 
 #### Guard Hierarchy
 - **SupabaseJwtGuard**: Primary authentication (most endpoints)
-- **JwtAuthGuard**: Legacy authentication with blacklist checking
 - **ThrottlerGuard**: Global rate limiting (100 req/min)
 
 #### Security Features
@@ -547,7 +535,6 @@ When implementing features:
   - `docs/history/` - Implementation completion reports
   - `docs/reference/` - Configuration guides, environment setup, API references
 - **Update `docs/README.md` index** when adding new documentation areas
-- **Use deprecation stubs** if you must reference legacy root docs; point to canonical `docs/` location
 - **Roadmap files**: Use consistent task ID format (RTF-B01, RTF-B02, etc.) for traceability
 
 ## Scripts & Automation

@@ -505,6 +505,7 @@ export class RoutinesService {
           id: true,
           programWithDeloads: true,
           programDurationWeeks: true,
+          programStartWeek: true,
           programStartDate: true,
           programEndDate: true,
           programTimezone: true,
@@ -559,6 +560,7 @@ export class RoutinesService {
 
       let programWithDeloads: boolean | null = null;
       let programDurationWeeks: number | null = null;
+      let programStartWeek: number | null = null;
       let programStartDate: Date | null = null;
       let programEndDate: Date | null = null;
       let programTimezone: string | null = null;
@@ -632,12 +634,22 @@ export class RoutinesService {
             Math.max(requestedStartWeek, 1),
             programDurationWeeks,
           );
+          programStartWeek = clamped;
           const remainingWeeks = programDurationWeeks - (clamped - 1);
           const totalDays = remainingWeeks * 7 - 1;
           programEndDate = this.addDays(start, totalDays);
-        } else if (baseUnchanged && existing.programEndDate) {
-          programEndDate = existing.programEndDate;
+        } else if (baseUnchanged) {
+          // Preserve existing start week and end date if base inputs unchanged
+          programStartWeek = existing.programStartWeek ?? 1;
+          if (existing.programEndDate) {
+            programEndDate = existing.programEndDate;
+          } else {
+            const totalDays = programDurationWeeks * 7 - 1;
+            programEndDate = this.addDays(start, totalDays);
+          }
         } else {
+          // Reset to week 1 when base inputs changed and no explicit start week provided
+          programStartWeek = 1;
           const totalDays = programDurationWeeks * 7 - 1;
           programEndDate = this.addDays(start, totalDays);
         }
@@ -662,6 +674,7 @@ export class RoutinesService {
             ? {
                 programWithDeloads,
                 programDurationWeeks,
+                programStartWeek,
                 programStartDate,
                 programEndDate,
                 programTrainingDaysOfWeek,
@@ -672,6 +685,7 @@ export class RoutinesService {
             : dto.days && {
                 programWithDeloads: null,
                 programDurationWeeks: null,
+                programStartWeek: null,
                 programStartDate: null,
                 programEndDate: null,
                 programTrainingDaysOfWeek: [],

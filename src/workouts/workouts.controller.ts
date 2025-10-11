@@ -110,8 +110,14 @@ export class WorkoutsController {
   async getRtFTimeline(
     @Req() req: RequestWithUser,
     @Param('routineId') routineId: string,
+    @Query('remaining') remaining?: string,
   ) {
-    return this.workoutsService.getRtFTimeline(req.user.id, routineId);
+    const remainingOnly = remaining === '1' || remaining === 'true';
+    return this.workoutsService.getRtFTimeline(
+      req.user.id,
+      routineId,
+      remainingOnly,
+    );
   }
 
   // RtF forecast (projected future intensities/reps) (RTF-B06)
@@ -120,7 +126,13 @@ export class WorkoutsController {
   async getRtFForecast(
     @Req() req: RequestWithUser,
     @Param('routineId') routineId: string,
+    @Query('remaining') remaining?: string,
   ) {
-    return this.workoutsService.getRtFForecast(req.user.id, routineId);
+    const remainingOnly = remaining === '1' || remaining === 'true';
+    return this.workoutsService.getRtFForecast(
+      req.user.id,
+      routineId,
+      remainingOnly,
+    );
   }
 }

@@ -6,18 +6,10 @@ import {
 import { Test, TestingModule } from '@nestjs/testing';
 import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
-import { JwtAuthGuard } from '../src/auth/guards/passport-jwt.guard';
 import { SupabaseJwtGuard } from '../src/auth/guards/supabase-jwt.guard';
 import { RoutinesService } from '../src/routines/routines.service';
 
-const mockUser = { userId: 'u1', email: 'u1@mail.com' };
-const allowJwtGuard: Partial<JwtAuthGuard> = {
-  canActivate: (ctx) => {
-    const req = ctx.switchToHttp().getRequest();
-    req.user = mockUser as any;
-    return true as any;
-  },
-};
+const mockUser = { id: 'u1', email: 'u1@mail.com' };
 
 describe('RoutinesController (e2e)', () => {
   let app: INestApplication;
@@ -36,13 +28,11 @@ describe('RoutinesController (e2e)', () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     })
-      .overrideGuard(JwtAuthGuard as any)
-      .useValue(allowJwtGuard)
       .overrideGuard(SupabaseJwtGuard as any)
       .useValue({
         canActivate: (ctx: any) => {
           const req = ctx.switchToHttp().getRequest();
-          req.user = { id: 'u1', email: 'u1@mail.com' };
+          req.user = mockUser as any;
           return true as any;
         },
       })

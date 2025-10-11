@@ -259,23 +259,20 @@ This document provides comprehensive content outlines for each section of the do
   - Migration strategy from JWT to Supabase
   - Coexistence implementation
 - **Authentication Flow Comparison**
-  - Legacy JWT flow diagram
   - Supabase authentication flow
   - Token validation processes
 
 #### 2. Implementation Details
 - **Guard Architecture**
   - SupabaseJwtGuard implementation
-  - JwtAuthGuard legacy support
   - Guard selection strategies
 - **Strategy Patterns**
-  - Passport.js integration
   - Custom strategy implementation
   - Token extraction methods
 
 #### 3. Security Features
 - **Token Management**
-  - JWT generation and validation
+  - Supabase token validation
   - Refresh token rotation
   - Token blacklisting mechanism
 - **Session Security**
@@ -439,7 +436,6 @@ This document provides comprehensive content outlines for each section of the do
   - SupabaseService: Supabase integration
   - TokenService: JWT management
 - **Controllers**
-  - AuthController: Legacy JWT endpoints
   - SupabaseAuthController: Supabase endpoints
 - **Guards and Strategies**
   - Authentication guard implementation
@@ -458,10 +454,6 @@ This document provides comprehensive content outlines for each section of the do
   - Token validation flow
 
 ##### 2. Implementation Details
-- **JWT System (Legacy)**
-  - Token generation process
-  - Validation mechanisms
-  - Refresh token handling
 - **Supabase System (Primary)**
   - Token verification process
   - User synchronization

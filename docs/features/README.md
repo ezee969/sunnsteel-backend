@@ -53,7 +53,6 @@ Multi-layer architecture featuring:
 ### **Dual Authentication**
 Seamless integration of:
 - Modern Supabase Auth
-- Legacy JWT system
 - Migration strategies
 - Session management
 

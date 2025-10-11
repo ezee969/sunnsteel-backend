@@ -23,7 +23,7 @@
     "test:e2e": "jest --config ./test/jest-e2e.json --runInBand",
     "test:e2e:rtf": "jest --config ./test/jest-e2e.json --runTestsByPath test/routines-rtf-variants.e2e-spec.ts test/tm-adjustment-hypertrophy.e2e-spec.ts test/workouts-rtf-sets.e2e-spec.ts",
     "db:seed": "tsx prisma/seed.ts",
-    "docs:check": "./scripts/update-docs.sh",
+    "docs:check": "node scripts/run-update-docs.js",
     "docs:update": "echo 'Run docs:check first, then update documentation manually'",
     "token:supabase": "powershell -ExecutionPolicy Bypass -File ./scripts/get-supabase-token.ps1"
   },

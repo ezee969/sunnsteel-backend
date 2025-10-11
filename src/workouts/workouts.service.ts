@@ -58,8 +58,9 @@ export class WorkoutsService {
   private cacheKey(routineId: string, week: number) {
     return `weekGoals:${routineId}:${week}`;
   }
-  private forecastCacheKey(routineId: string) {
-    return `forecast:${routineId}:v${WorkoutsService.RTF_WEEK_GOALS_VERSION}`;
+  private forecastCacheKey(routineId: string, remainingOnly = false) {
+    const suffix = remainingOnly ? ':rem' : '';
+    return `forecast:${routineId}:v${WorkoutsService.RTF_WEEK_GOALS_VERSION}${suffix}`;
   }
   private async cacheGet(key: string) {
     return this.rtfCache.get(key);
@@ -259,6 +260,7 @@ export class WorkoutsService {
       select: {
         programWithDeloads: true,
         programDurationWeeks: true,
+        programStartWeek: true,
         programStartDate: true,
         programEndDate: true,
         programTrainingDaysOfWeek: true,
@@ -332,12 +334,16 @@ export class WorkoutsService {
     // Attach RtF plan for today if applicable
     if (hasProgram) {
       const tz = routine.programTimezone!;
-      const week = this.getCurrentProgramWeek(
+      const offset = Math.max(0, (routine.programStartWeek ?? 1) - 1);
+      const baseDuration = routine.programDurationWeeks!;
+      const remainingWeeks = Math.max(1, baseDuration - offset);
+      const relativeWeek = this.getCurrentProgramWeek(
         now,
         routine.programStartDate!,
-        routine.programDurationWeeks!,
+        remainingWeeks,
         tz,
       );
+      const week = relativeWeek + offset;
       const withDeloads = !!routine.programWithDeloads;
       const isDeload = this.isDeloadWeek(week, withDeloads);
 
@@ -475,7 +481,7 @@ export class WorkoutsService {
         ...created,
         program: {
           currentWeek: week,
-          durationWeeks: routine.programDurationWeeks!,
+          durationWeeks: baseDuration,
           withDeloads,
           isDeloadWeek: isDeload,
           startDate: routine.programStartDate!,
@@ -529,6 +535,7 @@ export class WorkoutsService {
               select: {
                 programWithDeloads: true,
                 programDurationWeeks: true,
+                programStartWeek: true,
                 programStartDate: true,
                 programEndDate: true,
                 programTimezone: true,
@@ -611,12 +618,16 @@ export class WorkoutsService {
         let isDeload = false;
         if (hasProgram) {
           const tz = routineProgram.programTimezone!;
-          currentWeek = this.getCurrentProgramWeek(
+          const offset = Math.max(0, (routineProgram.programStartWeek ?? 1) - 1);
+          const baseDuration = routineProgram.programDurationWeeks!;
+          const remainingWeeks = Math.max(1, baseDuration - offset);
+          const relativeWeek = this.getCurrentProgramWeek(
             new Date(),
             routineProgram.programStartDate!,
-            routineProgram.programDurationWeeks!,
+            remainingWeeks,
             tz,
           );
+          currentWeek = relativeWeek + offset;
           isDeload = this.isDeloadWeek(
             currentWeek,
             !!routineProgram.programWithDeloads,
@@ -853,6 +864,7 @@ export class WorkoutsService {
         id: true,
         programWithDeloads: true,
         programDurationWeeks: true,
+        programStartWeek: true,
         programStartDate: true,
         programTimezone: true,
         days: {
@@ -883,14 +895,20 @@ export class WorkoutsService {
       throw new BadRequestException('Routine does not have program data');
     }
     const withDeloads = !!routine.programWithDeloads;
+    const offset = Math.max(0, (routine.programStartWeek ?? 1) - 1);
+    const baseDuration = Number(routine.programDurationWeeks);
+    const remainingWeeks = Math.max(1, baseDuration - offset);
     const week = requestedWeek
       ? requestedWeek
-      : this.getCurrentProgramWeek(
-          new Date(),
-          routine.programStartDate,
-          routine.programDurationWeeks,
-          routine.programTimezone,
-        );
+      : (() => {
+          const rel = this.getCurrentProgramWeek(
+            new Date(),
+            routine.programStartDate,
+            remainingWeeks,
+            routine.programTimezone,
+          );
+          return rel + offset;
+        })();
     if (week < 1 || week > routine.programDurationWeeks) {
       throw new BadRequestException('Week out of range');
     }
@@ -999,7 +1017,11 @@ export class WorkoutsService {
    * Build full RtF timeline (all program weeks) for a routine.
    * Reuses per-week cache; aggregates results. (RTF-B03)
    */
-  async getRtFTimeline(userId: string, routineId: string) {
+  async getRtFTimeline(
+    userId: string,
+    routineId: string,
+    remainingOnly = false,
+  ) {
     // Fetch routine meta to know duration & deload setting
     const routine = await this.db.routine.findFirst({
       where: { id: routineId, userId },
@@ -1009,6 +1031,7 @@ export class WorkoutsService {
         programWithDeloads: true,
         programStartDate: true,
         programTimezone: true,
+        programStartWeek: true,
       },
     });
     if (!routine) throw new NotFoundException('Routine not found');
@@ -1018,7 +1041,10 @@ export class WorkoutsService {
     const weeks = routine.programDurationWeeks;
     const timeline: any[] = [];
     let cacheHits = 0;
-    for (let w = 1; w <= weeks; w++) {
+    const startWeek = remainingOnly
+      ? Math.max(1, Number(routine.programStartWeek ?? 1))
+      : 1;
+    for (let w = startWeek; w <= weeks; w++) {
       const weekGoals = await this.getRtFWeekGoals(userId, routineId, w);
       if (weekGoals._cache === 'HIT') cacheHits++;
       timeline.push({ week: w, goals: weekGoals.goals });
@@ -1028,6 +1054,7 @@ export class WorkoutsService {
       weeks,
       version: WorkoutsService.RTF_WEEK_GOALS_VERSION,
       cacheStats: { hits: cacheHits, misses: weeks - cacheHits },
+      fromWeek: remainingOnly ? startWeek : 1,
       timeline,
     };
   }
@@ -1039,8 +1066,12 @@ export class WorkoutsService {
    * adjust intensities for TM adjustments historically (future enhancement
    * could annotate weeks with delta events). Cached by routine/version.
    */
-  async getRtFForecast(userId: string, routineId: string) {
-    const cacheKey = this.forecastCacheKey(routineId);
+  async getRtFForecast(
+    userId: string,
+    routineId: string,
+    remainingOnly = false,
+  ) {
+    const cacheKey = this.forecastCacheKey(routineId, remainingOnly);
     const cached = await this.cacheGet(cacheKey);
     if (cached) {
       this.metrics.forecastHits++;
@@ -1063,6 +1094,7 @@ export class WorkoutsService {
           programWithDeloads: true,
           programStartDate: true,
           programTimezone: true,
+          programStartWeek: true,
           programRtfSnapshot: true,
           days: {
             select: {
@@ -1098,7 +1130,10 @@ export class WorkoutsService {
         snap.withDeloads === withDeloads &&
         Array.isArray(snap.standard) &&
         Array.isArray(snap.hypertrophy);
-      for (let w = 1; w <= weeks; w++) {
+      const startWeek = remainingOnly
+        ? Math.max(1, Number(routine.programStartWeek ?? 1))
+        : 1;
+      for (let w = startWeek; w <= weeks; w++) {
         const standard = snapshotApplicable
           ? ((snap.standard as any[])[w - 1] as {
               intensity: number;
@@ -1146,6 +1181,7 @@ export class WorkoutsService {
         weeks,
         version: WorkoutsService.RTF_WEEK_GOALS_VERSION,
         withDeloads,
+        fromWeek: remainingOnly ? startWeek : 1,
         forecast,
       };
       await this.cacheSet(cacheKey, result);

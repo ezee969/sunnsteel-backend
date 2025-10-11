@@ -29,6 +29,13 @@ See **[Authentication Documentation](../authentication/)** for complete authenti
 - **[Caching](CACHING.md)** - Cache headers and ETag support
 - **[Webhooks](WEBHOOKS.md)** - Event notifications (future)
 
+#### RtF Timeline/Forecast Remaining-Only
+
+- Endpoints support returning only the remaining portion of a forwarded program:
+  - `GET /api/workouts/routines/:routineId/rtf-timeline?remaining=1`
+  - `GET /api/workouts/routines/:routineId/rtf-forecast?remaining=1`
+- When `remaining=1|true` is provided, responses start at `programStartWeek` and include `fromWeek` to indicate the first returned global week. Without this parameter, endpoints return the canonical full range (weeks `1..N`).
+
 ## 🚀 Base URL
 
 ```

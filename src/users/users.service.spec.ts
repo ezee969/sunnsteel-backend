@@ -1,7 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UsersService } from './users.service';
 import { DatabaseService } from '../database/database.service';
-import { RegisterDto } from '../auth/dto/auth.dto';
 import * as bcrypt from 'bcrypt';
 
 // Mock bcrypt
@@ -124,7 +123,7 @@ describe('UsersService', () => {
   });
 
   describe('create', () => {
-    const registerDto: RegisterDto = {
+    const registerDto = {
       email: 'newuser@example.com',
       password: 'password123',
       name: 'New User',

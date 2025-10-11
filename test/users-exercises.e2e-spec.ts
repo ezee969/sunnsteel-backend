@@ -73,21 +73,13 @@ describe('Users & Exercises (e2e)', () => {
       name: 'Test User',
     };
 
-    // Register and authenticate a user for protected routes
-    const registerResponse = await request(app.getHttpServer())
-      .post('/api/auth/register')
-      .send(testUser)
-      .expect(201);
-
-    accessToken = registerResponse.body.accessToken;
-    userId = registerResponse.body.user.id;
+    // Create user directly and assign a mocked token for Supabase guard
+    const created = await databaseService.user.create({
+      data: { email: testUser.email, name: testUser.name },
+    });
+    userId = created.id;
+    accessToken = `token-${Date.now()}-${Math.random()}`;
     tokenToUser[accessToken] = { id: userId, email: testUser.email };
-
-    if (!accessToken || !userId) {
-      throw new Error(
-        `Invalid register response: ${JSON.stringify(registerResponse.body)}`,
-      );
-    }
   });
 
   afterEach(async () => {
