@@ -576,19 +576,32 @@ const exercises: ExerciseSeed[] = [
 async function main() {
   console.log('🌱 Starting seed...');
 
-  // Clear existing exercises
-  await prisma.exercise.deleteMany();
-  console.log('🗑️  Cleared existing exercises');
+  // Upsert exercises to preserve existing IDs and maintain referential integrity
+  let created = 0;
+  let updated = 0;
 
-  // Insert exercises
   for (const exercise of exercises) {
-    await prisma.exercise.create({
-      data: exercise,
+    const result = await prisma.exercise.upsert({
+      where: { name: exercise.name },
+      update: {
+        primaryMuscles: exercise.primaryMuscles,
+        secondaryMuscles: exercise.secondaryMuscles,
+        equipment: exercise.equipment,
+      },
+      create: exercise,
     });
+
+    // Check if this was a create or update by checking if createdAt === updatedAt
+    const isNew = result.createdAt.getTime() === result.updatedAt.getTime();
+    if (isNew) {
+      created++;
+    } else {
+      updated++;
+    }
   }
 
-  console.log(`✅ Created ${exercises.length} exercises`);
-  console.log('🌱 Seed completed!');
+  console.log(`✅ Seeding completed: ${created} created, ${updated} updated`);
+  console.log(`📊 Total exercises: ${exercises.length}`);
 }
 
 main()
