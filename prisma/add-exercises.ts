@@ -25,12 +25,6 @@ const newExercises: ExerciseSeed[] = [
 	//   secondaryMuscles: [MuscleGroup.TRAPEZIUS],
 	//   equipment: 'dumbbell',
 	// },
-	{
-	  name: 'Shoulder cable crossover',
-	  primaryMuscles: [MuscleGroup.MEDIAL_DELTOIDS],
-	  secondaryMuscles: [MuscleGroup.REAR_DELTOIDS],
-	  equipment: 'cable',
-	},
 ]
 
 async function main() {
