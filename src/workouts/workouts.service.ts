@@ -574,6 +574,7 @@ export class WorkoutsService {
             routineExerciseId: true,
             setNumber: true,
             reps: true,
+            weight: true,
             isCompleted: true,
           },
         });
@@ -582,11 +583,12 @@ export class WorkoutsService {
           `${reId}#${setNumber}`;
         const logMap = new Map<
           string,
-          { reps: number | null; isCompleted: boolean }
+          { reps: number | null; weight: number | null; isCompleted: boolean }
         >();
         for (const l of logs) {
           logMap.set(logKey(l.routineExerciseId, l.setNumber), {
             reps: l.reps ?? null,
+            weight: typeof l.weight === 'number' ? l.weight : null,
             isCompleted: l.isCompleted,
           });
         }
@@ -661,12 +663,31 @@ export class WorkoutsService {
             }
             if (allHit) {
               for (const s of ex.sets) {
-                const current = typeof s.weight === 'number' ? s.weight : 0;
+                const log = logMap.get(logKey(ex.id, s.setNumber));
+                const baseFromLog =
+                  typeof log?.weight === 'number' ? log!.weight : undefined;
+                const current =
+                  typeof baseFromLog === 'number'
+                    ? baseFromLog
+                    : typeof s.weight === 'number'
+                    ? s.weight
+                    : 0;
                 updates.push({
                   routineExerciseId: ex.id,
                   setNumber: s.setNumber,
                   newWeight: current + inc,
                 });
+              }
+            } else {
+              for (const s of ex.sets) {
+                const log = logMap.get(logKey(ex.id, s.setNumber));
+                if (typeof log?.weight === 'number') {
+                  updates.push({
+                    routineExerciseId: ex.id,
+                    setNumber: s.setNumber,
+                    newWeight: log.weight,
+                  });
+                }
               }
             }
           } else if (scheme === 'DYNAMIC_DOUBLE_PROGRESSION') {
@@ -684,11 +705,24 @@ export class WorkoutsService {
                 typeof reps === 'number' &&
                 reps >= target;
               if (hit) {
-                const current = typeof s.weight === 'number' ? s.weight : 0;
+                const baseFromLog =
+                  typeof log?.weight === 'number' ? log!.weight : undefined;
+                const current =
+                  typeof baseFromLog === 'number'
+                    ? baseFromLog
+                    : typeof s.weight === 'number'
+                    ? s.weight
+                    : 0;
                 updates.push({
                   routineExerciseId: ex.id,
                   setNumber: s.setNumber,
                   newWeight: current + inc,
+                });
+              } else if (typeof log?.weight === 'number') {
+                updates.push({
+                  routineExerciseId: ex.id,
+                  setNumber: s.setNumber,
+                  newWeight: log.weight,
                 });
               }
             }
@@ -728,6 +762,17 @@ export class WorkoutsService {
                     select: { id: true },
                   });
                 }
+              }
+            }
+          } else {
+            for (const s of ex.sets) {
+              const log = logMap.get(logKey(ex.id, s.setNumber));
+              if (typeof log?.weight === 'number') {
+                updates.push({
+                  routineExerciseId: ex.id,
+                  setNumber: s.setNumber,
+                  newWeight: log.weight,
+                });
               }
             }
           }
