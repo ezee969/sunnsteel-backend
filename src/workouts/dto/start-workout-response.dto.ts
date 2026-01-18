@@ -1,20 +1,23 @@
-import { WorkoutSessionStatus } from '@prisma/client';
+import {
+  StartWorkoutResponse,
+  WorkoutSessionStatus,
+} from '@sunsteel/contracts';
 
-export class StartWorkoutResponseDto {
+export class StartWorkoutResponseDto implements StartWorkoutResponse {
   id!: string;
   routineId!: string;
   routineDayId!: string;
   status!: WorkoutSessionStatus;
-  startedAt!: Date;
-  endedAt?: Date | null;
+  startedAt!: string;
+  endedAt?: string | null;
   // Optional RtF program payload (present when routine is programmed)
   program?: {
     currentWeek: number;
     durationWeeks: number;
     withDeloads: boolean;
     isDeloadWeek: boolean;
-    startDate: Date;
-    endDate: Date;
+    startDate: string;
+    endDate: string;
     timeZone: string;
   };
   rtfPlans?: Array<any>;

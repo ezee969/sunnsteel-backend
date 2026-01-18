@@ -23,8 +23,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
       exception instanceof HttpException
         ? exception.getResponse()
         : exception instanceof Error
-        ? exception.message
-        : 'Internal server error';
+          ? exception.message
+          : 'Internal server error';
 
     // Log the full error for debugging
     console.error('=== UNHANDLED EXCEPTION ===');

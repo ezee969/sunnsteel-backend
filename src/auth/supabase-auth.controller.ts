@@ -45,9 +45,9 @@ export class SupabaseAuthController {
 
     try {
       console.log('[Signup Analytics] Token verification started');
-      
+
       const supabaseUser = await this.supabaseService.verifyToken(token);
-      
+
       // Check if user exists before getOrCreate to track new signups
       const existingUser = await this.supabaseService.getUserBySupabaseId(
         supabaseUser.id,
@@ -112,10 +112,10 @@ export class SupabaseAuthController {
 
       // Clear session cookie on verification failure
       res.clearCookie('ss_session', { path: '/' });
-      
+
       // Log the full error for debugging
       console.error('[Signup Analytics] Full error object:', error);
-      
+
       throw error;
     }
   }

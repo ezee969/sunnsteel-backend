@@ -2,7 +2,7 @@ import { Type } from 'class-transformer';
 import {
   IsArray,
   IsBoolean,
-  IsEnum,
+  IsIn,
   IsInt,
   IsNotEmpty,
   IsNumber,
@@ -13,53 +13,62 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
+import {
+  CreateRoutineRequest,
+  CreateRoutineDayInput,
+  CreateRoutineExerciseInput,
+  ProgramStyle,
+  PROGRAM_STYLES,
+  ProgressionScheme,
+  PROGRESSION_SCHEMES,
+  RepType,
+  REP_TYPES,
+  RoutineSet,
+} from '@sunsteel/contracts';
 
-export enum RepTypeDto {
-  FIXED = 'FIXED',
-  RANGE = 'RANGE',
-}
+const PROGRESSION_SCHEME_VALUES: readonly ProgressionScheme[] =
+  PROGRESSION_SCHEMES as readonly ProgressionScheme[];
 
-export class CreateRoutineExerciseSetDto {
+const REP_TYPE_VALUES: readonly RepType[] = REP_TYPES as readonly RepType[];
+
+const PROGRAM_STYLE_VALUES: readonly ProgramStyle[] =
+  PROGRAM_STYLES as readonly ProgramStyle[];
+
+export class CreateRoutineExerciseSetDto implements RoutineSet {
   @IsInt()
   @Min(1)
   @Max(10)
   setNumber: number;
 
   // Rep prescription type
-  @IsEnum(RepTypeDto)
-  repType: RepTypeDto;
+  @IsIn(REP_TYPE_VALUES)
+  repType: RepType;
 
   // When repType is FIXED, reps must be provided
-  @ValidateIf(
-    (o: CreateRoutineExerciseSetDto) => o.repType === RepTypeDto.FIXED,
-  )
+  @ValidateIf((o: CreateRoutineExerciseSetDto) => o.repType === 'FIXED')
   @IsInt()
   @Min(1)
   @Max(50)
   reps?: number;
 
   // When repType is RANGE, minReps/maxReps must be provided
-  @ValidateIf(
-    (o: CreateRoutineExerciseSetDto) => o.repType === RepTypeDto.RANGE,
-  )
+  @ValidateIf((o: CreateRoutineExerciseSetDto) => o.repType === 'RANGE')
   @IsInt()
   @Min(1)
   @Max(50)
   minReps?: number;
 
-  @ValidateIf(
-    (o: CreateRoutineExerciseSetDto) => o.repType === RepTypeDto.RANGE,
-  )
+  @ValidateIf((o: CreateRoutineExerciseSetDto) => o.repType === 'RANGE')
   @IsInt()
   @Min(1)
   @Max(50)
   maxReps?: number;
 
   @IsOptional()
-  weight?: number;
+  weight?: number | null;
 }
 
-export class CreateRoutineExerciseDto {
+export class CreateRoutineExerciseDto implements CreateRoutineExerciseInput {
   @IsString()
   @IsNotEmpty()
   exerciseId: string;
@@ -74,29 +83,16 @@ export class CreateRoutineExerciseDto {
   restSeconds: number;
 
   // Progression configuration per exercise
-  @IsOptional()
-  @IsEnum(
-    {
-      NONE: 'NONE',
-      DOUBLE_PROGRESSION: 'DOUBLE_PROGRESSION',
-      DYNAMIC_DOUBLE_PROGRESSION: 'DYNAMIC_DOUBLE_PROGRESSION',
-      PROGRAMMED_RTF: 'PROGRAMMED_RTF',
-    } as const,
-    {
-      message:
-        'progressionScheme must be NONE, DOUBLE_PROGRESSION, DYNAMIC_DOUBLE_PROGRESSION, or PROGRAMMED_RTF',
-    },
-  )
-  progressionScheme?:
-    | 'NONE'
-    | 'DOUBLE_PROGRESSION'
-    | 'DYNAMIC_DOUBLE_PROGRESSION'
-    | 'PROGRAMMED_RTF';
+  @IsIn(PROGRESSION_SCHEME_VALUES, {
+    message:
+      'progressionScheme must be NONE, DOUBLE_PROGRESSION, DYNAMIC_DOUBLE_PROGRESSION, or PROGRAMMED_RTF',
+  })
+  @IsNotEmpty()
+  progressionScheme!: ProgressionScheme;
 
-  @IsOptional()
   @IsNumber()
   @Min(0.1)
-  minWeightIncrement?: number; // defaults to 2.5 if omitted
+  minWeightIncrement: number; // defaults to 2.5 if omitted
 
   @IsArray()
   @ValidateNested({ each: true })
@@ -122,14 +118,14 @@ export class CreateRoutineExerciseDto {
   @ValidateIf(
     (o: CreateRoutineExerciseDto) => o.progressionScheme === 'PROGRAMMED_RTF',
   )
-  @IsEnum(['STANDARD', 'HYPERTROPHY'], {
+  @IsIn(PROGRAM_STYLE_VALUES, {
     message:
       'programStyle must be STANDARD or HYPERTROPHY for PROGRAMMED_RTF exercises',
   })
-  programStyle?: 'STANDARD' | 'HYPERTROPHY';
+  programStyle?: ProgramStyle;
 }
 
-export class CreateRoutineDayDto {
+export class CreateRoutineDayDto implements CreateRoutineDayInput {
   @IsInt()
   @Min(0)
   @Max(6)
@@ -145,7 +141,7 @@ export class CreateRoutineDayDto {
   exercises: CreateRoutineExerciseDto[];
 }
 
-export class CreateRoutineDto {
+export class CreateRoutineDto implements CreateRoutineRequest {
   @IsString()
   @IsNotEmpty()
   name: string;
@@ -183,8 +179,8 @@ export class CreateRoutineDto {
 
   // Program style (variant) for PROGRAMMED_RTF routines (front-end metadata persisted)
   @IsOptional()
-  @IsEnum({ STANDARD: 'STANDARD', HYPERTROPHY: 'HYPERTROPHY' } as const, {
+  @IsIn(PROGRAM_STYLE_VALUES, {
     message: 'programStyle must be STANDARD or HYPERTROPHY',
   })
-  programStyle?: 'STANDARD' | 'HYPERTROPHY';
+  programStyle?: ProgramStyle;
 }

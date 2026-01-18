@@ -7,7 +7,25 @@ import {
   Max,
   Length,
 } from 'class-validator';
-import { Transform, Type } from 'class-transformer';
+import { Type } from 'class-transformer';
+import {
+  CreateTmEventRequest,
+  TM_ADJUSTMENT_CONSTANTS,
+} from '@sunsteel/contracts';
+
+type TmAdjustmentLimits = {
+  MAX_DELTA_KG: number;
+  MIN_DELTA_KG: number;
+  MIN_WEEK: number;
+  MAX_WEEK: number;
+  MAX_REASON_LENGTH: number;
+};
+
+const TM_ADJUSTMENT_LIMITS =
+  TM_ADJUSTMENT_CONSTANTS as unknown as TmAdjustmentLimits;
+
+const { MIN_WEEK, MAX_WEEK, MIN_DELTA_KG, MAX_DELTA_KG, MAX_REASON_LENGTH } =
+  TM_ADJUSTMENT_LIMITS;
 
 /**
  * DTO for creating a Training Max adjustment event
@@ -15,7 +33,7 @@ import { Transform, Type } from 'class-transformer';
  * Used when users need to adjust their training max for a specific exercise
  * based on performance feedback from reps-to-failure sets
  */
-export class CreateTmEventDto {
+export class CreateTmEventDto implements CreateTmEventRequest {
   /**
    * ID of the exercise being adjusted
    */
@@ -27,8 +45,8 @@ export class CreateTmEventDto {
    */
   @Type(() => Number)
   @IsInt()
-  @Min(1)
-  @Max(21)
+  @Min(MIN_WEEK)
+  @Max(MAX_WEEK)
   weekNumber: number;
 
   /**
@@ -37,8 +55,8 @@ export class CreateTmEventDto {
    */
   @Type(() => Number)
   @IsNumber()
-  @Min(-15)
-  @Max(15)
+  @Min(MIN_DELTA_KG)
+  @Max(MAX_DELTA_KG)
   deltaKg: number;
 
   /**
@@ -63,6 +81,6 @@ export class CreateTmEventDto {
    */
   @IsOptional()
   @IsString()
-  @Length(0, 160)
+  @Length(0, MAX_REASON_LENGTH)
   reason?: string;
 }

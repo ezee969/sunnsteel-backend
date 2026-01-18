@@ -24,6 +24,7 @@ Comprehensive reference for routine creation, update, and time-based programmed 
 POST `/api/routines`
 
 Body (excerpt):
+
 ```json
 {
   "name": "My RtF Routine",
@@ -42,12 +43,12 @@ Body (excerpt):
           "programStyle": "STANDARD",
           "programTMKg": 100,
           "programRoundingKg": 2.5,
-          "sets": [ { "setNumber": 1, "repType": "FIXED", "reps": 5 } ]
+          "sets": [{ "setNumber": 1, "repType": "FIXED", "reps": 5 }]
         },
         {
           "exerciseId": "...",
           "progressionScheme": "DYNAMIC_DOUBLE_PROGRESSION",
-          "sets": [ { "setNumber": 1, "repType": "FIXED", "reps": 8 } ]
+          "sets": [{ "setNumber": 1, "repType": "FIXED", "reps": 8 }]
         }
       ]
     }
@@ -56,11 +57,15 @@ Body (excerpt):
 ```
 
 Validation rules:
+
 - If any exercise is `PROGRAMMED_RTF`, the following are required: `programWithDeloads`, `programStartDate` (yyyy-mm-dd), `programTimezone` (IANA), first training day weekday must match `programStartDate`.
 - `programStyle` is required per PROGRAMMED_RTF exercise.
 - `programStartWeek` is optional; when omitted defaults to `1`.
+- Per-exercise fields `progressionScheme` and `minWeightIncrement` are required and validated against the shared contracts enums; omit them only to intentionally fail validation. These inputs are now enforced at the DTO level (no implicit defaults accepted by validation).
+- `progressionScheme` is non-optional in the DTO to align with `CreateRoutineExerciseInput`; sending `undefined` will fail validation instead of leaking into type widening.
 
 Persistence (service):
+
 - See `src/routines/routines.service.ts:create()` for validation and persistence.
 - Program snapshot is recorded in `programRtfSnapshot`.
 
@@ -69,6 +74,7 @@ Persistence (service):
 PATCH `/api/routines/:id`
 
 Behavior:
+
 - When `days` is provided and at least one exercise is `PROGRAMMED_RTF`, program fields must be present and validated.
 - If `programStartWeek` is provided, it is clamped and saved; `programEndDate` is recomputed from remaining weeks.
 - If base inputs (`programStartDate`, `programWithDeloads`) remain unchanged and `programStartWeek` is omitted, existing `programStartWeek` and `programEndDate` are preserved.
@@ -82,6 +88,13 @@ Implementation details: `src/routines/routines.service.ts:update()`.
 - Only PROGRAMMED_RTF exercises use time-driven scheduling.
 - Other schemes (`DYNAMIC_DOUBLE_PROGRESSION`, etc.) are unaffected by `programStartWeek`.
 
+## Validation Notes
+
+- Progression and program style fields validate against the shared
+  contract enums (`PROGRESSION_SCHEMES`, `PROGRAM_STYLES`) directly. This
+  removes unsafe array spreads and keeps backend validation aligned with
+  the published contracts.
+
 ## Week Goals and Sessions
 
 - `GET /api/workouts/routines/:id/rtf-week-goals?week=` uses global program week (1..18|21). When omitted, current week is derived against the forwarded schedule and then mapped back with the offset.
@@ -89,8 +102,29 @@ Implementation details: `src/routines/routines.service.ts:update()`.
 - `PATCH /api/workouts/sessions/:id/finish` uses the offset-adjusted week for AMRAP-based TM adjustments.
 
 Relevant code:
+
 - `src/workouts/workouts.service.ts` (startSession, finishSession, getRtFWeekGoals)
 - `src/workouts/rtf-schedules.ts` (canonical RtF schedules and snapshot builder)
+
+## TM Adjustments
+
+- `POST /api/routines/:id/tm-events` creates a TM adjustment entry when guardrails
+  pass.
+- `GET /api/routines/:id/tm-events` returns history ordered by week and creation.
+- `GET /api/routines/:id/tm-events/summary` aggregates adjustments per exercise.
+- `createdAt` in all TM adjustment responses is emitted as an ISO 8601 string to
+  match the shared `@sunsteel/contracts` schema.
+
+Summary response fields (`GET /tm-events/summary`):
+
+| Field                | Description                                                      |
+| -------------------- | ---------------------------------------------------------------- |
+| `exerciseId`         | Target exercise identifier                                       |
+| `exerciseName`       | Human-readable exercise label (falls back to `Unknown Exercise`) |
+| `adjustmentCount`    | Number of TM events recorded for the exercise                    |
+| `totalDeltaKg`       | Net kilograms added/removed across all events                    |
+| `averageDeltaKg`     | Mean delta per event                                             |
+| `lastAdjustmentDate` | ISO 8601 string of the latest event timestamp (or `null`)        |
 
 ## Error Responses
 

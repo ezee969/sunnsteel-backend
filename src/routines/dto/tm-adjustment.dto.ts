@@ -6,7 +6,35 @@ import {
   IsNumber,
   IsOptional,
   MaxLength,
+  Max,
 } from 'class-validator';
+import {
+  CreateTmEventRequest,
+  TmEventSummary,
+  TmEventResponse,
+  ProgramStyle,
+  TM_ADJUSTMENT_CONSTANTS,
+} from '@sunsteel/contracts';
+
+type TmAdjustmentLimits = {
+  MAX_DELTA_KG: number;
+  MIN_DELTA_KG: number;
+  MIN_WEEK: number;
+  MAX_WEEK: number;
+  MAX_REASON_LENGTH: number;
+};
+
+const TM_ADJUSTMENT_LIMITS =
+  TM_ADJUSTMENT_CONSTANTS as unknown as TmAdjustmentLimits;
+
+const { MIN_WEEK, MAX_DELTA_KG, MIN_DELTA_KG, MAX_REASON_LENGTH } =
+  TM_ADJUSTMENT_LIMITS;
+
+// Decorator helpers (class-validator signatures expect `number` types)
+const maxDeltaGuard = MAX_DELTA_KG;
+const minDeltaGuard = MIN_DELTA_KG;
+const minWeekGuard = MIN_WEEK;
+const maxReasonLengthGuard = MAX_REASON_LENGTH;
 
 /**
  * CreateTmEventDto - DTO for creating training max adjustment events
@@ -14,7 +42,7 @@ import {
  * Used when users adjust their training max based on performance
  * in Programmed RtF routines.
  */
-export class CreateTmEventDto {
+export class CreateTmEventDto implements CreateTmEventRequest {
   /**
    * Exercise ID for which the TM is being adjusted
    */
@@ -26,7 +54,7 @@ export class CreateTmEventDto {
    * Week number in the program when adjustment occurred
    */
   @IsInt()
-  @Min(1)
+  @Min(minWeekGuard)
   weekNumber: number;
 
   /**
@@ -34,6 +62,8 @@ export class CreateTmEventDto {
    * Positive values indicate increases, negative for decreases
    */
   @IsNumber()
+  @Min(minDeltaGuard)
+  @Max(maxDeltaGuard)
   deltaKg: number;
 
   /**
@@ -54,33 +84,35 @@ export class CreateTmEventDto {
    */
   @IsOptional()
   @IsString()
-  @MaxLength(160)
+  @MaxLength(maxReasonLengthGuard)
   reason?: string;
 }
 
 /**
  * TmEventSummaryDto - Summary statistics for TM adjustments per exercise
  */
-export class TmEventSummaryDto {
+export class TmEventSummaryDto implements TmEventSummary {
   exerciseId: string;
   exerciseName: string;
-  events: number;
-  netDelta: number;
-  avgChange: number;
-  lastEventAt: Date | null;
+  totalDeltaKg: number;
+  averageDeltaKg: number;
+  adjustmentCount: number;
+  lastAdjustmentDate: string | null;
 }
 
 /**
  * TmEventResponseDto - Response format for TM adjustment events
  */
-export class TmEventResponseDto {
+export class TmEventResponseDto implements TmEventResponse {
   id: string;
+  routineId: string;
   exerciseId: string;
+  exerciseName: string;
   weekNumber: number;
   deltaKg: number;
   preTmKg: number;
   postTmKg: number;
-  reason: string | null;
-  style: 'STANDARD' | 'HYPERTROPHY' | null;
-  createdAt: Date;
+  reason?: string;
+  style: ProgramStyle | null;
+  createdAt: string;
 }

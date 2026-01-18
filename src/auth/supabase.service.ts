@@ -62,18 +62,22 @@ export class SupabaseService {
     console.log('[getOrCreateUser] Extracted userName:', userName);
 
     // First, check if user already exists by supabaseUserId
-    const existingUserBySupabaseId = await this.databaseService.user.findUnique({
-      where: { supabaseUserId: supabaseUser.id },
-    });
+    const existingUserBySupabaseId = await this.databaseService.user.findUnique(
+      {
+        where: { supabaseUserId: supabaseUser.id },
+      },
+    );
 
     if (existingUserBySupabaseId) {
-      console.log('[getOrCreateUser] User found by supabaseUserId, updating if needed');
-      
+      console.log(
+        '[getOrCreateUser] User found by supabaseUserId, updating if needed',
+      );
+
       // Update user data if needed
       const updateData: { email: string; name?: string } = {
         email: supabaseUser.email!,
       };
-      
+
       // Only update name if it's not just the email prefix (preserve user-provided names)
       if (userName !== supabaseUser.email?.split('@')[0]) {
         updateData.name = userName;
@@ -93,12 +97,14 @@ export class SupabaseService {
     if (existingUserByEmail) {
       if (!existingUserByEmail.supabaseUserId) {
         // Link existing legacy user to Supabase
-        console.log('[getOrCreateUser] Linking existing legacy user to Supabase');
-        
+        console.log(
+          '[getOrCreateUser] Linking existing legacy user to Supabase',
+        );
+
         const updateData: { supabaseUserId: string; name?: string } = {
           supabaseUserId: supabaseUser.id,
         };
-        
+
         // Only update name if it's not just the email prefix (preserve user-provided names)
         if (userName !== supabaseUser.email?.split('@')[0]) {
           updateData.name = userName;
@@ -110,15 +116,20 @@ export class SupabaseService {
         });
       } else if (existingUserByEmail.supabaseUserId === supabaseUser.id) {
         // User already exists with correct supabaseUserId - just return it
-        console.log('[getOrCreateUser] User already exists with correct supabaseUserId, returning existing user');
+        console.log(
+          '[getOrCreateUser] User already exists with correct supabaseUserId, returning existing user',
+        );
         return existingUserByEmail;
       } else {
         // User exists with different supabaseUserId - this is a conflict
-        console.error('[getOrCreateUser] User exists with different supabaseUserId:', {
-          existingSupabaseUserId: existingUserByEmail.supabaseUserId,
-          newSupabaseUserId: supabaseUser.id,
-          email: supabaseUser.email,
-        });
+        console.error(
+          '[getOrCreateUser] User exists with different supabaseUserId:',
+          {
+            existingSupabaseUserId: existingUserByEmail.supabaseUserId,
+            newSupabaseUserId: supabaseUser.id,
+            email: supabaseUser.email,
+          },
+        );
         throw new Error(
           `User with email ${supabaseUser.email} already exists with different Supabase ID`,
         );
@@ -158,7 +169,9 @@ export class SupabaseService {
         Array.isArray(error.meta?.target) &&
         error.meta?.target.includes('email')
       ) {
-        console.log('[getOrCreateUser] Unique constraint on email hit, returning existing user');
+        console.log(
+          '[getOrCreateUser] Unique constraint on email hit, returning existing user',
+        );
         const existingUser = await this.databaseService.user.findUnique({
           where: { email: supabaseUser.email! },
         });

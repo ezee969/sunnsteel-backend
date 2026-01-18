@@ -8,7 +8,7 @@ import { SupabaseJwtGuard } from 'src/auth/guards/supabase-jwt.guard';
 import { Request as ExpressRequest } from 'express';
 
 interface RequestWithUser extends ExpressRequest {
-	user: { id: string; email: string };
+  user: { id: string; email: string };
 }
 
 @Controller('users')

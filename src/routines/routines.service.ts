@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { ProgressionScheme } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
-import { CreateRoutineDto, RepTypeDto } from './dto/create-routine.dto';
+import { CreateRoutineDto } from './dto/create-routine.dto';
 import { UpdateRoutineDto } from './dto/update-routine.dto';
 import {
   CreateTmEventDto,
@@ -241,7 +241,7 @@ export class RoutinesService {
                   : {}),
                 sets: {
                   create: e.sets.map((s) => {
-                    if (s.repType === RepTypeDto.RANGE) {
+                    if (s.repType === 'RANGE') {
                       if (
                         typeof s.minReps !== 'number' ||
                         typeof s.maxReps !== 'number'
@@ -255,7 +255,7 @@ export class RoutinesService {
                           'minReps must be less than or equal to maxReps',
                         );
                       }
-                    } else if (s.repType === RepTypeDto.FIXED) {
+                    } else if (s.repType === 'FIXED') {
                       if (typeof s.reps !== 'number') {
                         throw new BadRequestException(
                           'For FIXED repType, reps is required',
@@ -264,7 +264,7 @@ export class RoutinesService {
                     }
 
                     const repTypeVal: 'RANGE' | 'FIXED' =
-                      s.repType === RepTypeDto.RANGE ? 'RANGE' : 'FIXED';
+                      s.repType === 'RANGE' ? 'RANGE' : 'FIXED';
                     return {
                       setNumber: s.setNumber,
                       repType: repTypeVal,
@@ -714,7 +714,7 @@ export class RoutinesService {
                       : {}),
                     sets: {
                       create: e.sets.map((s) => {
-                        if (s.repType === RepTypeDto.RANGE) {
+                        if (s.repType === 'RANGE') {
                           if (
                             typeof s.minReps !== 'number' ||
                             typeof s.maxReps !== 'number'
@@ -728,7 +728,7 @@ export class RoutinesService {
                               'minReps must be less than or equal to maxReps',
                             );
                           }
-                        } else if (s.repType === RepTypeDto.FIXED) {
+                        } else if (s.repType === 'FIXED') {
                           if (typeof s.reps !== 'number') {
                             throw new BadRequestException(
                               'For FIXED repType, reps is required',
@@ -737,7 +737,7 @@ export class RoutinesService {
                         }
 
                         const repTypeVal: 'RANGE' | 'FIXED' =
-                          s.repType === RepTypeDto.RANGE ? 'RANGE' : 'FIXED';
+                          s.repType === 'RANGE' ? 'RANGE' : 'FIXED';
                         return {
                           setNumber: s.setNumber,
                           repType: repTypeVal,
@@ -1119,16 +1119,23 @@ export class RoutinesService {
       });
     }
 
+    const exercise = await this.db.exercise.findUnique({
+      where: { id: dto.exerciseId },
+      select: { name: true },
+    });
+
     return {
       id: adjustment.id,
+      routineId,
       exerciseId: adjustment.exerciseId,
+      exerciseName: exercise?.name ?? 'Unknown Exercise',
       weekNumber: adjustment.weekNumber,
       deltaKg: adjustment.deltaKg,
       preTmKg: adjustment.preTmKg,
       postTmKg: adjustment.postTmKg,
-      reason: adjustment.reason,
+      reason: adjustment.reason ?? undefined,
       style: adjustment.style as 'STANDARD' | 'HYPERTROPHY' | null,
-      createdAt: adjustment.createdAt,
+      createdAt: adjustment.createdAt.toISOString(),
     };
   }
 
@@ -1168,16 +1175,27 @@ export class RoutinesService {
       orderBy: [{ weekNumber: 'desc' }, { createdAt: 'desc' }],
     });
 
+    const exerciseIds = Array.from(
+      new Set(adjustments.map((a) => a.exerciseId)),
+    );
+    const exercises = await this.db.exercise.findMany({
+      where: { id: { in: exerciseIds } },
+      select: { id: true, name: true },
+    });
+    const exerciseNameById = new Map(exercises.map((e) => [e.id, e.name]));
+
     return adjustments.map((adj) => ({
       id: adj.id,
+      routineId,
       exerciseId: adj.exerciseId,
+      exerciseName: exerciseNameById.get(adj.exerciseId) ?? 'Unknown Exercise',
       weekNumber: adj.weekNumber,
       deltaKg: adj.deltaKg,
       preTmKg: adj.preTmKg,
       postTmKg: adj.postTmKg,
-      reason: adj.reason,
+      reason: adj.reason ?? undefined,
       style: adj.style as 'STANDARD' | 'HYPERTROPHY' | null,
-      createdAt: adj.createdAt,
+      createdAt: adj.createdAt.toISOString(),
     }));
   }
 
@@ -1223,10 +1241,10 @@ export class RoutinesService {
     return summary.map((s) => ({
       exerciseId: s.exerciseId,
       exerciseName: exerciseMap.get(s.exerciseId) || 'Unknown Exercise',
-      events: s._count.id,
-      netDelta: s._sum.deltaKg || 0,
-      avgChange: s._avg.deltaKg || 0,
-      lastEventAt: s._max.createdAt,
+      adjustmentCount: s._count.id,
+      totalDeltaKg: s._sum.deltaKg || 0,
+      averageDeltaKg: s._avg.deltaKg || 0,
+      lastAdjustmentDate: s._max.createdAt?.toISOString() || null,
     }));
   }
 }

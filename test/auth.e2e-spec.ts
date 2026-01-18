@@ -6,10 +6,10 @@ import { DatabaseService } from '../src/database/database.service';
 
 /**
  * @deprecated These tests are for the legacy Passport.js authentication system.
- * 
+ *
  * The application has migrated to Supabase authentication.
  * See `supabase-auth.e2e-spec.ts` for current authentication tests.
- * 
+ *
  * These tests are kept for reference but are skipped by default.
  * They test the deprecated `/auth/register` and `/auth/login` endpoints.
  */

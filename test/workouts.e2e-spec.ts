@@ -39,7 +39,6 @@ const workoutsServiceMock = {
   upsertSetLog: jest.fn().mockResolvedValue({ id: 'log1', setNumber: 1 }),
 };
 
-
 describe('Workouts e2e (mocked service)', () => {
   let app: INestApplication;
 

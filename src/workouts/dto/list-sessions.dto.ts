@@ -10,11 +10,15 @@ import {
   Min,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { WorkoutSessionStatus } from '@prisma/client';
+import {
+  ListSessionsParams,
+  WORKOUT_SESSION_STATUSES,
+  WorkoutSessionStatus,
+} from '@sunsteel/contracts';
 
-export class ListSessionsDto {
+export class ListSessionsDto implements ListSessionsParams {
   @IsOptional()
-  @IsEnum(WorkoutSessionStatus)
+  @IsEnum(WORKOUT_SESSION_STATUSES)
   status?: WorkoutSessionStatus;
 
   @IsOptional()

@@ -21,7 +21,7 @@ import {
 import { Inject } from '@nestjs/common';
 import { StartWorkoutDto } from './dto/start-workout.dto';
 import { StartWorkoutResponseDto } from './dto/start-workout-response.dto';
-import { FinishWorkoutDto, FinishStatusDto } from './dto/finish-workout.dto';
+import { FinishWorkoutDto } from './dto/finish-workout.dto';
 import { UpsertSetLogDto } from './dto/upsert-set-log.dto';
 
 // Narrow unknown error objects that include a Prisma error code
@@ -519,7 +519,7 @@ export class WorkoutsService {
     );
 
     const status =
-      dto.status === FinishStatusDto.ABORTED
+      dto.status === 'ABORTED'
         ? WorkoutSessionStatus.ABORTED
         : WorkoutSessionStatus.COMPLETED;
 
@@ -620,7 +620,10 @@ export class WorkoutsService {
         let isDeload = false;
         if (hasProgram) {
           const tz = routineProgram.programTimezone!;
-          const offset = Math.max(0, (routineProgram.programStartWeek ?? 1) - 1);
+          const offset = Math.max(
+            0,
+            (routineProgram.programStartWeek ?? 1) - 1,
+          );
           const baseDuration = routineProgram.programDurationWeeks!;
           const remainingWeeks = Math.max(1, baseDuration - offset);
           const relativeWeek = this.getCurrentProgramWeek(
@@ -665,13 +668,13 @@ export class WorkoutsService {
               for (const s of ex.sets) {
                 const log = logMap.get(logKey(ex.id, s.setNumber));
                 const baseFromLog =
-                  typeof log?.weight === 'number' ? log!.weight : undefined;
+                  typeof log?.weight === 'number' ? log.weight : undefined;
                 const current =
                   typeof baseFromLog === 'number'
                     ? baseFromLog
                     : typeof s.weight === 'number'
-                    ? s.weight
-                    : 0;
+                      ? s.weight
+                      : 0;
                 updates.push({
                   routineExerciseId: ex.id,
                   setNumber: s.setNumber,
@@ -706,13 +709,13 @@ export class WorkoutsService {
                 reps >= target;
               if (hit) {
                 const baseFromLog =
-                  typeof log?.weight === 'number' ? log!.weight : undefined;
+                  typeof log?.weight === 'number' ? log.weight : undefined;
                 const current =
                   typeof baseFromLog === 'number'
                     ? baseFromLog
                     : typeof s.weight === 'number'
-                    ? s.weight
-                    : 0;
+                      ? s.weight
+                      : 0;
                 updates.push({
                   routineExerciseId: ex.id,
                   setNumber: s.setNumber,

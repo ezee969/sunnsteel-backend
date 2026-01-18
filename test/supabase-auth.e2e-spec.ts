@@ -1,5 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, ValidationPipe, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import {
+  INestApplication,
+  ValidationPipe,
+  UnauthorizedException,
+  BadRequestException,
+} from '@nestjs/common';
 import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { DatabaseService } from '../src/database/database.service';
@@ -15,7 +20,10 @@ describe('Supabase Auth (e2e)', () => {
   let supabaseServiceMock: Partial<SupabaseService>;
 
   // Token-to-user mapping for mock verification
-  const tokenToUser: Record<string, { id: string; email: string; name?: string }> = {};
+  const tokenToUser: Record<
+    string,
+    { id: string; email: string; name?: string }
+  > = {};
 
   beforeAll(async () => {
     // Create SupabaseService mock with token-based verification
@@ -39,17 +47,19 @@ describe('Supabase Auth (e2e)', () => {
             where: { supabaseUserId: supabaseId },
           });
         }),
-      getOrCreateUser: jest.fn().mockImplementation(async (supabaseUser: any) => {
-        return databaseService.user.upsert({
-          where: { email: supabaseUser.email },
-          update: { supabaseUserId: supabaseUser.id },
-          create: {
-            email: supabaseUser.email,
-            name: supabaseUser.user_metadata?.name || 'Test User',
-            supabaseUserId: supabaseUser.id,
-          },
-        });
-      }),
+      getOrCreateUser: jest
+        .fn()
+        .mockImplementation(async (supabaseUser: any) => {
+          return databaseService.user.upsert({
+            where: { email: supabaseUser.email },
+            update: { supabaseUserId: supabaseUser.id },
+            create: {
+              email: supabaseUser.email,
+              name: supabaseUser.user_metadata?.name || 'Test User',
+              supabaseUserId: supabaseUser.id,
+            },
+          });
+        }),
     };
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -113,7 +123,10 @@ describe('Supabase Auth (e2e)', () => {
       expect(response.body.user).toHaveProperty('id');
       expect(response.body.user.email).toBe(mockEmail);
       expect(response.body.user).toHaveProperty('name');
-      expect(response.body.user).toHaveProperty('supabaseUserId', mockSupabaseId);
+      expect(response.body.user).toHaveProperty(
+        'supabaseUserId',
+        mockSupabaseId,
+      );
       expect(response.body.user).toHaveProperty('weightUnit');
       expect(response.body).toHaveProperty('message');
 
@@ -229,7 +242,10 @@ describe('Supabase Auth (e2e)', () => {
       expect(response.body.user).toHaveProperty('id');
       expect(response.body.user.email).toBe(mockEmail);
       expect(response.body.user).toHaveProperty('name');
-      expect(response.body.user).toHaveProperty('supabaseUserId', mockSupabaseId);
+      expect(response.body.user).toHaveProperty(
+        'supabaseUserId',
+        mockSupabaseId,
+      );
     });
 
     it('should reject request without Bearer token', async () => {

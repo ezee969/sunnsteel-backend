@@ -1,13 +1,9 @@
 import { IsEnum, IsOptional, IsString } from 'class-validator';
-
-export enum FinishStatusDto {
-  COMPLETED = 'COMPLETED',
-  ABORTED = 'ABORTED',
-}
+import { FinishStatus } from '@sunsteel/contracts';
 
 export class FinishWorkoutDto {
-  @IsEnum(FinishStatusDto)
-  status!: FinishStatusDto;
+  @IsEnum(['COMPLETED', 'ABORTED'])
+  status!: FinishStatus;
 
   @IsOptional()
   @IsString()

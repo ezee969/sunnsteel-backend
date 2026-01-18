@@ -26,20 +26,20 @@ import { DatabaseModule } from 'src/database/database.module';
  */
 @Global()
 @Module({
-	imports: [
-		UsersModule,
-		TokenModule, // Still used by legacy AuthService
-		PassportModule,
-		JwtModule.register({}),
-		DatabaseModule,
-	],
-	controllers: [SupabaseAuthController],
-	providers: [
-		// Active Supabase Auth
-		SupabaseJwtStrategy,
-		SupabaseService,
-		SupabaseJwtGuard,
-	],
-	exports: [SupabaseJwtGuard, SupabaseService],
+  imports: [
+    UsersModule,
+    TokenModule, // Still used by legacy AuthService
+    PassportModule,
+    JwtModule.register({}),
+    DatabaseModule,
+  ],
+  controllers: [SupabaseAuthController],
+  providers: [
+    // Active Supabase Auth
+    SupabaseJwtStrategy,
+    SupabaseService,
+    SupabaseJwtGuard,
+  ],
+  exports: [SupabaseJwtGuard, SupabaseService],
 })
 export class AuthModule {}
