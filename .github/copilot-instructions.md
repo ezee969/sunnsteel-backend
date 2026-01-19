@@ -1,12 +1,3 @@
-- For documentation conventions and project references:
-    - `docs/README.md` - Documentation index
-
-## Documentation Conventions
-- **NEVER create documentation files at repo root** (except README.md)
-- **All project docs belong in `docs/` hierarchy**
-- **Update `docs/README.md` index** when adding new documentation areas
-- **Roadmap files**: Use consistent task ID format (RTF-B01, RTF-B02, etc.) for traceability
-
 ## Rules & Guidelines
 The project is executed in Windows 11.
 Never try to mount the project by yourself, always ask the user to do it.
