@@ -3,7 +3,6 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ProgressionScheme } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 import { CreateRoutineDto } from './dto/create-routine.dto';
 import { UpdateRoutineDto } from './dto/update-routine.dto';
@@ -269,6 +268,7 @@ export class RoutinesService {
                       setNumber: s.setNumber,
                       repType: repTypeVal,
                       weight: s.weight,
+                      ...(typeof s.rir === 'number' ? { rir: s.rir } : {}),
                       ...(repTypeVal === 'FIXED' && typeof s.reps === 'number'
                         ? { reps: s.reps }
                         : {}),
@@ -327,6 +327,7 @@ export class RoutinesService {
                     minReps: true,
                     maxReps: true,
                     weight: true,
+                      rir: true,
                   },
                   orderBy: { setNumber: 'asc' },
                 },
@@ -393,6 +394,7 @@ export class RoutinesService {
                     minReps: true,
                     maxReps: true,
                     weight: true,
+                    rir: true,
                   },
                   orderBy: { setNumber: 'asc' },
                 },
@@ -456,6 +458,7 @@ export class RoutinesService {
                     minReps: true,
                     maxReps: true,
                     weight: true,
+                    rir: true,
                   },
                   orderBy: { setNumber: 'asc' },
                 },
@@ -742,6 +745,7 @@ export class RoutinesService {
                           setNumber: s.setNumber,
                           repType: repTypeVal,
                           weight: s.weight,
+                          ...(typeof s.rir === 'number' ? { rir: s.rir } : {}),
                           ...(repTypeVal === 'FIXED' &&
                           typeof s.reps === 'number'
                             ? { reps: s.reps }
@@ -799,6 +803,7 @@ export class RoutinesService {
                       minReps: true,
                       maxReps: true,
                       weight: true,
+                      rir: true,
                     },
                     orderBy: { setNumber: 'asc' },
                   },
@@ -909,6 +914,7 @@ export class RoutinesService {
                     minReps: true,
                     maxReps: true,
                     weight: true,
+                    rir: true,
                   },
                   orderBy: { setNumber: 'asc' },
                 },
@@ -964,6 +970,7 @@ export class RoutinesService {
                     minReps: true,
                     maxReps: true,
                     weight: true,
+                    rir: true,
                   },
                   orderBy: { setNumber: 'asc' },
                 },

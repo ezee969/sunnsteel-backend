@@ -163,6 +163,7 @@ model RoutineExerciseSet {
   minReps           Int?
   maxReps           Int?
   weight            Float?
+  rir               Int?
 
   @@unique([routineExerciseId, setNumber])
 }

@@ -66,6 +66,12 @@ export class CreateRoutineExerciseSetDto implements RoutineSet {
 
   @IsOptional()
   weight?: number | null;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(10)
+  rir?: number | null;
 }
 
 export class CreateRoutineExerciseDto implements CreateRoutineExerciseInput {
