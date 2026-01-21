@@ -1,122 +1,48 @@
-## Rules & Guidelines
-The project is executed in Windows 11.
-Never try to mount the project by yourself, always ask the user to do it.
+## Sunnsteel Backend (NestJS + Prisma)
 
-# GitHub Copilot NestJS Backend API Developer Rule
+- The project is executed in Windows 11.
+- Never try to mount/run the project by yourself; ask the user to do it.
+- Keep documentation under `docs/` (avoid adding new root-level docs files).
 
-You are an expert senior backend developer specializing in NestJS, TypeScript, Prisma ORM, NeonDB (PostgreSQL), Node.js, and Supabase Auth for enterprise-grade REST APIs and microservices.
+### Developer workflows (from `package.json`)
 
-## Core Principles
-- Build scalable, maintainable APIs ready for enterprise deployment
-- Implement comprehensive error handling and validation
-- Follow SOLID principles and clean architecture patterns
-- Prioritize type safety and performance optimization
-- Apply proper security practices and authentication patterns
+- Run API: `npm run start:dev` (default `http://localhost:4000/api`)
+- Run both apps: `npm run dev:all` (PowerShell launcher in `start-dev.ps1`)
+- Prisma:
+  - Migrate: `npx prisma migrate dev`
+  - Seed: `npm run db:seed`
+  - Load exercises: `npm run db:add-exercises`
+- Tests: `npm test`, `npm run test:e2e`, `npm run test:e2e:rtf`
 
-## Code Standards
-- Tabs for indentation, single quotes, no semicolons
-- PascalCase: Classes, Interfaces, DTOs, Entities
-- kebab-case: File names, endpoints
-- camelCase: Variables, functions, properties
-- UPPERCASE: Constants, environment variables
-- Prefix interfaces with 'I', DTOs with 'Dto', entities with 'Entity'
-- Line limit: 80 characters, strict equality (===), trailing commas
+### Runtime conventions
 
-## NestJS Architecture Patterns
-- Use modular architecture with feature modules
-- Implement proper dependency injection with decorators
-- Use guards for authentication and authorization
-- Apply interceptors for logging, transformation, and caching
-- Use pipes for validation and transformation
-- Implement proper exception filters for error handling
-- Use middleware for cross-cutting concerns
+- `src/main.ts` polyfills `globalThis.crypto` via Node `webcrypto` (keep this at the very top of the file).
+- Global route prefix is `api` and CORS origin comes from `FRONTEND_URL` (fallback `http://localhost:3000`) in [src/main.ts](../src/main.ts).
+- Global validation uses `ValidationPipe({ transform: true, enableImplicitConversion: true })`, so DTO property types matter (implicit string→number conversions are expected).
 
-## Technology-Specific Requirements
+### Database (Prisma)
 
-### **Prisma ORM Integration**
-- Use Prisma Client with proper type generation
-- Implement connection pooling for production
-- Create efficient database queries with select/include
-- Use transactions for data consistency
-- Implement proper database migrations
-- Use Prisma schema validation and constraints
-- Apply database indexing strategies
+- Prisma client is provided as `DatabaseService extends PrismaClient` in [src/database/database.service.ts](../src/database/database.service.ts) and exported via `DatabaseModule`.
 
-### **NeonDB (PostgreSQL) Optimization**
-- Design normalized database schemas
-- Implement proper foreign key relationships
-- Use efficient queries with proper indexes
-- Apply connection pooling for scalability
-- Handle database connection errors gracefully
-- Use prepared statements for security
+### Ops / internal endpoints
 
-### **Supabase Auth Integration**
-- Validate JWT tokens from Supabase
-- Create NestJS guards for route protection
-- Extract user context from tokens
-- Handle token expiration and refresh
-- Implement role-based access control (RBAC)
-- Use Supabase RLS policies when needed
+- Global rate limiting is enabled via `ThrottlerGuard` (see [src/app.module.ts](../src/app.module.ts)).
+- Built-in endpoints: `/health` and `/internal/cache-metrics` (see [src/app.module.ts](../src/app.module.ts)).
 
-### **API Design Standards**
-- Follow RESTful conventions and HTTP status codes
-- Implement proper request/response DTOs
-- Use class-validator for input validation
-- Apply class-transformer for serialization
-- Implement pagination, filtering, and sorting
-- Use OpenAPI/Swagger for documentation
-- Apply rate limiting and throttling
+### Auth (Supabase)
 
+- Protect endpoints using `@UseGuards(SupabaseJwtGuard)` (see [src/auth/auth.module.ts](../src/auth/auth.module.ts)).
+- The `/auth/supabase/verify` endpoint sets an HttpOnly cookie `ss_session=1` used by the frontend middleware for route protection (see [src/auth/supabase-auth.controller.ts](../src/auth/supabase-auth.controller.ts)).
 
-## Error Handling & Validation
-- Use built-in NestJS exception filters
-- Create custom exception classes for business logic
-- Implement proper HTTP status codes
-- Use class-validator for DTO validation
-- Handle Prisma errors gracefully
-- Log errors with proper context
-- Return consistent error response format
+### Caching (RtF week goals)
 
-## Performance & Security
-- Implement request caching with Redis (when available)
-- Use connection pooling for database
-- Apply CORS configuration properly
-- Implement helmet for security headers
-- Use environment variables for sensitive data
-- Apply input sanitization and validation
-- Implement proper logging and monitoring
+- Global singleton cache module is [src/cache/cache.module.ts](../src/cache/cache.module.ts).
+- Driver/config is environment-based: `RTF_CACHE_DRIVER=memory|redis`, `RTF_REDIS_URL`, `RTF_CACHE_LAYERED`.
 
-## Database Patterns with Prisma
-- Use select for optimal queries
-- Implement proper relations with include
-- Use transactions for multi-table operations
-- Apply soft deletes where appropriate
-- Create efficient pagination queries
-- Use database constraints for data integrity
+### Shared contracts (`@sunsteel/contracts`)
 
+- Backend DTOs/enums often come from `@sunsteel/contracts` (examples: `src/routines/dto/*`, `src/workouts/dto/*`). Prefer reusing these shared shapes over redefining them.
 
-## Code Generation Requirements
-Always include:
-1. Proper TypeScript interfaces and DTOs
-2. NestJS decorators for dependency injection
-3. Input validation with class-validator
-4. Error handling with try-catch blocks
-5. Prisma queries with proper typing
-6. JWT authentication guards
-7. OpenAPI/Swagger documentation
-8. Comprehensive JSDoc comments
+### Code style
 
-
-## Quality Checklist
-- [ ] Proper dependency injection implemented
-- [ ] Input validation with DTOs
-- [ ] Error handling with proper HTTP codes
-- [ ] Database queries optimized
-- [ ] Authentication guards applied
-- [ ] Swagger documentation included
-- [ ] Environment variables used for config
-- [ ] Proper logging implemented
-- [ ] Type safety maintained throughout
-
-
-Remember: Build production-ready APIs with enterprise scalability. Every endpoint should be secure, validated, documented, and optimized for performance. Follow NestJS conventions and leverage TypeScript's type system for maximum reliability.
+- Match the surrounding file’s formatting (tabs/spaces and semicolon usage vary across existing files). Run `npm run lint`/`npm run format` when touching many files.
