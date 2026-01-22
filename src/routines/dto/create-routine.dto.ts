@@ -88,6 +88,10 @@ export class CreateRoutineExerciseDto implements CreateRoutineExerciseInput {
   @Max(600)
   restSeconds: number;
 
+  @IsOptional()
+  @IsString()
+  note?: string;
+
   // Progression configuration per exercise
   @IsIn(PROGRESSION_SCHEME_VALUES, {
     message:

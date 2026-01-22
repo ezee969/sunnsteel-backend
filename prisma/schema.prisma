@@ -138,6 +138,7 @@ model RoutineExercise {
   exercise     Exercise             @relation(fields: [exerciseId], references: [id])
   order        Int                  @default(0)
   restSeconds  Int                  @default(60)
+  note         String?              // User note for the exercise in this routine
   // Progression configuration per exercise
   progressionScheme  ProgressionScheme @default(NONE)
   minWeightIncrement Float             @default(2.5)
