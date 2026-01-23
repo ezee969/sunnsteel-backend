@@ -74,6 +74,21 @@ export class RoutinesController {
     return await this.routinesService.update(req.user.id, id, dto);
   }
 
+  @Patch(':id/exercises/:exerciseId/note')
+  async updateExerciseNote(
+    @Req() req: RequestWithUser,
+    @Param('id') routineId: string,
+    @Param('exerciseId') exerciseId: string,
+    @Body('note') note: string,
+  ) {
+    return this.routinesService.updateExerciseNote(
+      req.user.id,
+      routineId,
+      exerciseId,
+      note,
+    );
+  }
+
   @Patch(':id/favorite')
   async setFavorite(
     @Req() req: RequestWithUser,

@@ -826,6 +826,38 @@ export class RoutinesService {
     });
   }
 
+  async updateExerciseNote(
+    userId: string,
+    routineId: string,
+    routineExerciseId: string,
+    note: string,
+  ) {
+    // Verify ownership
+    const routine = await this.db.routine.findFirst({
+      where: { id: routineId, userId },
+    });
+    if (!routine) {
+      throw new NotFoundException('Routine not found');
+    }
+
+    // Verify routineExercise belongs to routine
+    const re = await this.db.routineExercise.findFirst({
+      where: {
+        id: routineExerciseId,
+        routineDay: { routineId },
+      },
+    });
+
+    if (!re) {
+      throw new NotFoundException('Exercise not found in this routine');
+    }
+
+    return this.db.routineExercise.update({
+      where: { id: routineExerciseId },
+      data: { note },
+    });
+  }
+
   async setFavorite(userId: string, id: string, isFavorite: boolean) {
     // Ensure routine belongs to user
     const routine = await this.db.routine.findFirst({
