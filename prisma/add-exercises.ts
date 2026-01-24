@@ -18,13 +18,36 @@ type ExerciseSeed = {
  * 2. Run: npx tsx prisma/add-exercises.ts
  */
 const newExercises: ExerciseSeed[] = [
-	// Example: Add your new exercises here
-	// {
-	//   name: "Farmer's Walk",
-	//   primaryMuscles: [MuscleGroup.FOREARMS, MuscleGroup.CORE],
-	//   secondaryMuscles: [MuscleGroup.TRAPEZIUS],
-	//   equipment: 'dumbbell',
-	// },
+	{
+		name: 'Leg Press',
+		primaryMuscles: [MuscleGroup.QUADRICEPS],
+		secondaryMuscles: [MuscleGroup.GLUTES, MuscleGroup.HAMSTRINGS],
+		equipment: 'machine',
+	},
+	{
+		name: 'Back Extension (Hamstring Bias)',
+		primaryMuscles: [MuscleGroup.HAMSTRINGS],
+		secondaryMuscles: [MuscleGroup.ERECTOR_SPINAE, MuscleGroup.GLUTES],
+		equipment: 'bodyweight',
+	},
+	{
+		name: 'Seated Leg Extension (Unilateral)',
+		primaryMuscles: [MuscleGroup.QUADRICEPS],
+		secondaryMuscles: [],
+		equipment: 'machine',
+	},
+	{
+		name: 'Hip Adduction Machine',
+		primaryMuscles: [MuscleGroup.ADDUCTOR],
+		secondaryMuscles: [],
+		equipment: 'machine',
+	},
+	{
+		name: 'Pause Squat',
+		primaryMuscles: [MuscleGroup.QUADRICEPS],
+		secondaryMuscles: [MuscleGroup.GLUTES, MuscleGroup.HAMSTRINGS],
+		equipment: 'barbell',
+	},
 ]
 
 async function main() {

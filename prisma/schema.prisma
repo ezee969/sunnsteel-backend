@@ -70,6 +70,7 @@ enum MuscleGroup {
   GLUTES
   CALVES
   CORE
+  ADDUCTOR
 }
 
 // Catalog of exercises selectable when building routines
