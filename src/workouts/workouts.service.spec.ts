@@ -3,7 +3,6 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { WorkoutsService } from './workouts.service';
 import { DatabaseService } from '../database/database.service';
 import { RTF_WEEK_GOALS_CACHE } from '../cache/rtf-week-goals-cache.async';
-import { FinishStatusDto } from './dto/finish-workout.dto';
 import { WorkoutSessionStatus } from '@prisma/client';
 
 const dbMock = {
@@ -136,7 +135,7 @@ describe('WorkoutsService', () => {
 
       await expect(
         service.finishSession('u1', 's1', {
-          status: FinishStatusDto.COMPLETED,
+          status: 'COMPLETED',
         }),
       ).rejects.toBeInstanceOf(NotFoundException);
     });
@@ -150,7 +149,7 @@ describe('WorkoutsService', () => {
 
       await expect(
         service.finishSession('u1', 's1', {
-          status: FinishStatusDto.COMPLETED,
+          status: 'COMPLETED',
         }),
       ).rejects.toBeInstanceOf(BadRequestException);
     });
@@ -166,7 +165,7 @@ describe('WorkoutsService', () => {
       (dbMock.workoutSession.update as any).mockResolvedValue(updated);
 
       const res = await service.finishSession('u1', 's1', {
-        status: FinishStatusDto.COMPLETED,
+        status: 'COMPLETED',
         notes: 'done',
       });
 
@@ -186,7 +185,7 @@ describe('WorkoutsService', () => {
       );
 
       const res: any = await service.finishSession('u1', 's2', {
-        status: FinishStatusDto.ABORTED,
+        status: 'ABORTED',
         notes: 'stopped',
       });
 
@@ -488,7 +487,7 @@ describe('WorkoutsService', () => {
       ]);
 
       await service.finishSession('u1', 's1', {
-        status: FinishStatusDto.COMPLETED,
+        status: 'COMPLETED',
       } as any);
 
       // Expect both sets to be updated with +2.5 increment
@@ -525,7 +524,7 @@ describe('WorkoutsService', () => {
       (dbMock.routineExerciseSet.update as any).mockClear();
 
       await service.finishSession('u1', 's1', {
-        status: FinishStatusDto.COMPLETED,
+        status: 'COMPLETED',
       } as any);
 
       expect(dbMock.routineExerciseSet.update).not.toHaveBeenCalled();
@@ -568,7 +567,7 @@ describe('WorkoutsService', () => {
       ]);
 
       await service.finishSession('u1', 's1', {
-        status: FinishStatusDto.COMPLETED,
+        status: 'COMPLETED',
       } as any);
 
       const calls = (dbMock.routineExerciseSet.update as any).mock.calls;

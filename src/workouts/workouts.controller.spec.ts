@@ -1,7 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { WorkoutsController } from './workouts.controller';
 import { WorkoutsService } from './workouts.service';
-import { FinishStatusDto } from './dto/finish-workout.dto';
 
 const serviceMock = {
   startSession: jest.fn(),
@@ -38,7 +37,7 @@ describe('WorkoutsController', () => {
   });
 
   it('finish calls service with userId, id and dto', async () => {
-    const dto = { status: FinishStatusDto.COMPLETED, notes: 'ok' } as any;
+    const dto = { status: 'COMPLETED', notes: 'ok' } as any;
     serviceMock.finishSession.mockResolvedValue({ id: 's1' });
 
     const res = await controller.finish(req, 's1', dto);

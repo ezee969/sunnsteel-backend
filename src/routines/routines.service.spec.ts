@@ -362,14 +362,15 @@ describe('RoutinesService', () => {
                 exercises: expect.objectContaining({
                   select: expect.objectContaining({
                     sets: expect.objectContaining({
-                      select: {
+                      select: expect.objectContaining({
                         setNumber: true,
                         repType: true,
                         reps: true,
                         minReps: true,
                         maxReps: true,
                         weight: true,
-                      },
+                        rir: true,
+                      }),
                     }),
                   }),
                 }),
@@ -499,14 +500,15 @@ describe('RoutinesService', () => {
                 exercises: expect.objectContaining({
                   select: expect.objectContaining({
                     sets: expect.objectContaining({
-                      select: {
+                      select: expect.objectContaining({
                         setNumber: true,
                         repType: true,
                         reps: true,
                         minReps: true,
                         maxReps: true,
                         weight: true,
-                      },
+                        rir: true,
+                      }),
                     }),
                   }),
                 }),
@@ -628,14 +630,15 @@ describe('RoutinesService', () => {
                 exercises: expect.objectContaining({
                   select: expect.objectContaining({
                     sets: expect.objectContaining({
-                      select: {
+                      select: expect.objectContaining({
                         setNumber: true,
                         repType: true,
                         reps: true,
                         minReps: true,
                         maxReps: true,
                         weight: true,
-                      },
+                        rir: true,
+                      }),
                     }),
                   }),
                 }),
@@ -674,14 +677,15 @@ describe('RoutinesService', () => {
                 exercises: expect.objectContaining({
                   select: expect.objectContaining({
                     sets: expect.objectContaining({
-                      select: {
+                      select: expect.objectContaining({
                         setNumber: true,
                         repType: true,
                         reps: true,
                         minReps: true,
                         maxReps: true,
                         weight: true,
-                      },
+                        rir: true,
+                      }),
                     }),
                   }),
                 }),

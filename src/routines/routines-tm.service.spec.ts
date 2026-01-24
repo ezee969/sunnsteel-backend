@@ -32,6 +32,7 @@ describe('RoutinesService - TM Adjustments', () => {
               groupBy: jest.fn(),
             },
             exercise: {
+              findUnique: jest.fn(),
               findMany: jest.fn(),
             },
           },
@@ -84,6 +85,7 @@ describe('RoutinesService - TM Adjustments', () => {
     };
 
     it('should create TM adjustment successfully', async () => {
+      const exerciseName = 'Bench Press';
       const mockAdjustment = {
         id: 'adjustment-123',
         ...createTmEventDto,
@@ -100,6 +102,10 @@ describe('RoutinesService - TM Adjustments', () => {
         .spyOn((databaseService as any).tmAdjustment, 'create')
         .mockResolvedValue(mockAdjustment as any);
 
+      jest
+        .spyOn((databaseService as any).exercise, 'findUnique')
+        .mockResolvedValue({ name: exerciseName } as any);
+
       const result = await service.createTmAdjustment(
         mockUser.id,
         mockRoutine.id,
@@ -108,14 +114,16 @@ describe('RoutinesService - TM Adjustments', () => {
 
       expect(result).toEqual({
         id: mockAdjustment.id,
+        routineId: mockRoutine.id,
         exerciseId: mockAdjustment.exerciseId,
+        exerciseName,
         weekNumber: mockAdjustment.weekNumber,
         deltaKg: mockAdjustment.deltaKg,
         preTmKg: mockAdjustment.preTmKg,
         postTmKg: mockAdjustment.postTmKg,
-        reason: mockAdjustment.reason,
+        reason: createTmEventDto.reason,
         style: mockAdjustment.style,
-        createdAt: mockAdjustment.createdAt,
+        createdAt: mockAdjustment.createdAt.toISOString(),
       });
     });
 
@@ -173,6 +181,7 @@ describe('RoutinesService - TM Adjustments', () => {
 
   describe('getTmAdjustments', () => {
     it('should return adjustments for authorized user', async () => {
+      const exerciseName = 'Bench Press';
       const mockAdjustments = [
         {
           id: 'adj-1',
@@ -195,17 +204,32 @@ describe('RoutinesService - TM Adjustments', () => {
         .spyOn((databaseService as any).tmAdjustment, 'findMany')
         .mockResolvedValue(mockAdjustments as any);
 
+      jest
+        .spyOn((databaseService as any).exercise, 'findMany')
+        .mockResolvedValue([
+          { id: 'exercise-123', name: exerciseName },
+        ] as any);
+
       const result = await service.getTmAdjustments(
         mockUser.id,
         mockRoutine.id,
       );
 
-      // The service should return adjustments without exposing routineId (since it's already in the context)
-      const expectedResult = mockAdjustments.map((adj) => {
-        const { routineId, ...rest } = adj;
-        return rest;
-      });
-      expect(result).toEqual(expectedResult);
+      expect(result).toEqual([
+        {
+          id: 'adj-1',
+          routineId: mockRoutine.id,
+          exerciseId: 'exercise-123',
+          exerciseName,
+          weekNumber: 3,
+          deltaKg: 2.5,
+          preTmKg: 100,
+          postTmKg: 102.5,
+          reason: 'test',
+          style: 'STANDARD',
+          createdAt: mockAdjustments[0].createdAt.toISOString(),
+        },
+      ]);
       expect(
         (databaseService as any).tmAdjustment.findMany,
       ).toHaveBeenCalledWith({
@@ -220,6 +244,10 @@ describe('RoutinesService - TM Adjustments', () => {
         .mockResolvedValue(mockRoutine);
       jest
         .spyOn((databaseService as any).tmAdjustment, 'findMany')
+        .mockResolvedValue([] as any);
+
+      jest
+        .spyOn((databaseService as any).exercise, 'findMany')
         .mockResolvedValue([] as any);
 
       await service.getTmAdjustments(
@@ -283,10 +311,10 @@ describe('RoutinesService - TM Adjustments', () => {
         {
           exerciseId: 'exercise-123',
           exerciseName: 'Bench Press',
-          events: 3,
-          netDelta: 7.5,
-          avgChange: 2.5,
-          lastEventAt: mockSummary[0]._max.createdAt,
+          adjustmentCount: 3,
+          totalDeltaKg: 7.5,
+          averageDeltaKg: 2.5,
+          lastAdjustmentDate: mockSummary[0]._max.createdAt.toISOString(),
         },
       ]);
     });
