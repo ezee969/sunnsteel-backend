@@ -21,6 +21,12 @@ model User {
   email         String         @unique
   password      String?        // Made optional for Supabase migration
   name          String
+  lastName      String?
+  avatarUrl     String?
+  age           Int?
+  sex           Sex?
+  weight        Float?
+  height        Float?
   supabaseUserId String?       @unique // Link to Supabase user
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -50,6 +56,12 @@ model RefreshToken {
 enum WeightUnit {
   KG
   LB
+}
+
+// Biological sex of user
+enum Sex {
+  MALE
+  FEMALE
 }
 
 // Muscle groups for exercise targeting

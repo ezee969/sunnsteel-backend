@@ -70,23 +70,18 @@ export class SupabaseService {
 
     if (existingUserBySupabaseId) {
       console.log(
-        '[getOrCreateUser] User found by supabaseUserId, updating if needed',
+        '[getOrCreateUser] User found by supabaseUserId, returning existing user (updating email if changed)',
       );
 
-      // Update user data if needed
-      const updateData: { email: string; name?: string } = {
-        email: supabaseUser.email!,
-      };
-
-      // Only update name if it's not just the email prefix (preserve user-provided names)
-      if (userName !== supabaseUser.email?.split('@')[0]) {
-        updateData.name = userName;
+      // Update email if it has changed in Supabase
+      if (existingUserBySupabaseId.email !== supabaseUser.email) {
+        return this.databaseService.user.update({
+          where: { id: existingUserBySupabaseId.id },
+          data: { email: supabaseUser.email! },
+        });
       }
 
-      return this.databaseService.user.update({
-        where: { id: existingUserBySupabaseId.id },
-        data: updateData,
-      });
+      return existingUserBySupabaseId;
     }
 
     // Check if user exists by email (legacy user migration scenario)
@@ -101,18 +96,11 @@ export class SupabaseService {
           '[getOrCreateUser] Linking existing legacy user to Supabase',
         );
 
-        const updateData: { supabaseUserId: string; name?: string } = {
-          supabaseUserId: supabaseUser.id,
-        };
-
-        // Only update name if it's not just the email prefix (preserve user-provided names)
-        if (userName !== supabaseUser.email?.split('@')[0]) {
-          updateData.name = userName;
-        }
-
         return this.databaseService.user.update({
           where: { id: existingUserByEmail.id },
-          data: updateData,
+          data: {
+            supabaseUserId: supabaseUser.id,
+          },
         });
       } else if (existingUserByEmail.supabaseUserId === supabaseUser.id) {
         // User already exists with correct supabaseUserId - just return it
@@ -183,9 +171,6 @@ export class SupabaseService {
               where: { id: existingUser.id },
               data: {
                 supabaseUserId: supabaseUser.id,
-                ...(userName !== supabaseUser.email?.split('@')[0] && {
-                  name: userName,
-                }),
               },
             });
           }

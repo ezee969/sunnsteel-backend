@@ -38,7 +38,7 @@
     "@nestjs/schedule": "^5.0.1",
     "@nestjs/throttler": "^6.4.0",
     "@prisma/client": "^6.0.0",
-    "@sunsteel/contracts": "^0.2.3",
+    "@sunsteel/contracts": "file:../sunsteel-contracts",
     "@supabase/supabase-js": "^2.39.8",
     "@types/cookie-parser": "^1.4.8",
     "bcrypt": "^5.1.1",

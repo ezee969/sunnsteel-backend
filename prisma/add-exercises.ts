@@ -19,34 +19,10 @@ type ExerciseSeed = {
  */
 const newExercises: ExerciseSeed[] = [
 	{
-		name: 'Leg Press',
-		primaryMuscles: [MuscleGroup.QUADRICEPS],
-		secondaryMuscles: [MuscleGroup.GLUTES, MuscleGroup.HAMSTRINGS],
-		equipment: 'machine',
-	},
-	{
-		name: 'Back Extension (Hamstring Bias)',
-		primaryMuscles: [MuscleGroup.HAMSTRINGS],
-		secondaryMuscles: [MuscleGroup.ERECTOR_SPINAE, MuscleGroup.GLUTES],
-		equipment: 'bodyweight',
-	},
-	{
-		name: 'Seated Leg Extension (Unilateral)',
-		primaryMuscles: [MuscleGroup.QUADRICEPS],
+		name: 'Chest Supported Dumbbell Shrug',
+		primaryMuscles: [MuscleGroup.TRAPEZIUS],
 		secondaryMuscles: [],
-		equipment: 'machine',
-	},
-	{
-		name: 'Hip Adduction Machine',
-		primaryMuscles: [MuscleGroup.ADDUCTOR],
-		secondaryMuscles: [],
-		equipment: 'machine',
-	},
-	{
-		name: 'Pause Squat',
-		primaryMuscles: [MuscleGroup.QUADRICEPS],
-		secondaryMuscles: [MuscleGroup.GLUTES, MuscleGroup.HAMSTRINGS],
-		equipment: 'barbell',
+		equipment: 'dumbbell',
 	},
 ]
 
