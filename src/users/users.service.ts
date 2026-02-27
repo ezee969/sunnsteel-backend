@@ -111,4 +111,31 @@ export class UsersService {
       },
     });
   }
+
+  async searchUsers(query: string, excludeEmail: string, limit: number = 10) {
+    if (!query || query.trim() === '') return [];
+
+    // search across name, lastName, and email
+    return this.db.user.findMany({
+      where: {
+        email: { not: excludeEmail },
+        OR: [
+          { name: { contains: query, mode: 'insensitive' } },
+          { lastName: { contains: query, mode: 'insensitive' } },
+          { email: { contains: query, mode: 'insensitive' } },
+        ],
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        lastName: true,
+        avatarUrl: true,
+      },
+      take: limit,
+      orderBy: {
+        name: 'asc'
+      }
+    });
+  }
 }

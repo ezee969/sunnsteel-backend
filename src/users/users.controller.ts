@@ -1,5 +1,5 @@
 // Utility
-import { Controller, Get, Patch, Body, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Patch, Body, UseGuards, Request, Query } from '@nestjs/common';
 // Services
 import { UsersService } from './users.service';
 // Guards
@@ -26,5 +26,12 @@ export class UsersController {
   @Patch('profile')
   updateProfile(@Request() req: RequestWithUser, @Body() data: UpdateProfileRequest) {
     return this.usersService.updateProfile(req.user.email, data);
+  }
+
+  @UseGuards(SupabaseJwtGuard)
+  @Get('search')
+  searchUsers(@Request() req: RequestWithUser, @Query('q') query: string, @Query('limit') limit?: string) {
+    const limitNum = limit ? parseInt(limit, 10) : 10;
+    return this.usersService.searchUsers(query, req.user.email, limitNum);
   }
 }
