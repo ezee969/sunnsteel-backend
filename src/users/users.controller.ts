@@ -1,5 +1,16 @@
 // Utility
-import { Controller, Get, Patch, Body, UseGuards, Request, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Patch,
+  Body,
+  UseGuards,
+  Request,
+  Query,
+  Param,
+  Post,
+  Delete,
+} from '@nestjs/common';
 // Services
 import { UsersService } from './users.service';
 // Guards
@@ -33,5 +44,23 @@ export class UsersController {
   searchUsers(@Request() req: RequestWithUser, @Query('q') query: string, @Query('limit') limit?: string) {
     const limitNum = limit ? parseInt(limit, 10) : 10;
     return this.usersService.searchUsers(query, req.user.email, limitNum);
+  }
+
+  @UseGuards(SupabaseJwtGuard)
+  @Get(':id')
+  getPublicProfile(@Request() req: RequestWithUser, @Param('id') userId: string) {
+    return this.usersService.getPublicProfileById(req.user.id, userId);
+  }
+
+  @UseGuards(SupabaseJwtGuard)
+  @Post(':id/follow')
+  followUser(@Request() req: RequestWithUser, @Param('id') userId: string) {
+    return this.usersService.followUser(req.user.id, userId);
+  }
+
+  @UseGuards(SupabaseJwtGuard)
+  @Delete(':id/follow')
+  unfollowUser(@Request() req: RequestWithUser, @Param('id') userId: string) {
+    return this.usersService.unfollowUser(req.user.id, userId);
   }
 }

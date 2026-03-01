@@ -7,19 +7,33 @@ describe('UsersController', () => {
   let controller: UsersController;
   let usersService: UsersService;
 
-  const mockUser = {
+  const mockUserProfile = {
     id: '1',
     email: 'test@example.com',
     name: 'Test User',
     supabaseUserId: null,
-    weightUnit: 'KG' as any,
+    weightUnit: 'KG' as const,
     createdAt: new Date(),
     updatedAt: new Date(),
+    followerCount: 0,
+    followingCount: 0,
+  };
+
+  const mockPublicProfile = {
+    id: 'target-user-id',
+    name: 'Target',
+    lastName: 'User',
+    avatarUrl: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    followerCount: 12,
+    followingCount: 4,
+    isFollowedByMe: true,
   };
 
   const mockRequest = {
     user: {
-      sub: '1',
+      id: 'viewer-user-id',
       email: 'test@example.com',
     },
   };
@@ -27,6 +41,9 @@ describe('UsersController', () => {
   beforeEach(async () => {
     const mockUsersService = {
       findByEmail: jest.fn(),
+      getPublicProfileById: jest.fn(),
+      followUser: jest.fn(),
+      unfollowUser: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -52,25 +69,57 @@ describe('UsersController', () => {
 
   describe('getProfile', () => {
     it('should return user profile', async () => {
-      jest.spyOn(usersService, 'findByEmail').mockResolvedValue(mockUser);
+      jest.spyOn(usersService, 'findByEmail').mockResolvedValue(mockUserProfile as any);
 
       const result = await controller.getProfile(mockRequest as any);
 
-      expect(usersService.findByEmail).toHaveBeenCalledWith(
-        mockRequest.user.email,
-      );
-      expect(result).toEqual(mockUser);
+      expect(usersService.findByEmail).toHaveBeenCalledWith(mockRequest.user.email);
+      expect(result).toEqual(mockUserProfile);
     });
+  });
 
-    it('should handle user not found', async () => {
-      jest.spyOn(usersService, 'findByEmail').mockResolvedValue(null);
+  describe('getPublicProfile', () => {
+    it('should return public user profile', async () => {
+      jest
+        .spyOn(usersService, 'getPublicProfileById')
+        .mockResolvedValue(mockPublicProfile as any);
 
-      const result = await controller.getProfile(mockRequest as any);
+      const result = await controller.getPublicProfile(mockRequest as any, 'target-user-id');
 
-      expect(usersService.findByEmail).toHaveBeenCalledWith(
-        mockRequest.user.email,
+      expect(usersService.getPublicProfileById).toHaveBeenCalledWith(
+        mockRequest.user.id,
+        'target-user-id',
       );
-      expect(result).toBeNull();
+      expect(result).toEqual(mockPublicProfile);
+    });
+  });
+
+  describe('followUser', () => {
+    it('should follow and return updated public profile', async () => {
+      jest.spyOn(usersService, 'followUser').mockResolvedValue(mockPublicProfile as any);
+
+      const result = await controller.followUser(mockRequest as any, 'target-user-id');
+
+      expect(usersService.followUser).toHaveBeenCalledWith(
+        mockRequest.user.id,
+        'target-user-id',
+      );
+      expect(result).toEqual(mockPublicProfile);
+    });
+  });
+
+  describe('unfollowUser', () => {
+    it('should unfollow and return updated public profile', async () => {
+      const unfollowedProfile = { ...mockPublicProfile, isFollowedByMe: false };
+      jest.spyOn(usersService, 'unfollowUser').mockResolvedValue(unfollowedProfile as any);
+
+      const result = await controller.unfollowUser(mockRequest as any, 'target-user-id');
+
+      expect(usersService.unfollowUser).toHaveBeenCalledWith(
+        mockRequest.user.id,
+        'target-user-id',
+      );
+      expect(result).toEqual(unfollowedProfile);
     });
   });
 });
