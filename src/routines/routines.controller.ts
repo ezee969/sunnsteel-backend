@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Logger,
   Param,
   Post,
   Req,
@@ -19,13 +20,19 @@ import { UpdateCompletedDto } from './dto/update-completed.dto';
 import { GetRoutinesFilterDto } from './dto/get-routines-filter.dto';
 import { CreateTmEventDto } from './dto/tm-adjustment.dto';
 import { Request } from 'express';
+import { RoutinesTmService } from './routines-tm.service';
 
 type RequestWithUser = Request & { user: { id: string; email: string } };
 
 @UseGuards(SupabaseJwtGuard)
 @Controller('routines')
 export class RoutinesController {
-  constructor(private readonly routinesService: RoutinesService) {}
+  private readonly logger = new Logger(RoutinesController.name);
+
+  constructor(
+    private readonly routinesService: RoutinesService,
+    private readonly routinesTmService: RoutinesTmService,
+  ) {}
 
   @Post()
   async create(@Req() req: RequestWithUser, @Body() dto: CreateRoutineDto) {
@@ -124,15 +131,14 @@ export class RoutinesController {
     @Param('id') routineId: string,
     @Body() dto: CreateTmEventDto,
   ) {
-    const result = await this.routinesService.createTmAdjustment(
+    const result = await this.routinesTmService.createTmAdjustment(
       req.user.id,
       routineId,
       dto,
     );
 
-    // Log significant adjustments for monitoring (hardcoded threshold: 15kg)
     if (Math.abs(dto.deltaKg) > 15) {
-      console.warn(
+      this.logger.warn(
         `Large TM adjustment detected: ${dto.deltaKg}kg for routine ${routineId}, exercise ${dto.exerciseId}`,
       );
     }
@@ -152,7 +158,7 @@ export class RoutinesController {
     @Query('minWeek') minWeek?: string,
     @Query('maxWeek') maxWeek?: string,
   ) {
-    return this.routinesService.getTmAdjustments(
+    return this.routinesTmService.getTmAdjustments(
       req.user.id,
       routineId,
       exerciseId,
@@ -170,6 +176,9 @@ export class RoutinesController {
     @Req() req: RequestWithUser,
     @Param('id') routineId: string,
   ) {
-    return this.routinesService.getTmAdjustmentSummary(req.user.id, routineId);
+    return this.routinesTmService.getTmAdjustmentSummary(
+      req.user.id,
+      routineId,
+    );
   }
 }

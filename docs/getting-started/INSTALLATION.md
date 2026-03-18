@@ -204,17 +204,16 @@ npm run start:debug    # Start with debugger
 npm run build          # Build for production
 npm run start:prod     # Start production build
 
-# Testing
-npm run test           # Run unit tests
-npm run test:e2e       # Run end-to-end tests
-npm run test:cov       # Run tests with coverage
+# Static verification
+npm run typecheck      # Run the TypeScript compiler without emitting files
+npm run lint           # Run ESLint checks
 
 # Code Quality
 npm run lint           # Run ESLint
 npm run format         # Format code with Prettier
 
 # Database
-npm run db:seed        # Seed database with test data
+npm run db:seed        # Seed database with development data
 npx prisma studio      # Open Prisma Studio (database GUI)
 npx prisma generate    # Generate Prisma client
 ```

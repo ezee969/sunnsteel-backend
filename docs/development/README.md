@@ -10,11 +10,9 @@ Guidelines, processes, and best practices for developing and maintaining the Sun
 - **[Git Workflow](GIT_WORKFLOW.md)** - Branching strategy and commit conventions
 - **[Code Standards](CODE_STANDARDS.md)** - Style guide and linting rules
 
-### **Testing**
-- **[Testing Strategy](TESTING_STRATEGY.md)** - Unit, integration, and e2e testing
-- **[Test Setup](TEST_SETUP.md)** - Jest configuration and test database
-- **[Writing Tests](WRITING_TESTS.md)** - Testing patterns and best practices
-- **[Test Coverage](TEST_COVERAGE.md)** - Coverage requirements and reporting
+### **Verification**
+- **Manual API validation** - Use the token helper and HTTP client flows documented below
+- **Static quality checks** - Run `npm run typecheck` and `npm run lint`
 
 ### **Database Management**
 - **[Migrations](MIGRATIONS.md)** - Creating and managing database migrations
@@ -30,7 +28,6 @@ Guidelines, processes, and best practices for developing and maintaining the Sun
 
 ### **CI/CD & Automation**
 - **[GitHub Actions](GITHUB_ACTIONS.md)** - CI/CD pipeline configuration
-- **[Automated Testing](AUTOMATED_TESTING.md)** - Test automation in CI
 - **[Code Quality Checks](CODE_QUALITY_CHECKS.md)** - Linting and formatting in CI
 - **[Release Process](RELEASE_PROCESS.md)** - Version management and releases
 
@@ -61,9 +58,9 @@ npx prisma db seed
 # Start development server
 npm run start:dev
 
-# Run tests
-npm run test
-npm run test:e2e
+# Static verification
+npm run typecheck
+npm run lint
 
 # Code quality
 npm run lint
@@ -85,10 +82,10 @@ npm run format
 
 ## 📊 Development Metrics
 
-- **Test Coverage**: >90% target
+- **Manual verification**: Required for auth, routine CRUD, workouts, and RtF flows
 - **Build Time**: <2 minutes
 - **Startup Time**: <10 seconds
-- **Code Quality**: ESLint + Prettier
+- **Code Quality**: TypeScript + ESLint + Prettier
 
 ---
 

@@ -122,11 +122,9 @@ curl -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \\
 # Development server with hot reload
 npm run start:dev
 
-# Run tests
-npm run test
-
-# Run e2e tests
-npm run test:e2e
+# Static verification
+npm run typecheck
+npm run lint
 
 # Code formatting
 npm run format

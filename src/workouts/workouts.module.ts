@@ -1,16 +1,21 @@
 import { Module } from '@nestjs/common';
-import { WorkoutsService } from './workouts.service';
 import { WorkoutMaintenanceService } from './workout-maintenance.service';
 import { WorkoutsController } from './workouts.controller';
 import { DatabaseModule } from '../database/database.module';
-import { CacheModule } from '../cache/cache.module';
+import { WorkoutsService } from './workouts.service';
+import { RtfProgressionService, RtfForecastService } from './services';
+import { WorkoutSessionReadService } from './workout-session-read.service';
 
 @Module({
-  imports: [DatabaseModule, CacheModule],
+  imports: [DatabaseModule],
   controllers: [WorkoutsController],
-  providers: [WorkoutsService, WorkoutMaintenanceService],
-  // Export service so other feature modules (e.g. Routines) can optionally
-  // reuse RtF helper logic (RTF-B02 inclusion parameter for routine detail)
+  providers: [
+    WorkoutsService,
+    WorkoutMaintenanceService,
+    RtfProgressionService,
+    RtfForecastService,
+    WorkoutSessionReadService,
+  ],
   exports: [WorkoutsService],
 })
 export class WorkoutsModule {}

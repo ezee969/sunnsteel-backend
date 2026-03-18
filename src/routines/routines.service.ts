@@ -6,18 +6,17 @@ import {
 import { DatabaseService } from '../database/database.service';
 import { CreateRoutineDto } from './dto/create-routine.dto';
 import { UpdateRoutineDto } from './dto/update-routine.dto';
-import {
-  CreateTmEventDto,
-  TmEventResponseDto,
-  TmEventSummaryDto,
-} from './dto/tm-adjustment.dto';
 import { WorkoutsService } from '../workouts/workouts.service';
-import {
-  IRtfWeekGoalsCacheAsync,
-  RTF_WEEK_GOALS_CACHE,
-} from '../cache/rtf-week-goals-cache.async';
 import { buildRtfProgramSnapshot } from '../workouts/rtf-schedules';
-import { Inject } from '@nestjs/common';
+import {
+  ROUTINE_COMPLETED_SELECT,
+  ROUTINE_COMPLETED_TOGGLE_SELECT,
+  ROUTINE_DETAIL_SELECT,
+  ROUTINE_FAVORITE_TOGGLE_SELECT,
+  ROUTINE_MUTATION_SELECT,
+  ROUTINE_UPDATE_SELECT,
+  ROUTINE_WITH_PROGRAM_SELECT,
+} from './routine.selects';
 
 @Injectable()
 export class RoutinesService {
@@ -25,21 +24,7 @@ export class RoutinesService {
     private readonly db: DatabaseService,
     // Inject workouts service to leverage existing RtF weekly goal logic
     private readonly workoutsService: WorkoutsService,
-    @Inject(RTF_WEEK_GOALS_CACHE)
-    private readonly rtfCache: IRtfWeekGoalsCacheAsync,
   ) {}
-
-  // --- Telemetry counters (RTF-B07 extension) ---
-  private metrics = {
-    tmAdjustmentsCreated: 0,
-    tmGuardrailRejections: 0,
-    tmUnknownExerciseRejections: 0,
-    tmOwnershipOrProgramRejections: 0,
-  };
-
-  getInternalMetrics() {
-    return { ...this.metrics };
-  }
 
   // Helpers to work with calendar days in a given IANA timezone
   private localDateParts(d: Date, timeZone: string) {
@@ -286,60 +271,7 @@ export class RoutinesService {
           })),
         },
       },
-      select: {
-        id: true,
-        userId: true,
-        name: true,
-        description: true,
-        isPeriodized: true,
-        isFavorite: true,
-        isCompleted: true,
-        programWithDeloads: true,
-        programDurationWeeks: true,
-        programStartWeek: true,
-        programStartDate: true,
-        programEndDate: true,
-        programTrainingDaysOfWeek: true,
-        programTimezone: true,
-        programStyle: true,
-        createdAt: true,
-        updatedAt: true,
-        days: {
-          select: {
-            id: true,
-            dayOfWeek: true,
-            order: true,
-            exercises: {
-              select: {
-                id: true,
-                order: true,
-                restSeconds: true,
-                note: true,
-                progressionScheme: true,
-                minWeightIncrement: true,
-                programTMKg: true,
-                programRoundingKg: true,
-                programStyle: true,
-                exercise: { select: { id: true, name: true } },
-                sets: {
-                  select: {
-                    setNumber: true,
-                    repType: true,
-                    reps: true,
-                    minReps: true,
-                    maxReps: true,
-                    weight: true,
-                      rir: true,
-                  },
-                  orderBy: { setNumber: 'asc' },
-                },
-              },
-              orderBy: { order: 'asc' },
-            },
-          },
-          orderBy: { order: 'asc' },
-        },
-      },
+      select: ROUTINE_MUTATION_SELECT,
     });
     return routine;
   }
@@ -358,56 +290,7 @@ export class RoutinesService {
 
     const routines = await this.db.routine.findMany({
       where,
-      select: {
-        id: true,
-        userId: true,
-        name: true,
-        description: true,
-        isPeriodized: true,
-        isFavorite: true,
-        isCompleted: true,
-        programWithDeloads: true,
-        programDurationWeeks: true,
-        programStartWeek: true,
-        programStartDate: true,
-        programEndDate: true,
-        programTimezone: true,
-        programStyle: true,
-        createdAt: true,
-        updatedAt: true,
-        days: {
-          select: {
-            id: true,
-            dayOfWeek: true,
-            order: true,
-            exercises: {
-              select: {
-                id: true,
-                order: true,
-                restSeconds: true,
-                note: true,
-                progressionScheme: true,
-                minWeightIncrement: true,
-                exercise: { select: { id: true, name: true } },
-                sets: {
-                  select: {
-                    setNumber: true,
-                    repType: true,
-                    reps: true,
-                    minReps: true,
-                    maxReps: true,
-                    weight: true,
-                    rir: true,
-                  },
-                  orderBy: { setNumber: 'asc' },
-                },
-              },
-              orderBy: { order: 'asc' },
-            },
-          },
-          orderBy: { order: 'asc' },
-        },
-      },
+      select: ROUTINE_WITH_PROGRAM_SELECT,
       orderBy: { createdAt: 'desc' },
     });
 
@@ -421,58 +304,7 @@ export class RoutinesService {
   ) {
     const routine = await this.db.routine.findFirst({
       where: { id, userId },
-      select: {
-        id: true,
-        userId: true,
-        name: true,
-        description: true,
-        isPeriodized: true,
-        isFavorite: true,
-        isCompleted: true,
-        programWithDeloads: true,
-        programDurationWeeks: true,
-        programStartWeek: true,
-        programStartDate: true,
-        programEndDate: true,
-        programTimezone: true,
-        programStyle: true,
-        createdAt: true,
-        updatedAt: true,
-        days: {
-          select: {
-            id: true,
-            dayOfWeek: true,
-            order: true,
-            exercises: {
-              select: {
-                id: true,
-                order: true,
-                restSeconds: true,
-                note: true,
-                progressionScheme: true,
-                minWeightIncrement: true,
-                programTMKg: true,
-                programRoundingKg: true,
-                exercise: { select: { id: true, name: true } },
-                sets: {
-                  select: {
-                    setNumber: true,
-                    repType: true,
-                    reps: true,
-                    minReps: true,
-                    maxReps: true,
-                    weight: true,
-                    rir: true,
-                  },
-                  orderBy: { setNumber: 'asc' },
-                },
-              },
-              orderBy: { order: 'asc' },
-            },
-          },
-          orderBy: { order: 'asc' },
-        },
-      },
+      select: ROUTINE_DETAIL_SELECT,
     });
 
     if (!routine) {
@@ -769,57 +601,7 @@ export class RoutinesService {
             },
           }),
         },
-        select: {
-          id: true,
-          userId: true,
-          name: true,
-          description: true,
-          isPeriodized: true,
-          isFavorite: true,
-          isCompleted: true,
-          programWithDeloads: true,
-          programDurationWeeks: true,
-          programStartWeek: true,
-          programStartDate: true,
-          programEndDate: true,
-          programTrainingDaysOfWeek: true,
-          programTimezone: true,
-          programStyle: true,
-          createdAt: true,
-          updatedAt: true,
-          days: {
-            select: {
-              id: true,
-              dayOfWeek: true,
-              order: true,
-              exercises: {
-                select: {
-                  id: true,
-                  order: true,
-                  restSeconds: true,
-                  note: true,
-                  progressionScheme: true,
-                  minWeightIncrement: true,
-                  exercise: { select: { id: true, name: true } },
-                  sets: {
-                    select: {
-                      setNumber: true,
-                      repType: true,
-                      reps: true,
-                      minReps: true,
-                      maxReps: true,
-                      weight: true,
-                      rir: true,
-                    },
-                    orderBy: { setNumber: 'asc' },
-                  },
-                },
-                orderBy: { order: 'asc' },
-              },
-            },
-            orderBy: { order: 'asc' },
-          },
-        },
+        select: ROUTINE_UPDATE_SELECT,
       });
 
       return updated;
@@ -873,18 +655,7 @@ export class RoutinesService {
     return this.db.routine.update({
       where: { id },
       data: { isFavorite },
-      select: {
-        id: true,
-        userId: true,
-        name: true,
-        description: true,
-        isPeriodized: true,
-        isFavorite: true,
-        isCompleted: true,
-        programStyle: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+      select: ROUTINE_FAVORITE_TOGGLE_SELECT,
     });
   }
 
@@ -903,67 +674,14 @@ export class RoutinesService {
     return this.db.routine.update({
       where: { id },
       data: { isCompleted },
-      select: {
-        id: true,
-        userId: true,
-        name: true,
-        description: true,
-        isPeriodized: true,
-        isFavorite: true,
-        isCompleted: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+      select: ROUTINE_COMPLETED_TOGGLE_SELECT,
     });
   }
 
   async findCompleted(userId: string) {
     return this.db.routine.findMany({
       where: { userId, isCompleted: true },
-      select: {
-        id: true,
-        userId: true,
-        name: true,
-        description: true,
-        isPeriodized: true,
-        isFavorite: true,
-        isCompleted: true,
-        programStyle: true,
-        createdAt: true,
-        updatedAt: true,
-        days: {
-          select: {
-            id: true,
-            dayOfWeek: true,
-            order: true,
-            exercises: {
-              select: {
-                id: true,
-                order: true,
-                restSeconds: true,
-                note: true,
-                progressionScheme: true,
-                minWeightIncrement: true,
-                exercise: { select: { id: true, name: true } },
-                sets: {
-                  select: {
-                    setNumber: true,
-                    repType: true,
-                    reps: true,
-                    minReps: true,
-                    maxReps: true,
-                    weight: true,
-                    rir: true,
-                  },
-                  orderBy: { setNumber: 'asc' },
-                },
-              },
-              orderBy: { order: 'asc' },
-            },
-          },
-          orderBy: { order: 'asc' },
-        },
-      },
+      select: ROUTINE_COMPLETED_SELECT,
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -971,56 +689,7 @@ export class RoutinesService {
   async findFavorites(userId: string) {
     return this.db.routine.findMany({
       where: { userId, isFavorite: true },
-      select: {
-        id: true,
-        userId: true,
-        name: true,
-        description: true,
-        isPeriodized: true,
-        isFavorite: true,
-        isCompleted: true,
-        programWithDeloads: true,
-        programDurationWeeks: true,
-        programStartWeek: true,
-        programStartDate: true,
-        programEndDate: true,
-        programTimezone: true,
-        programStyle: true,
-        createdAt: true,
-        updatedAt: true,
-        days: {
-          select: {
-            id: true,
-            dayOfWeek: true,
-            order: true,
-            exercises: {
-              select: {
-                id: true,
-                order: true,
-                restSeconds: true,
-                note: true,
-                progressionScheme: true,
-                minWeightIncrement: true,
-                exercise: { select: { id: true, name: true } },
-                sets: {
-                  select: {
-                    setNumber: true,
-                    repType: true,
-                    reps: true,
-                    minReps: true,
-                    maxReps: true,
-                    weight: true,
-                    rir: true,
-                  },
-                  orderBy: { setNumber: 'asc' },
-                },
-              },
-              orderBy: { order: 'asc' },
-            },
-          },
-          orderBy: { order: 'asc' },
-        },
-      },
+      select: ROUTINE_WITH_PROGRAM_SELECT,
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -1043,255 +712,4 @@ export class RoutinesService {
     });
   }
 
-  /**
-   * Create a new TM adjustment event
-   *
-   * @param userId - User ID from authenticated request
-   * @param routineId - Routine ID to associate the adjustment with
-   * @param dto - TM adjustment data
-   */
-  async createTmAdjustment(
-    userId: string,
-    routineId: string,
-    dto: CreateTmEventDto,
-  ): Promise<TmEventResponseDto> {
-    // Verify routine ownership and that it uses RTF progression schemes
-    const routine = await this.db.routine.findFirst({
-      where: {
-        id: routineId,
-        userId,
-        days: {
-          some: {
-            exercises: {
-              some: {
-                OR: [{ progressionScheme: 'PROGRAMMED_RTF' }],
-              },
-            },
-          },
-        },
-      },
-      select: {
-        id: true,
-        programStyle: true,
-        days: {
-          select: {
-            exercises: {
-              where: {
-                exerciseId: dto.exerciseId,
-                progressionScheme: 'PROGRAMMED_RTF',
-              },
-              select: { id: true },
-            },
-          },
-        },
-      },
-    });
-
-    if (!routine) {
-      this.metrics.tmOwnershipOrProgramRejections++;
-      throw new NotFoundException(
-        'Routine not found, not accessible, or does not use RTF progression schemes',
-      );
-    }
-
-    // Verify exercise exists in routine and uses RTF progression schemes
-    const hasExercise = routine.days.some((day) =>
-      day.exercises.some((ex) => ex.id),
-    );
-
-    if (!hasExercise) {
-      this.metrics.tmUnknownExerciseRejections++;
-      throw new BadRequestException(
-        'Exercise not found in routine or does not use RTF progression schemes',
-      );
-    }
-
-    // Validate delta calculation (optional integrity check)
-    const calculatedPost = dto.preTmKg + dto.deltaKg;
-    const epsilon = 0.01; // Allow small floating point differences
-    if (Math.abs(calculatedPost - dto.postTmKg) > epsilon) {
-      this.metrics.tmGuardrailRejections++;
-      throw new BadRequestException('preTmKg + deltaKg must equal postTmKg');
-    }
-
-    // Guardrails (RTF-B08): reasonable delta bounds and reason length
-    const maxAbsPercent = 0.2; // 20% per single adjustment safety cap
-    if (dto.preTmKg > 0) {
-      const percent = Math.abs(dto.deltaKg) / dto.preTmKg;
-      if (percent > maxAbsPercent) {
-        this.metrics.tmGuardrailRejections++;
-        throw new BadRequestException(
-          'deltaKg exceeds 20% of preTmKg (guardrail)',
-        );
-      }
-    }
-    if (Math.abs(dto.deltaKg) > 25) {
-      // Hard absolute cap
-      this.metrics.tmGuardrailRejections++;
-      throw new BadRequestException(
-        'deltaKg absolute change too large (guardrail)',
-      );
-    }
-    if (dto.reason && dto.reason.length > 240) {
-      this.metrics.tmGuardrailRejections++;
-      throw new BadRequestException('reason too long (max 240 chars)');
-    }
-
-    // Create the adjustment
-    const adjustment = await this.db.tmAdjustment.create({
-      data: {
-        routineId,
-        exerciseId: dto.exerciseId,
-        weekNumber: dto.weekNumber,
-        deltaKg: dto.deltaKg,
-        preTmKg: dto.preTmKg,
-        postTmKg: dto.postTmKg,
-        reason: dto.reason,
-        style: routine.programStyle,
-      },
-    });
-    this.metrics.tmAdjustmentsCreated++;
-
-    // Invalidate cached RtF week goals for this routine (all weeks) (RTF-B04 Phase 1.5)
-    try {
-      // Broad invalidation (all weeks for routine)
-      await this.rtfCache.invalidateRoutine(routineId);
-      // Targeted safety: also remove specific week key if routine cache implementation
-      const directKey = `weekGoals:${routineId}:${dto.weekNumber}`;
-      await this.rtfCache.delete(directKey);
-    } catch (e) {
-      console.warn('RtF cache invalidation failed', {
-        routineId,
-        error: e?.message,
-      });
-    }
-
-    const exercise = await this.db.exercise.findUnique({
-      where: { id: dto.exerciseId },
-      select: { name: true },
-    });
-
-    return {
-      id: adjustment.id,
-      routineId,
-      exerciseId: adjustment.exerciseId,
-      exerciseName: exercise?.name ?? 'Unknown Exercise',
-      weekNumber: adjustment.weekNumber,
-      deltaKg: adjustment.deltaKg,
-      preTmKg: adjustment.preTmKg,
-      postTmKg: adjustment.postTmKg,
-      reason: adjustment.reason ?? undefined,
-      style: adjustment.style as 'STANDARD' | 'HYPERTROPHY' | null,
-      createdAt: adjustment.createdAt.toISOString(),
-    };
-  }
-
-  /**
-   * Get TM adjustment events for a routine
-   *
-   * @param userId - User ID from authenticated request
-   * @param routineId - Routine ID to get adjustments for
-   * @param exerciseId - Optional filter by exercise
-   * @param minWeek - Optional minimum week filter
-   * @param maxWeek - Optional maximum week filter
-   */
-  async getTmAdjustments(
-    userId: string,
-    routineId: string,
-    exerciseId?: string,
-    minWeek?: number,
-    maxWeek?: number,
-  ): Promise<TmEventResponseDto[]> {
-    // Verify routine ownership
-    const routine = await this.db.routine.findFirst({
-      where: { id: routineId, userId },
-      select: { id: true },
-    });
-
-    if (!routine) {
-      throw new NotFoundException('Routine not found or not accessible');
-    }
-
-    const adjustments = await this.db.tmAdjustment.findMany({
-      where: {
-        routineId,
-        ...(exerciseId && { exerciseId }),
-        ...(minWeek && { weekNumber: { gte: minWeek } }),
-        ...(maxWeek && { weekNumber: { lte: maxWeek } }),
-      },
-      orderBy: [{ weekNumber: 'desc' }, { createdAt: 'desc' }],
-    });
-
-    const exerciseIds = Array.from(
-      new Set(adjustments.map((a) => a.exerciseId)),
-    );
-    const exercises = await this.db.exercise.findMany({
-      where: { id: { in: exerciseIds } },
-      select: { id: true, name: true },
-    });
-    const exerciseNameById = new Map(exercises.map((e) => [e.id, e.name]));
-
-    return adjustments.map((adj) => ({
-      id: adj.id,
-      routineId,
-      exerciseId: adj.exerciseId,
-      exerciseName: exerciseNameById.get(adj.exerciseId) ?? 'Unknown Exercise',
-      weekNumber: adj.weekNumber,
-      deltaKg: adj.deltaKg,
-      preTmKg: adj.preTmKg,
-      postTmKg: adj.postTmKg,
-      reason: adj.reason ?? undefined,
-      style: adj.style as 'STANDARD' | 'HYPERTROPHY' | null,
-      createdAt: adj.createdAt.toISOString(),
-    }));
-  }
-
-  /**
-   * Get TM adjustment summary statistics per exercise
-   *
-   * @param userId - User ID from authenticated request
-   * @param routineId - Routine ID to get summary for
-   */
-  async getTmAdjustmentSummary(
-    userId: string,
-    routineId: string,
-  ): Promise<TmEventSummaryDto[]> {
-    // Verify routine ownership
-    const routine = await this.db.routine.findFirst({
-      where: { id: routineId, userId },
-      select: { id: true },
-    });
-
-    if (!routine) {
-      throw new NotFoundException('Routine not found or not accessible');
-    }
-
-    // Get aggregated statistics using groupBy
-    const summary = await this.db.tmAdjustment.groupBy({
-      by: ['exerciseId'],
-      where: { routineId },
-      _count: { id: true },
-      _sum: { deltaKg: true },
-      _avg: { deltaKg: true },
-      _max: { createdAt: true },
-    });
-
-    // Get exercise names
-    const exerciseIds = summary.map((s) => s.exerciseId);
-    const exercises = await this.db.exercise.findMany({
-      where: { id: { in: exerciseIds } },
-      select: { id: true, name: true },
-    });
-
-    const exerciseMap = new Map(exercises.map((e) => [e.id, e.name]));
-
-    return summary.map((s) => ({
-      exerciseId: s.exerciseId,
-      exerciseName: exerciseMap.get(s.exerciseId) || 'Unknown Exercise',
-      adjustmentCount: s._count.id,
-      totalDeltaKg: s._sum.deltaKg || 0,
-      averageDeltaKg: s._avg.deltaKg || 0,
-      lastAdjustmentDate: s._max.createdAt?.toISOString() || null,
-    }));
-  }
 }

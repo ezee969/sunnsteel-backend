@@ -1,51 +1,72 @@
 import {
+  BadRequestException,
+  Inject,
   Injectable,
+  Logger,
   NotFoundException,
-  ForbiddenException,
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
-import { CreateTmEventDto } from './dto/create-tm-event.dto';
-import { GetTmAdjustmentsDto } from './dto/get-tm-adjustments.dto';
-import { ProgramStyle } from '@prisma/client';
+import {
+  IRtfWeekGoalsCacheAsync,
+  RTF_WEEK_GOALS_CACHE,
+} from '../cache/rtf-week-goals-cache.async';
+import {
+  CreateTmEventDto,
+  TmEventResponseDto,
+  TmEventSummaryDto,
+} from './dto/tm-adjustment.dto';
 
-/**
- * Service responsible for Training Max (TM) adjustments in programmed RTF routines
- *
- * Provides functionality for:
- * - Creating TM adjustment events with validation
- * - Retrieving adjustment history with filtering
- * - Generating adjustment summaries and analytics
- * - Ensuring user authorization for routine access
- */
 @Injectable()
 export class RoutinesTmService {
-  constructor(private readonly databaseService: DatabaseService) {}
+  private readonly logger = new Logger(RoutinesTmService.name);
 
-  /**
-   * Creates a new Training Max adjustment event
-   *
-   * @param userId - ID of the user making the adjustment
-   * @param routineId - ID of the routine to adjust
-   * @param createTmEventDto - TM adjustment details
-   * @returns Promise<TmAdjustmentResponse> - Created adjustment record
-   * @throws NotFoundException - When routine doesn't exist or user lacks access
-   * @throws ForbiddenException - When exercise not in routine or delta out of range
-   */
+  private readonly metrics = {
+    tmAdjustmentsCreated: 0,
+    tmGuardrailRejections: 0,
+    tmUnknownExerciseRejections: 0,
+    tmOwnershipOrProgramRejections: 0,
+  };
+
+  constructor(
+    private readonly db: DatabaseService,
+    @Inject(RTF_WEEK_GOALS_CACHE)
+    private readonly rtfCache: IRtfWeekGoalsCacheAsync,
+  ) {}
+
+  getInternalMetrics() {
+    return { ...this.metrics };
+  }
+
   async createTmAdjustment(
     userId: string,
     routineId: string,
-    createTmEventDto: CreateTmEventDto,
-  ) {
-    // Verify routine exists and user has access
-    const routine = await this.databaseService.routine.findFirst({
-      where: { id: routineId, userId },
-      include: {
+    dto: CreateTmEventDto,
+  ): Promise<TmEventResponseDto> {
+    const routine = await this.db.routine.findFirst({
+      where: {
+        id: routineId,
+        userId,
         days: {
-          include: {
+          some: {
             exercises: {
-              include: {
-                exercise: { select: { id: true, name: true } },
+              some: {
+                OR: [{ progressionScheme: 'PROGRAMMED_RTF' }],
               },
+            },
+          },
+        },
+      },
+      select: {
+        id: true,
+        programStyle: true,
+        days: {
+          select: {
+            exercises: {
+              where: {
+                exerciseId: dto.exerciseId,
+                progressionScheme: 'PROGRAMMED_RTF',
+              },
+              select: { id: true },
             },
           },
         },
@@ -53,95 +74,172 @@ export class RoutinesTmService {
     });
 
     if (!routine) {
-      throw new NotFoundException('Routine not found or access denied');
+      this.metrics.tmOwnershipOrProgramRejections++;
+      throw new NotFoundException(
+        'Routine not found, not accessible, or does not use RTF progression schemes',
+      );
     }
 
-    // Verify exercise exists in routine
-    const exerciseInRoutine = routine.days
-      .flatMap((day) => day.exercises)
-      .some((ex) => ex.exerciseId === createTmEventDto.exerciseId);
+    const hasExercise = routine.days.some((day) =>
+      day.exercises.some((exercise) => exercise.id),
+    );
 
-    if (!exerciseInRoutine) {
-      throw new ForbiddenException('Exercise not found in this routine');
+    if (!hasExercise) {
+      this.metrics.tmUnknownExerciseRejections++;
+      throw new BadRequestException(
+        'Exercise not found in routine or does not use RTF progression schemes',
+      );
     }
 
-    // Create TM adjustment record
-    const adjustment = await (this.databaseService as any).tmAdjustment.create({
+    const calculatedPost = dto.preTmKg + dto.deltaKg;
+    const epsilon = 0.01;
+    if (Math.abs(calculatedPost - dto.postTmKg) > epsilon) {
+      this.metrics.tmGuardrailRejections++;
+      throw new BadRequestException('preTmKg + deltaKg must equal postTmKg');
+    }
+
+    const maxAbsPercent = 0.2;
+    if (dto.preTmKg > 0) {
+      const percent = Math.abs(dto.deltaKg) / dto.preTmKg;
+      if (percent > maxAbsPercent) {
+        this.metrics.tmGuardrailRejections++;
+        throw new BadRequestException(
+          'deltaKg exceeds 20% of preTmKg (guardrail)',
+        );
+      }
+    }
+
+    if (Math.abs(dto.deltaKg) > 25) {
+      this.metrics.tmGuardrailRejections++;
+      throw new BadRequestException(
+        'deltaKg absolute change too large (guardrail)',
+      );
+    }
+
+    if (dto.reason && dto.reason.length > 240) {
+      this.metrics.tmGuardrailRejections++;
+      throw new BadRequestException('reason too long (max 240 chars)');
+    }
+
+    const adjustment = await this.db.tmAdjustment.create({
       data: {
         routineId,
-        exerciseId: createTmEventDto.exerciseId,
-        weekNumber: createTmEventDto.weekNumber,
-        deltaKg: createTmEventDto.deltaKg,
-        preTmKg: createTmEventDto.preTmKg,
-        postTmKg: createTmEventDto.postTmKg,
-        reason: createTmEventDto.reason || null,
-        style: (routine.programStyle as ProgramStyle) || null,
+        exerciseId: dto.exerciseId,
+        weekNumber: dto.weekNumber,
+        deltaKg: dto.deltaKg,
+        preTmKg: dto.preTmKg,
+        postTmKg: dto.postTmKg,
+        reason: dto.reason,
+        style: routine.programStyle,
       },
     });
+    this.metrics.tmAdjustmentsCreated++;
 
-    return adjustment;
+    try {
+      await this.rtfCache.invalidateRoutine(routineId);
+      await this.rtfCache.delete(`weekGoals:${routineId}:${dto.weekNumber}`);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unknown cache invalidation error';
+      this.logger.warn(
+        `RtF cache invalidation failed for routine ${routineId}: ${message}`,
+      );
+    }
+
+    const exercise = await this.db.exercise.findUnique({
+      where: { id: dto.exerciseId },
+      select: { name: true },
+    });
+
+    return {
+      id: adjustment.id,
+      routineId,
+      exerciseId: adjustment.exerciseId,
+      exerciseName: exercise?.name ?? 'Unknown Exercise',
+      weekNumber: adjustment.weekNumber,
+      deltaKg: adjustment.deltaKg,
+      preTmKg: adjustment.preTmKg,
+      postTmKg: adjustment.postTmKg,
+      reason: adjustment.reason ?? undefined,
+      style: adjustment.style as 'STANDARD' | 'HYPERTROPHY' | null,
+      createdAt: adjustment.createdAt.toISOString(),
+    };
   }
 
-  /**
-   * Retrieves TM adjustments for a routine with optional filtering
-   *
-   * @param userId - ID of the requesting user
-   * @param routineId - ID of the routine
-   * @param exerciseId - Optional exercise filter
-   * @returns Promise<TmAdjustment[]> - List of adjustment records
-   * @throws NotFoundException - When routine doesn't exist or user lacks access
-   */
   async getTmAdjustments(
     userId: string,
     routineId: string,
     exerciseId?: string,
-  ) {
-    // Verify routine access
-    const routine = await this.databaseService.routine.findFirst({
+    minWeek?: number,
+    maxWeek?: number,
+  ): Promise<TmEventResponseDto[]> {
+    const routine = await this.db.routine.findFirst({
       where: { id: routineId, userId },
+      select: { id: true },
     });
 
     if (!routine) {
-      throw new NotFoundException('Routine not found or access denied');
+      throw new NotFoundException('Routine not found or not accessible');
     }
 
-    // Build filter conditions
-    const whereClause: any = { routineId };
-    if (exerciseId) {
-      whereClause.exerciseId = exerciseId;
-    }
+    const weekFilter =
+      minWeek || maxWeek
+        ? {
+            ...(minWeek ? { gte: minWeek } : {}),
+            ...(maxWeek ? { lte: maxWeek } : {}),
+          }
+        : undefined;
 
-    // Retrieve adjustments with sorting
-    const adjustments = await (
-      this.databaseService as any
-    ).tmAdjustment.findMany({
-      where: whereClause,
-      orderBy: { createdAt: 'desc' },
+    const adjustments = await this.db.tmAdjustment.findMany({
+      where: {
+        routineId,
+        ...(exerciseId ? { exerciseId } : {}),
+        ...(weekFilter ? { weekNumber: weekFilter } : {}),
+      },
+      orderBy: [{ weekNumber: 'desc' }, { createdAt: 'desc' }],
     });
 
-    return adjustments;
+    const exerciseIds = Array.from(
+      new Set(adjustments.map((adjustment) => adjustment.exerciseId)),
+    );
+    const exercises = exerciseIds.length
+      ? await this.db.exercise.findMany({
+          where: { id: { in: exerciseIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const exerciseNameById = new Map(exercises.map((exercise) => [exercise.id, exercise.name]));
+
+    return adjustments.map((adjustment) => ({
+      id: adjustment.id,
+      routineId,
+      exerciseId: adjustment.exerciseId,
+      exerciseName:
+        exerciseNameById.get(adjustment.exerciseId) ?? 'Unknown Exercise',
+      weekNumber: adjustment.weekNumber,
+      deltaKg: adjustment.deltaKg,
+      preTmKg: adjustment.preTmKg,
+      postTmKg: adjustment.postTmKg,
+      reason: adjustment.reason ?? undefined,
+      style: adjustment.style as 'STANDARD' | 'HYPERTROPHY' | null,
+      createdAt: adjustment.createdAt.toISOString(),
+    }));
   }
 
-  /**
-   * Generates TM adjustment summary statistics for a routine
-   *
-   * @param userId - ID of the requesting user
-   * @param routineId - ID of the routine
-   * @returns Promise<TmAdjustmentSummary[]> - Summary stats per exercise
-   * @throws NotFoundException - When routine doesn't exist or user lacks access
-   */
-  async getTmAdjustmentSummary(userId: string, routineId: string) {
-    // Verify routine access
-    const routine = await this.databaseService.routine.findFirst({
+  async getTmAdjustmentSummary(
+    userId: string,
+    routineId: string,
+  ): Promise<TmEventSummaryDto[]> {
+    const routine = await this.db.routine.findFirst({
       where: { id: routineId, userId },
+      select: { id: true },
     });
 
     if (!routine) {
-      throw new NotFoundException('Routine not found or access denied');
+      throw new NotFoundException('Routine not found or not accessible');
     }
 
-    // Aggregate adjustment statistics by exercise
-    const summary = await (this.databaseService as any).tmAdjustment.groupBy({
+    const summary = await this.db.tmAdjustment.groupBy({
       by: ['exerciseId'],
       where: { routineId },
       _count: { id: true },
@@ -150,26 +248,22 @@ export class RoutinesTmService {
       _max: { createdAt: true },
     });
 
-    // Get exercise names for summary
-    const exerciseIds = summary.map((s) => s.exerciseId);
-    const exercises = await this.databaseService.exercise.findMany({
-      where: { id: { in: exerciseIds } },
-      select: { id: true, name: true },
-    });
+    const exerciseIds = summary.map((item) => item.exerciseId);
+    const exercises = exerciseIds.length
+      ? await this.db.exercise.findMany({
+          where: { id: { in: exerciseIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const exerciseMap = new Map(exercises.map((exercise) => [exercise.id, exercise.name]));
 
-    // Combine summary data with exercise names
-    const enrichedSummary = summary.map((stat) => {
-      const exercise = exercises.find((ex) => ex.id === stat.exerciseId);
-      return {
-        exerciseId: stat.exerciseId,
-        exerciseName: exercise?.name || 'Unknown Exercise',
-        totalAdjustments: stat._count.id,
-        totalDeltaKg: stat._sum.deltaKg || 0,
-        averageDeltaKg: stat._avg.deltaKg || 0,
-        lastAdjustment: stat._max.createdAt,
-      };
-    });
-
-    return enrichedSummary;
+    return summary.map((item) => ({
+      exerciseId: item.exerciseId,
+      exerciseName: exerciseMap.get(item.exerciseId) || 'Unknown Exercise',
+      adjustmentCount: item._count.id,
+      totalDeltaKg: item._sum.deltaKg || 0,
+      averageDeltaKg: item._avg.deltaKg || 0,
+      lastAdjustmentDate: item._max.createdAt?.toISOString() || null,
+    }));
   }
 }

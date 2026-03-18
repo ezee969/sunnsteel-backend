@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { Registry, collectDefaultMetrics, Counter, Gauge } from 'prom-client';
-import { WorkoutsService } from '../workouts/workouts.service';
+import { RtfForecastService } from '../workouts/services';
 import { CacheMetricsService } from '../cache/cache-metrics.service';
-import { RoutinesService } from '../routines/routines.service';
+import { RoutinesTmService } from '../routines/routines-tm.service';
 
 /**
  * PrometheusMetricsService
@@ -30,9 +30,9 @@ export class PrometheusMetricsService {
   private lastTmOwnershipRejects = 0;
 
   constructor(
-    private readonly workouts: WorkoutsService,
+    private readonly rtfForecast: RtfForecastService,
     private readonly cacheMetrics: CacheMetricsService,
-    private readonly routines: RoutinesService,
+    private readonly routinesTm: RoutinesTmService,
   ) {
     collectDefaultMetrics({ register: this.registry });
 
@@ -85,7 +85,7 @@ export class PrometheusMetricsService {
 
   /** Collect latest values into gauges/counters. */
   snapshot() {
-    const w = this.workouts.getInternalMetrics();
+    const w = this.rtfForecast.getInternalMetrics();
     const cache = this.cacheMetrics.getWeekGoalsCacheMetrics();
     if (cache.driver === 'layered') {
       if (typeof cache.hitRate === 'number') {
@@ -117,7 +117,7 @@ export class PrometheusMetricsService {
     this.lastStampedeBypass = w.stampedeBypass;
 
     // TM metrics
-    const r = this.routines.getInternalMetrics?.() || {};
+    const r = this.routinesTm.getInternalMetrics?.() || {};
     const adj = r.tmAdjustmentsCreated || 0;
     const gr = r.tmGuardrailRejections || 0;
     const ex = r.tmUnknownExerciseRejections || 0;

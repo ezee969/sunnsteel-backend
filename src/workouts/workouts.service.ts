@@ -4,25 +4,18 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
-  Prisma,
   WorkoutSessionStatus,
   RepType,
   ProgressionScheme,
 } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
-import {
-  IRtfWeekGoalsCacheAsync,
-  RTF_WEEK_GOALS_CACHE,
-} from '../cache/rtf-week-goals-cache.async';
-import {
-  RTF_STANDARD_WITH_DELOADS,
-  RTF_HYPERTROPHY_WITH_DELOADS,
-} from './rtf-schedules';
-import { Inject } from '@nestjs/common';
 import { StartWorkoutDto } from './dto/start-workout.dto';
 import { StartWorkoutResponseDto } from './dto/start-workout-response.dto';
 import { FinishWorkoutDto } from './dto/finish-workout.dto';
 import { UpsertSetLogDto } from './dto/upsert-set-log.dto';
+import { RtfProgressionService, RtfForecastService } from './services';
+import { buildWorkoutSessionSelect } from './workout-session.selects';
+import { WorkoutSessionReadService } from './workout-session-read.service';
 
 // Narrow unknown error objects that include a Prisma error code
 const isPrismaErrorWithCode = (e: unknown): e is { code: string } => {
@@ -35,8 +28,9 @@ const isPrismaErrorWithCode = (e: unknown): e is { code: string } => {
 export class WorkoutsService {
   constructor(
     private readonly db: DatabaseService,
-    @Inject(RTF_WEEK_GOALS_CACHE)
-    private readonly rtfCache: IRtfWeekGoalsCacheAsync,
+    private readonly rtfProgression: RtfProgressionService,
+    private readonly rtfForecast: RtfForecastService,
+    private readonly workoutSessionRead: WorkoutSessionReadService,
   ) {}
   /**
    * Heartbeat utility to bump lastActivityAt timestamp. Silent on failure
@@ -50,181 +44,18 @@ export class WorkoutsService {
         select: { id: true },
       });
     } catch {}
-  } // --- Payload Versioning (RTF-B05) ---
-  // Increment this when the shape of week goals or timeline responses changes
-  private static readonly RTF_WEEK_GOALS_VERSION = 1;
-
-  // --- RtF Cache Abstraction (RTF-B04 Phase 1) ---
-  private cacheKey(routineId: string, week: number) {
-    return `weekGoals:${routineId}:${week}`;
   }
-  private forecastCacheKey(routineId: string, remainingOnly = false) {
-    const suffix = remainingOnly ? ':rem' : '';
-    return `forecast:${routineId}:v${WorkoutsService.RTF_WEEK_GOALS_VERSION}${suffix}`;
-  }
-  private async cacheGet(key: string) {
-    return this.rtfCache.get(key);
-  }
-  private async cacheSet(key: string, value: any) {
-    await this.rtfCache.set(key, value);
-  }
+  
+  // Mathematical functions moved to RtfProgressionService
+  // Forecast and timeline logic moved to RtfForecastService
 
-  // --- Metrics (RTF-B07 incremental) ---
-  private metrics = {
-    stampedeWaits: 0,
-    stampedeBypass: 0,
-    forecastSets: 0,
-    forecastHits: 0,
-    forecastMisses: 0,
-    weekGoalsSets: 0,
-    weekGoalsHits: 0,
-    weekGoalsMisses: 0,
-    startedAt: Date.now(),
-  };
-
-  getInternalMetrics() {
-    const uptimeMs = Date.now() - this.metrics.startedAt;
-    return { ...this.metrics, uptimeMs };
-  }
-
-  // Stampede protection: track in-flight computations keyed by cache key
-  private static inFlight = new Map<string, Promise<any>>();
-  private async withStampedeProtection<T>(
-    key: string,
-    factory: () => Promise<T>,
-  ): Promise<T> {
-    if (WorkoutsService.inFlight.has(key)) {
-      // Another request already computing this key
-      this.metrics.stampedeWaits++;
-      return WorkoutsService.inFlight.get(key) as Promise<T>;
-    }
-    this.metrics.stampedeBypass++;
-    const p = factory().finally(() => {
-      WorkoutsService.inFlight.delete(key);
-    });
-    WorkoutsService.inFlight.set(key, p as Promise<any>);
-    return p;
-  }
-
-  // --- RtF weekly goals (with deloads) ---
-  // We now maintain TWO canonical schedules mirroring the frontend `reps-to-failure.ts` logic.
-  // STANDARD: strength leaning (lower reps, broader intensity ramp, 5 sets total, AMRAP on set 5)
-  // HYPERTROPHY: higher rep emphasis (moderate intensities, 4 sets total, AMRAP on set 4)
-  // Deload weeks (7,14,21) differ: standard -> 3x5 @ ~60% TM (RPE6 implicit), hypertrophy -> 4x5 @ 60% TM.
-  // NOTE: If programWithDeloads === false we strip deload weeks and reindex weeks logically (same as frontend approach).
-
-  // Schedules moved to shared module rtf-schedules.ts (RTF-B09)
-
-  private localDateParts(d: Date, timeZone: string) {
-    const fmt = new Intl.DateTimeFormat('en-CA', {
-      timeZone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      weekday: 'short',
-    });
-    const parts = fmt.formatToParts(d);
-    const get = (type: string) =>
-      parts.find((p) => p.type === type)?.value ?? '';
-    const y = Number(get('year'));
-    const m = Number(get('month'));
-    const day = Number(get('day'));
-    const wk = get('weekday'); // 'Sun'..'Sat'
-    const map: Record<string, number> = {
-      Sun: 0,
-      Mon: 1,
-      Tue: 2,
-      Wed: 3,
-      Thu: 4,
-      Fri: 5,
-      Sat: 6,
-    };
-    const dow = map[wk] ?? 0;
-    return { y, m, day, dow };
-  }
-
-  private diffLocalDays(a: Date, b: Date, timeZone: string) {
-    const ap = this.localDateParts(a, timeZone);
-    const bp = this.localDateParts(b, timeZone);
-    const aUTC = Date.UTC(ap.y, ap.m - 1, ap.day);
-    const bUTC = Date.UTC(bp.y, bp.m - 1, bp.day);
-    return Math.floor((aUTC - bUTC) / 86_400_000);
-  }
-
-  private getCurrentProgramWeek(
-    today: Date,
-    programStartDate: Date,
-    programDurationWeeks: number,
-    timeZone: string,
-  ) {
-    const diffDays = this.diffLocalDays(today, programStartDate, timeZone);
-    const week = Math.floor(diffDays / 7) + 1;
-    if (week < 1) return 1;
-    if (week > programDurationWeeks) return programDurationWeeks;
-    return week;
-  }
-
-  private isDeloadWeek(week: number, withDeloads: boolean) {
-    return withDeloads && (week === 7 || week === 14 || week === 21);
-  }
-
-  private getRtFGoalForWeek(
-    week: number,
-    withDeloads: boolean,
-    variant: 'STANDARD' | 'HYPERTROPHY',
-  ) {
-    const source =
-      variant === 'HYPERTROPHY'
-        ? RTF_HYPERTROPHY_WITH_DELOADS
-        : RTF_STANDARD_WITH_DELOADS;
-    if (withDeloads) return source[week - 1];
-    const trainingOnly = source.filter(
-      (g) => !('isDeload' in g && g.isDeload === true),
-    ) as Array<{
-      week: number;
-      intensity: number;
-      fixedReps: number;
-      amrapTarget: number;
-    }>;
-    return trainingOnly[week - 1];
-  }
-
-  private roundToNearest(value: number, increment: number): number {
-    if (!increment || increment <= 0) return value;
-    return Math.round(value / increment) * increment;
-  }
-
-  private adjustTM(currentTM: number, repsDone: number, targetReps: number) {
-    const diff = repsDone - targetReps;
-    if (diff >= 5) return currentTM * 1.03;
-    if (diff === 4) return currentTM * 1.02;
-    if (diff === 3) return currentTM * 1.015;
-    if (diff === 2) return currentTM * 1.01;
-    if (diff === 1) return currentTM * 1.005;
-    if (diff === 0) return currentTM;
-    if (diff === -1) return currentTM * 0.98;
-    return currentTM * 0.95; // diff <= -2
-  }
 
   async getActiveSession(userId: string) {
-    return this.db.workoutSession.findFirst({
-      where: { userId, status: WorkoutSessionStatus.IN_PROGRESS },
-      orderBy: { startedAt: 'desc' },
-      select: this.sessionSelect(),
-    });
+    return this.workoutSessionRead.getActiveSession(userId);
   }
 
   async getSessionById(userId: string, id: string) {
-    const session = await this.db.workoutSession.findFirst({
-      where: { id, userId },
-      select: this.sessionSelect(true),
-    });
-
-    if (!session) {
-      throw new NotFoundException('Workout session not found');
-    }
-
-    return session;
+    return this.workoutSessionRead.getSessionById(userId, id);
   }
 
   /**
@@ -280,13 +111,29 @@ export class WorkoutsService {
 
     if (hasProgram) {
       const tz = routine.programTimezone!;
-      const dow = this.localDateParts(now, tz).dow; // 0..6
+      // Add +1 so it starts at 1, max out at programDurationWeeks
+      const diffDays = this.rtfProgression.diffLocalDays(
+        new Date(),
+        routine.programStartDate!,
+        routine.programTimezone!,
+      );
+      const relativeWk = Math.floor(diffDays / 7) + 1;
+      const weekBounded = Math.max(
+        1,
+        Math.min(relativeWk, routine.programDurationWeeks!),
+      );
+
+      // What day of week is it (0=Sun..6=Sat) in that timezone?
+      const dow = this.rtfProgression.localDateParts(
+        now,
+        tz,
+      ).dow; // 0..6
       const isScheduled = routine.programTrainingDaysOfWeek.includes(dow);
 
       // Date window checks (inclusive)
       const beforeStart =
-        this.diffLocalDays(now, routine.programStartDate!, tz) < 0;
-      const afterEnd = this.diffLocalDays(now, routine.programEndDate!, tz) > 0;
+        this.rtfProgression.diffLocalDays(now, routine.programStartDate!, tz) < 0;
+      const afterEnd = this.rtfProgression.diffLocalDays(now, routine.programEndDate!, tz) > 0;
       if (beforeStart) {
         throw new BadRequestException('Program has not started yet');
       }
@@ -316,7 +163,7 @@ export class WorkoutsService {
           status: WorkoutSessionStatus.IN_PROGRESS,
           notes: dto.notes,
         },
-        select: this.sessionSelect(),
+        select: buildWorkoutSessionSelect(),
       });
       // Initial activity heartbeat (ignore failure)
       try {
@@ -337,7 +184,7 @@ export class WorkoutsService {
       const offset = Math.max(0, (routine.programStartWeek ?? 1) - 1);
       const baseDuration = routine.programDurationWeeks!;
       const remainingWeeks = Math.max(1, baseDuration - offset);
-      const relativeWeek = this.getCurrentProgramWeek(
+      const relativeWeek = this.rtfProgression.getCurrentProgramWeek(
         now,
         routine.programStartDate!,
         remainingWeeks,
@@ -345,7 +192,7 @@ export class WorkoutsService {
       );
       const week = relativeWeek + offset;
       const withDeloads = !!routine.programWithDeloads;
-      const isDeload = this.isDeloadWeek(week, withDeloads);
+      const isDeload = this.rtfProgression.isDeloadWeek(week, withDeloads);
 
       // Load exercises for this routine day with RtF config
       const exs = await this.db.routineExercise.findMany({
@@ -369,13 +216,13 @@ export class WorkoutsService {
         .map((e) => {
           const variant: 'STANDARD' | 'HYPERTROPHY' =
             e.programStyle ?? 'STANDARD';
-          const goal = this.getRtFGoalForWeek(week, withDeloads, variant);
+          const goal = this.rtfProgression.getRtFGoalForWeek(week, withDeloads, variant);
 
           // Deload logic diverges in hypertrophy: 4 sets vs 3 sets (standard)
           if ((goal as any).isDeload) {
             const deload: any = goal;
             const intensity = deload.intensity ?? 0.6;
-            const weightKg = this.roundToNearest(
+            const weightKg = this.rtfProgression.roundToNearest(
               (e.programTMKg ?? 0) * intensity,
               e.programRoundingKg ?? 2.5,
             );
@@ -422,7 +269,7 @@ export class WorkoutsService {
             fixedReps: number;
             amrapTarget: number;
           };
-          const weightKg = this.roundToNearest(
+          const weightKg = this.rtfProgression.roundToNearest(
             (e.programTMKg ?? 0) * g.intensity,
             e.programRoundingKg ?? 2.5,
           );
@@ -626,14 +473,14 @@ export class WorkoutsService {
           );
           const baseDuration = routineProgram.programDurationWeeks!;
           const remainingWeeks = Math.max(1, baseDuration - offset);
-          const relativeWeek = this.getCurrentProgramWeek(
+          const relativeWeek = this.rtfProgression.getCurrentProgramWeek(
             new Date(),
             routineProgram.programStartDate!,
             remainingWeeks,
             tz,
           );
           currentWeek = relativeWeek + offset;
-          isDeload = this.isDeloadWeek(
+          isDeload = this.rtfProgression.isDeloadWeek(
             currentWeek,
             !!routineProgram.programWithDeloads,
           );
@@ -740,7 +587,7 @@ export class WorkoutsService {
                 lastSet?.reps != null &&
                 ex.programLastAdjustedWeek !== currentWeek
               ) {
-                const goal = this.getRtFGoalForWeek(
+                const goal = this.rtfProgression.getRtFGoalForWeek(
                   currentWeek,
                   !!routineProgram.programWithDeloads,
                   ex.programStyle ?? 'STANDARD',
@@ -751,7 +598,7 @@ export class WorkoutsService {
                     fixedReps: number;
                     amrapTarget: number;
                   };
-                  const newTM = this.adjustTM(
+                  const newTM = this.rtfProgression.adjustTM(
                     ex.programTMKg,
                     lastSet.reps,
                     g.amrapTarget,
@@ -804,7 +651,7 @@ export class WorkoutsService {
     return this.db.workoutSession.update({
       where: { id },
       data: { status, endedAt: now, durationSec, notes: dto.notes },
-      select: this.sessionSelect(),
+      select: buildWorkoutSessionSelect(),
     });
   }
 
@@ -949,7 +796,7 @@ export class WorkoutsService {
     const week = requestedWeek
       ? requestedWeek
       : (() => {
-          const rel = this.getCurrentProgramWeek(
+          const rel = this.rtfProgression.getCurrentProgramWeek(
             new Date(),
             routine.programStartDate,
             remainingWeeks,
@@ -960,28 +807,28 @@ export class WorkoutsService {
     if (week < 1 || week > routine.programDurationWeeks) {
       throw new BadRequestException('Week out of range');
     }
-    const cacheKey = this.cacheKey(routineId, week);
-    const cached = await this.cacheGet(cacheKey);
+    const cacheKey = this.rtfForecast.cacheKey(routineId, week);
+    const cached = await this.rtfForecast.cacheGet(cacheKey);
     if (cached) {
-      this.metrics.weekGoalsHits++;
+      this.rtfForecast.getInternalMetrics().weekGoalsHits++;
       return { ...cached, _cache: 'HIT' };
     }
-    this.metrics.weekGoalsMisses++;
-    return this.withStampedeProtection(cacheKey, async () => {
-      const again = await this.cacheGet(cacheKey);
+    this.rtfForecast.getInternalMetrics().weekGoalsMisses++;
+    return this.rtfForecast.withStampedeProtection(cacheKey, async () => {
+      const again = await this.rtfForecast.cacheGet(cacheKey);
       if (again) return { ...again, _cache: 'HIT' };
       const goals: any[] = [];
       for (const day of routine.days) {
         for (const ex of day.exercises) {
           const variant: 'STANDARD' | 'HYPERTROPHY' =
             ex.programStyle ?? 'STANDARD';
-          const goal = this.getRtFGoalForWeek(week, withDeloads, variant);
+          const goal = this.rtfProgression.getRtFGoalForWeek(week, withDeloads, variant);
           const isDeload = (goal as any).isDeload === true;
 
           // Calculate working weight based on Training Max and intensity
           const tmKg = ex.programTMKg || 0;
           const roundingKg = ex.programRoundingKg || 2.5;
-          const workingWeight = this.roundToNearest(
+          const workingWeight = this.rtfProgression.roundToNearest(
             tmKg * (goal as any).intensity,
             roundingKg,
           );
@@ -1001,7 +848,7 @@ export class WorkoutsService {
                 setsPlanned: deload.sets ?? 4,
                 amrapTarget: null,
                 amrapSetNumber: null,
-                workingWeightKg: this.roundToNearest(
+                workingWeightKg: this.rtfProgression.roundToNearest(
                   tmKg * (deload.intensity ?? 0.6),
                   roundingKg,
                 ),
@@ -1020,7 +867,7 @@ export class WorkoutsService {
                 setsPlanned: 3,
                 amrapTarget: null,
                 amrapSetNumber: null,
-                workingWeightKg: this.roundToNearest(tmKg * 0.6, roundingKg),
+                workingWeightKg: this.rtfProgression.roundToNearest(tmKg * 0.6, roundingKg),
                 trainingMaxKg: tmKg,
               });
             }
@@ -1053,10 +900,10 @@ export class WorkoutsService {
         week,
         withDeloads,
         goals,
-        version: WorkoutsService.RTF_WEEK_GOALS_VERSION,
+        version: RtfForecastService.RTF_WEEK_GOALS_VERSION,
       };
-      await this.cacheSet(cacheKey, result);
-      this.metrics.weekGoalsSets++;
+      await this.rtfForecast.cacheSet(cacheKey, result);
+      this.rtfForecast.getInternalMetrics().weekGoalsSets++;
       return { ...result, _cache: 'MISS' };
     });
   }
@@ -1100,7 +947,7 @@ export class WorkoutsService {
     return {
       routineId,
       weeks,
-      version: WorkoutsService.RTF_WEEK_GOALS_VERSION,
+      version: RtfForecastService.RTF_WEEK_GOALS_VERSION,
       cacheStats: { hits: cacheHits, misses: weeks - cacheHits },
       fromWeek: remainingOnly ? startWeek : 1,
       timeline,
@@ -1119,17 +966,17 @@ export class WorkoutsService {
     routineId: string,
     remainingOnly = false,
   ) {
-    const cacheKey = this.forecastCacheKey(routineId, remainingOnly);
-    const cached = await this.cacheGet(cacheKey);
+    const cacheKey = this.rtfForecast.forecastCacheKey(routineId, remainingOnly);
+    const cached = await this.rtfForecast.cacheGet(cacheKey);
     if (cached) {
-      this.metrics.forecastHits++;
+      this.rtfForecast.getInternalMetrics().forecastHits++;
       return { ...cached, _cache: 'HIT' };
     }
-    this.metrics.forecastMisses++;
-    return this.withStampedeProtection(cacheKey, async () => {
-      const again = await this.cacheGet(cacheKey);
+    this.rtfForecast.getInternalMetrics().forecastMisses++;
+    return this.rtfForecast.withStampedeProtection(cacheKey, async () => {
+      const again = await this.rtfForecast.cacheGet(cacheKey);
       if (again) {
-        this.metrics.forecastHits++;
+        this.rtfForecast.getInternalMetrics().forecastHits++;
         return { ...again, _cache: 'HIT' };
       }
       const routine: any = await this.db.routine.findFirst({
@@ -1189,7 +1036,7 @@ export class WorkoutsService {
               amrapTarget: number;
               isDeload?: boolean;
             })
-          : this.getRtFGoalForWeek(w, withDeloads, 'STANDARD');
+          : this.rtfProgression.getRtFGoalForWeek(w, withDeloads, 'STANDARD');
         const hypertrophy = snapshotApplicable
           ? ((snap.hypertrophy as any[])[w - 1] as {
               intensity: number;
@@ -1197,7 +1044,7 @@ export class WorkoutsService {
               amrapTarget: number;
               isDeload?: boolean;
             })
-          : this.getRtFGoalForWeek(w, withDeloads, 'HYPERTROPHY');
+          : this.rtfProgression.getRtFGoalForWeek(w, withDeloads, 'HYPERTROPHY');
         const isDeload =
           ('isDeload' in standard && standard.isDeload) ||
           ('isDeload' in hypertrophy && hypertrophy.isDeload);
@@ -1227,13 +1074,13 @@ export class WorkoutsService {
       const result = {
         routineId,
         weeks,
-        version: WorkoutsService.RTF_WEEK_GOALS_VERSION,
+        version: RtfForecastService.RTF_WEEK_GOALS_VERSION,
         withDeloads,
         fromWeek: remainingOnly ? startWeek : 1,
         forecast,
       };
-      await this.cacheSet(cacheKey, result);
-      this.metrics.forecastSets++;
+      await this.rtfForecast.cacheSet(cacheKey, result);
+      this.rtfForecast.getInternalMetrics().forecastSets++;
       return { ...result, _cache: 'MISS' };
     });
   }
@@ -1298,203 +1145,6 @@ export class WorkoutsService {
         | 'startedAt:asc';
     },
   ) {
-    const take = Math.min(Math.max(params.limit ?? 20, 1), 50) + 1; // fetch one extra to detect next
-    const where: Prisma.WorkoutSessionWhereInput = {
-      userId,
-      ...(params.status ? { status: params.status } : {}),
-      ...(params.routineId ? { routineId: params.routineId } : {}),
-    };
-
-    // Date range: prefer endedAt when finished, otherwise startedAt
-    const useStarted = params.status === WorkoutSessionStatus.IN_PROGRESS;
-    const gte = params.from ? new Date(params.from) : undefined;
-    const lte = params.to ? new Date(params.to) : undefined;
-    if (gte || lte) {
-      if (useStarted) {
-        where.startedAt = {
-          ...(where.startedAt as Prisma.DateTimeFilter),
-          ...(gte ? { gte } : {}),
-          ...(lte ? { lte } : {}),
-        };
-      } else {
-        where.endedAt = {
-          ...(where.endedAt as Prisma.DateTimeFilter),
-          ...(gte ? { gte } : {}),
-          ...(lte ? { lte } : {}),
-        };
-      }
-    }
-
-    // Basic text search: notes contains (case-insensitive)
-    if (params.q) {
-      where.notes = {
-        contains: params.q,
-        mode: 'insensitive',
-      } as Prisma.StringNullableFilter;
-    }
-
-    // Sorting
-    let orderBy: Prisma.WorkoutSessionOrderByWithRelationInput[] = [];
-    switch (params.sort) {
-      case 'finishedAt:asc':
-        orderBy = [{ endedAt: 'asc' }, { id: 'asc' }];
-        break;
-      case 'startedAt:asc':
-        orderBy = [{ startedAt: 'asc' }, { id: 'asc' }];
-        break;
-      case 'startedAt:desc':
-        orderBy = [{ startedAt: 'desc' }, { id: 'desc' }];
-        break;
-      case 'finishedAt:desc':
-      default:
-        orderBy = [{ endedAt: 'desc' }, { id: 'desc' }];
-        break;
-    }
-
-    const list = await this.db.workoutSession.findMany({
-      where,
-      orderBy,
-      take,
-      skip: params.cursor ? 1 : 0,
-      cursor: params.cursor ? { id: params.cursor } : undefined,
-      select: {
-        id: true,
-        status: true,
-        startedAt: true,
-        endedAt: true,
-        durationSec: true,
-        notes: true,
-        routine: { select: { id: true, name: true } },
-        routineDay: { select: { dayOfWeek: true } },
-      },
-    });
-
-    const hasNext = list.length === take;
-    const items = (hasNext ? list.slice(0, -1) : list).map((s) => ({
-      id: s.id,
-      status: s.status,
-      startedAt: s.startedAt,
-      endedAt: s.endedAt,
-      durationSec: s.durationSec ?? undefined,
-      notes: s.notes ?? undefined,
-      // aggregates can be added later; keep optional for now
-      totalVolume: undefined,
-      totalSets: undefined,
-      totalExercises: undefined,
-      routine: {
-        id: s.routine.id,
-        name: s.routine.name,
-        dayName: this.dayNameFrom(s.routineDay.dayOfWeek),
-      },
-    }));
-
-    return {
-      items,
-      nextCursor: hasNext ? items[items.length - 1]?.id : undefined,
-    };
-  }
-
-  private dayNameFrom(dayOfWeek: number): string {
-    const names = [
-      'Sunday',
-      'Monday',
-      'Tuesday',
-      'Wednesday',
-      'Thursday',
-      'Friday',
-      'Saturday',
-    ];
-    return names[dayOfWeek] ?? '';
-  }
-
-  private sessionSelect(includeLogs = false) {
-    return {
-      id: true,
-      userId: true,
-      routineId: true,
-      routineDayId: true,
-      status: true,
-      startedAt: true,
-      endedAt: true,
-      durationSec: true,
-      notes: true,
-      lastActivityAt: true,
-      createdAt: true,
-      updatedAt: true,
-      routine: {
-        select: {
-          id: true,
-          name: true,
-          description: true,
-        },
-      },
-      routineDay: {
-        select: {
-          id: true,
-          dayOfWeek: true,
-          exercises: {
-            select: {
-              id: true,
-              order: true,
-              restSeconds: true,
-              progressionScheme: true,
-              minWeightIncrement: true,
-              exercise: {
-                select: {
-                  id: true,
-                  name: true,
-                  primaryMuscles: true,
-                  equipment: true,
-                },
-              },
-              sets: {
-                select: {
-                  id: true,
-                  setNumber: true,
-                  repType: true,
-                  reps: true,
-                  minReps: true,
-                  maxReps: true,
-                  weight: true,
-                },
-                orderBy: { setNumber: 'asc' },
-              },
-            },
-            orderBy: { order: 'asc' },
-          },
-        },
-      },
-      ...(includeLogs
-        ? {
-            setLogs: {
-              select: {
-                id: true,
-                routineExerciseId: true,
-                exerciseId: true,
-                setNumber: true,
-                reps: true,
-                weight: true,
-                rpe: true,
-                isCompleted: true,
-                completedAt: true,
-                createdAt: true,
-                updatedAt: true,
-                exercise: {
-                  select: {
-                    id: true,
-                    name: true,
-                    primaryMuscles: true,
-                    equipment: true,
-                  },
-                },
-              },
-              orderBy: [
-                { routineExerciseId: Prisma.SortOrder.asc },
-                { setNumber: Prisma.SortOrder.asc },
-              ],
-            },
-          }
-        : {}),
-    } as const;
+    return this.workoutSessionRead.listSessions(userId, params);
   }
 }

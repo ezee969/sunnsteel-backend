@@ -12,7 +12,7 @@
   - Migrate: `npx prisma migrate dev`
   - Seed: `npm run db:seed`
   - Load exercises: `npm run db:add-exercises`
-- Tests: `npm test`, `npm run test:e2e`, `npm run test:e2e:rtf`
+- Quality checks: `npm run typecheck`, `npm run lint`
 
 ### Runtime conventions
 
@@ -41,7 +41,7 @@
 
 ### Shared contracts (`@sunsteel/contracts`)
 
-- Backend DTOs/enums often come from `@sunsteel/contracts` (examples: `src/routines/dto/*`, `src/workouts/dto/*`). Prefer reusing these shared shapes over redefining them.
+- Backend DTOs/enums often come from the local `@sunsteel/contracts` package (examples: `src/routines/dto/*`, `src/workouts/dto/*`). Prefer reusing these shared shapes over redefining them.
 
 ### Code style
 

@@ -4,11 +4,12 @@ import { RoutinesController } from './routines.controller';
 import { DatabaseModule } from '../database/database.module';
 import { WorkoutsModule } from '../workouts/workouts.module';
 import { CacheModule } from '../cache/cache.module';
+import { RoutinesTmService } from './routines-tm.service';
 
 @Module({
   imports: [DatabaseModule, WorkoutsModule, CacheModule],
   controllers: [RoutinesController],
-  providers: [RoutinesService],
-  exports: [RoutinesService],
+  providers: [RoutinesService, RoutinesTmService],
+  exports: [RoutinesService, RoutinesTmService],
 })
 export class RoutinesModule {}
