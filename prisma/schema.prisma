@@ -17,25 +17,25 @@ datasource db {
 }
 
 model User {
-  id            String         @id @default(uuid())
-  email         String         @unique
-  password      String?        // Made optional for Supabase migration
-  name          String
-  lastName      String?
-  avatarUrl     String?
-  age           Int?
-  sex           Sex?
-  weight        Float?
-  height        Float?
-  supabaseUserId String?       @unique // Link to Supabase user
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  refreshTokens RefreshToken[]
-  weightUnit    WeightUnit     @default(KG)
-  routines      Routine[]
+  id              String           @id @default(uuid())
+  email           String           @unique
+  password        String? // Made optional for Supabase migration
+  name            String
+  lastName        String?
+  avatarUrl       String?
+  age             Int?
+  sex             Sex?
+  weight          Float?
+  height          Float?
+  supabaseUserId  String?          @unique // Link to Supabase user
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  refreshTokens   RefreshToken[]
+  weightUnit      WeightUnit       @default(KG)
+  routines        Routine[]
   workoutSessions WorkoutSession[]
-  following     UserFollow[]   @relation("UserFollowing")
-  followers     UserFollow[]   @relation("UserFollowers")
+  following       UserFollow[]     @relation("UserFollowing")
+  followers       UserFollow[]     @relation("UserFollowers")
 }
 
 model UserFollow {
@@ -104,9 +104,9 @@ enum MuscleGroup {
 model Exercise {
   id               String            @id @default(uuid())
   name             String            @unique
-  primaryMuscles   MuscleGroup[]     // Primary muscle movers (counts as 1.0 for volume)
-  secondaryMuscles MuscleGroup[]     // Secondary muscle movers (counts as 0.5 for volume)
-  equipment        String            // e.g., "barbell", "dumbbell", "bodyweight"
+  primaryMuscles   MuscleGroup[] // Primary muscle movers (counts as 1.0 for volume)
+  secondaryMuscles MuscleGroup[] // Secondary muscle movers (counts as 0.5 for volume)
+  equipment        String // e.g., "barbell", "dumbbell", "bodyweight"
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   routineExercises RoutineExercise[]
@@ -115,30 +115,18 @@ model Exercise {
 
 // A training routine owned by a single user (non-shareable for now)
 model Routine {
-  id           String       @id @default(uuid())
-  userId       String
-  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name         String
-  description  String?
-  isPeriodized Boolean      @default(false)
-  isFavorite   Boolean      @default(false)
-  isCompleted  Boolean      @default(false)
-  // Programmed Reps-to-Failure (RtF) schedule (date-driven). If nulls, routine is infinite (non-programmed)
-  programWithDeloads       Boolean?
-  programDurationWeeks     Int?
-  programStartWeek         Int?         @default(1)
-  programStartDate         DateTime?    @db.Date
-  programEndDate           DateTime?    @db.Date
-  programTrainingDaysOfWeek Int[]       @default([])
-  programTimezone          String?
-  programStyle             ProgramStyle? // STANDARD or HYPERTROPHY (front-end metadata persisted for analytics)
-  // Snapshot of canonical RtF schedules at creation/update (RTF-B09)
-  programRtfSnapshot       Json?
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
-  days         RoutineDay[]
+  id              String           @id @default(uuid())
+  userId          String
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  description     String?
+  isPeriodized    Boolean          @default(false)
+  isFavorite      Boolean          @default(false)
+  isCompleted     Boolean          @default(false)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  days            RoutineDay[]
   workoutSessions WorkoutSession[]
-  tmAdjustments TmAdjustment[]
 
   @@index([userId, isFavorite])
   @@index([userId, isCompleted])
@@ -146,12 +134,12 @@ model Routine {
 
 // A training day configuration inside a routine
 model RoutineDay {
-  id        String            @id @default(uuid())
-  routineId String
-  routine   Routine           @relation(fields: [routineId], references: [id], onDelete: Cascade)
-  dayOfWeek Int // 0=Sun .. 6=Sat
-  order     Int               @default(0)
-  exercises RoutineExercise[]
+  id              String            @id @default(uuid())
+  routineId       String
+  routine         Routine           @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  dayOfWeek       Int // 0=Sun .. 6=Sat
+  order           Int               @default(0)
+  exercises       RoutineExercise[]
   workoutSessions WorkoutSession[]
 
   @@unique([routineId, dayOfWeek])
@@ -159,25 +147,19 @@ model RoutineDay {
 
 // One exercise entry in a routine day
 model RoutineExercise {
-  id           String               @id @default(uuid())
-  routineDayId String
-  routineDay   RoutineDay           @relation(fields: [routineDayId], references: [id], onDelete: Cascade)
-  exerciseId   String
-  exercise     Exercise             @relation(fields: [exerciseId], references: [id])
-  order        Int                  @default(0)
-  restSeconds  Int                  @default(60)
-  note         String?              // User note for the exercise in this routine
+  id                 String               @id @default(uuid())
+  routineDayId       String
+  routineDay         RoutineDay           @relation(fields: [routineDayId], references: [id], onDelete: Cascade)
+  exerciseId         String
+  exercise           Exercise             @relation(fields: [exerciseId], references: [id])
+  order              Int                  @default(0)
+  restSeconds        Int                  @default(60)
+  note               String? // User note for the exercise in this routine
   // Progression configuration per exercise
-  progressionScheme  ProgressionScheme @default(NONE)
-  minWeightIncrement Float             @default(2.5)
-  // Programmed Reps-to-Failure (RtF) specific config (applies when progressionScheme = PROGRAMMED_RTF)
-  programTMKg             Float?
-  programRoundingKg       Float               @default(2.5)
-  programStyle            ProgramStyle?       // STANDARD or HYPERTROPHY for PROGRAMMED_RTF exercises
-  // To ensure at most one TM adjustment per calendar week per exercise instance
-  programLastAdjustedWeek Int?
-  sets         RoutineExerciseSet[]
-  setLogs      SetLog[]
+  progressionScheme  ProgressionScheme    @default(NONE)
+  minWeightIncrement Float                @default(2.5)
+  sets               RoutineExerciseSet[]
+  setLogs            SetLog[]
 }
 
 // Set configuration for a routine exercise
@@ -205,17 +187,9 @@ enum RepType {
 
 // How weight progression should be applied for an exercise
 enum ProgressionScheme {
-  NONE                      // no progression applied
-  DOUBLE_PROGRESSION        // progress when all sets hit target (formerly DYNAMIC)
+  NONE // no progression applied
+  DOUBLE_PROGRESSION // progress when all sets hit target (formerly DYNAMIC)
   DYNAMIC_DOUBLE_PROGRESSION // progress per set when that set hits target (formerly DYNAMIC_DOUBLE)
-  PROGRAMMED_RTF            // date-driven, 5 sets (4 fixed + 1 AMRAP), optional deloads - Standard style
-  PROGRAMMED_RTF_HYPERTROPHY // date-driven, 4 sets (3 fixed + 1 AMRAP), optional deloads - Hypertrophy style
-}
-
-// Program style (variant) for PROGRAMMED_RTF routines
-enum ProgramStyle {
-  STANDARD
-  HYPERTROPHY
 }
 
 // Tracking a user's execution of a specific RoutineDay
@@ -226,46 +200,27 @@ enum WorkoutSessionStatus {
 }
 
 model WorkoutSession {
-  id            String                @id @default(uuid())
-  userId        String
-  user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  routineId     String
-  routine       Routine               @relation(fields: [routineId], references: [id], onDelete: Cascade)
-  routineDayId  String
-  routineDay    RoutineDay            @relation(fields: [routineDayId], references: [id], onDelete: Cascade)
-  status        WorkoutSessionStatus  @default(IN_PROGRESS)
-  startedAt     DateTime              @default(now())
-  endedAt       DateTime?
-  durationSec   Int?
-  notes         String?
-  setLogs       SetLog[]
+  id             String               @id @default(uuid())
+  userId         String
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  routineId      String
+  routine        Routine              @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  routineDayId   String
+  routineDay     RoutineDay           @relation(fields: [routineDayId], references: [id], onDelete: Cascade)
+  status         WorkoutSessionStatus @default(IN_PROGRESS)
+  startedAt      DateTime             @default(now())
+  endedAt        DateTime?
+  durationSec    Int?
+  notes          String?
+  setLogs        SetLog[]
   // Updated whenever a set log is created/updated/deleted (activity heartbeat)
   lastActivityAt DateTime?
 
-  createdAt     DateTime              @default(now())
-  updatedAt     DateTime              @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId, status, startedAt])
   @@index([lastActivityAt])
-}
-
-// TM (Training Max) adjustments for Programmed RtF routines
-model TmAdjustment {
-  id          String       @id @default(cuid())
-  routineId   String
-  exerciseId  String
-  weekNumber  Int
-  deltaKg     Float
-  preTmKg     Float
-  postTmKg    Float
-  reason      String?      @db.VarChar(160)
-  style       ProgramStyle? // snapshot for historical context
-  createdAt   DateTime     @default(now())
-
-  routine     Routine      @relation(fields: [routineId], references: [id], onDelete: Cascade)
-
-  @@index([routineId, exerciseId, createdAt])
-  @@index([routineId, weekNumber])
 }
 
 // A log of an executed set during a workout session
@@ -284,8 +239,8 @@ model SetLog {
   isCompleted       Boolean         @default(false)
   completedAt       DateTime?
 
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([sessionId, routineExerciseId, setNumber])
   @@index([sessionId])

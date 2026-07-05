@@ -22,7 +22,7 @@
     "dev:all:cmd": "./scripts/start-dev.bat",
     "lint": "eslint \"{src,scripts,prisma}/**/*.ts\"",
     "lint:fix": "eslint \"{src,scripts,prisma}/**/*.ts\" --fix",
-    "db:seed": "tsx prisma/seed.ts",
+    "db:seed": "tsx prisma/add-exercises.ts",
     "db:add-exercises": "tsx prisma/add-exercises.ts",
     "docs:check": "node scripts/run-update-docs.js",
     "docs:update": "echo 'Run docs:check first, then update documentation manually'",
@@ -79,7 +79,7 @@
     "typescript-eslint": "^8.20.0"
   },
   "prisma": {
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx prisma/add-exercises.ts"
   },
   "overrides": {
     "path-to-regexp": "^8.4.0",

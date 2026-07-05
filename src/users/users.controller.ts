@@ -16,49 +16,49 @@ import { UsersService } from './users.service';
 // Guards
 import { SupabaseJwtGuard } from 'src/auth/guards/supabase-jwt.guard';
 // Types
-import { Request as ExpressRequest } from 'express';
 import { UpdateProfileRequest } from '@sunsteel/contracts';
+import { RequestWithUser } from '../common/types/request-with-user';
+import { SearchUsersDto } from './dto/search-users.dto';
 
-interface RequestWithUser extends ExpressRequest {
-  user: { id: string; email: string };
-}
-
+@UseGuards(SupabaseJwtGuard)
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) { }
+  constructor(private readonly usersService: UsersService) {}
 
-  @UseGuards(SupabaseJwtGuard)
   @Get('profile')
   getProfile(@Request() req: RequestWithUser) {
     return this.usersService.findByEmail(req.user.email);
   }
 
-  @UseGuards(SupabaseJwtGuard)
   @Patch('profile')
-  updateProfile(@Request() req: RequestWithUser, @Body() data: UpdateProfileRequest) {
+  updateProfile(
+    @Request() req: RequestWithUser,
+    @Body() data: UpdateProfileRequest,
+  ) {
     return this.usersService.updateProfile(req.user.email, data);
   }
 
-  @UseGuards(SupabaseJwtGuard)
   @Get('search')
-  searchUsers(@Request() req: RequestWithUser, @Query('q') query: string, @Query('limit') limit?: string) {
-    const limitNum = limit ? parseInt(limit, 10) : 10;
-    return this.usersService.searchUsers(query, req.user.email, limitNum);
+  searchUsers(
+    @Request() req: RequestWithUser,
+    @Query() query: SearchUsersDto,
+  ) {
+    return this.usersService.searchUsers(query.q, req.user.email, query.limit);
   }
 
-  @UseGuards(SupabaseJwtGuard)
   @Get(':id')
-  getPublicProfile(@Request() req: RequestWithUser, @Param('id') userId: string) {
+  getPublicProfile(
+    @Request() req: RequestWithUser,
+    @Param('id') userId: string,
+  ) {
     return this.usersService.getPublicProfileById(req.user.id, userId);
   }
 
-  @UseGuards(SupabaseJwtGuard)
   @Post(':id/follow')
   followUser(@Request() req: RequestWithUser, @Param('id') userId: string) {
     return this.usersService.followUser(req.user.id, userId);
   }
 
-  @UseGuards(SupabaseJwtGuard)
   @Delete(':id/follow')
   unfollowUser(@Request() req: RequestWithUser, @Param('id') userId: string) {
     return this.usersService.unfollowUser(req.user.id, userId);

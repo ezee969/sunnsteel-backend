@@ -3,7 +3,11 @@ import { WorkoutMaintenanceService } from './workout-maintenance.service';
 import { WorkoutsController } from './workouts.controller';
 import { DatabaseModule } from '../database/database.module';
 import { WorkoutsService } from './workouts.service';
-import { RtfProgressionService, RtfForecastService } from './services';
+import {
+  WorkoutSessionFinishService,
+  WorkoutSessionLogService,
+  WorkoutSessionStartService,
+} from './services';
 import { WorkoutSessionReadService } from './workout-session-read.service';
 
 @Module({
@@ -12,8 +16,9 @@ import { WorkoutSessionReadService } from './workout-session-read.service';
   providers: [
     WorkoutsService,
     WorkoutMaintenanceService,
-    RtfProgressionService,
-    RtfForecastService,
+    WorkoutSessionStartService,
+    WorkoutSessionFinishService,
+    WorkoutSessionLogService,
     WorkoutSessionReadService,
   ],
   exports: [WorkoutsService],

@@ -17,22 +17,27 @@ import {
   CreateRoutineRequest,
   CreateRoutineDayInput,
   CreateRoutineExerciseInput,
-  ProgramStyle,
-  PROGRAM_STYLES,
   ProgressionScheme,
-  PROGRESSION_SCHEMES,
   RepType,
   REP_TYPES,
   RoutineSet,
 } from '@sunsteel/contracts';
 
-const PROGRESSION_SCHEME_VALUES: readonly ProgressionScheme[] =
-  PROGRESSION_SCHEMES as readonly ProgressionScheme[];
+// Live progression schemes accepted by the backend. The shared contracts
+// package still exports legacy RtF schemes, but they are no longer supported.
+const LIVE_PROGRESSION_SCHEMES = [
+  'NONE',
+  'DOUBLE_PROGRESSION',
+  'DYNAMIC_DOUBLE_PROGRESSION',
+] as const satisfies readonly ProgressionScheme[];
+
+type LiveProgressionScheme = (typeof LIVE_PROGRESSION_SCHEMES)[number];
+
+const PROGRESSION_SCHEME_ERROR_MESSAGE = `progressionScheme must be one of: ${LIVE_PROGRESSION_SCHEMES.join(
+  ', ',
+)}`;
 
 const REP_TYPE_VALUES: readonly RepType[] = REP_TYPES as readonly RepType[];
-
-const PROGRAM_STYLE_VALUES: readonly ProgramStyle[] =
-  PROGRAM_STYLES as readonly ProgramStyle[];
 
 export class CreateRoutineExerciseSetDto implements RoutineSet {
   @IsInt()
@@ -93,12 +98,11 @@ export class CreateRoutineExerciseDto implements CreateRoutineExerciseInput {
   note?: string;
 
   // Progression configuration per exercise
-  @IsIn(PROGRESSION_SCHEME_VALUES, {
-    message:
-      'progressionScheme must be NONE, DOUBLE_PROGRESSION, DYNAMIC_DOUBLE_PROGRESSION, or PROGRAMMED_RTF',
+  @IsIn(LIVE_PROGRESSION_SCHEMES, {
+    message: PROGRESSION_SCHEME_ERROR_MESSAGE,
   })
   @IsNotEmpty()
-  progressionScheme!: ProgressionScheme;
+  progressionScheme!: LiveProgressionScheme;
 
   @IsNumber()
   @Min(0.1)
@@ -108,31 +112,6 @@ export class CreateRoutineExerciseDto implements CreateRoutineExerciseInput {
   @ValidateNested({ each: true })
   @Type(() => CreateRoutineExerciseSetDto)
   sets: CreateRoutineExerciseSetDto[];
-
-  // RtF-specific fields when progressionScheme is PROGRAMMED_RTF
-  @ValidateIf(
-    (o: CreateRoutineExerciseDto) => o.progressionScheme === 'PROGRAMMED_RTF',
-  )
-  @IsNumber()
-  @Min(1)
-  programTMKg?: number;
-
-  @ValidateIf(
-    (o: CreateRoutineExerciseDto) => o.progressionScheme === 'PROGRAMMED_RTF',
-  )
-  @IsNumber()
-  @Min(0.5)
-  programRoundingKg?: number; // defaults to 2.5 if omitted
-
-  // Program style for PROGRAMMED_RTF exercises (unified scheme)
-  @ValidateIf(
-    (o: CreateRoutineExerciseDto) => o.progressionScheme === 'PROGRAMMED_RTF',
-  )
-  @IsIn(PROGRAM_STYLE_VALUES, {
-    message:
-      'programStyle must be STANDARD or HYPERTROPHY for PROGRAMMED_RTF exercises',
-  })
-  programStyle?: ProgramStyle;
 }
 
 export class CreateRoutineDayDto implements CreateRoutineDayInput {
@@ -166,31 +145,4 @@ export class CreateRoutineDto implements CreateRoutineRequest {
   @ValidateNested({ each: true })
   @Type(() => CreateRoutineDayDto)
   days: CreateRoutineDayDto[];
-
-  // Routine-level program fields (only required if any exercise is PROGRAMMED_RTF)
-  @IsOptional()
-  @IsBoolean()
-  programWithDeloads?: boolean; // true=21w; false=18w
-
-  @IsOptional()
-  @IsString()
-  programStartDate?: string; // ISO date (yyyy-mm-dd)
-
-  @IsOptional()
-  @IsString()
-  programTimezone?: string; // IANA TZ, e.g. "America/Argentina/Buenos_Aires"
-
-  // Start program at a specific calendar week (create-time feature). Clamped server-side to [1..(18|21)].
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  @Max(21)
-  programStartWeek?: number;
-
-  // Program style (variant) for PROGRAMMED_RTF routines (front-end metadata persisted)
-  @IsOptional()
-  @IsIn(PROGRAM_STYLE_VALUES, {
-    message: 'programStyle must be STANDARD or HYPERTROPHY',
-  })
-  programStyle?: ProgramStyle;
 }

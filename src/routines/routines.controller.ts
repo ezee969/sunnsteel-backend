@@ -2,7 +2,6 @@ import {
   Body,
   Controller,
   Get,
-  Logger,
   Param,
   Post,
   Req,
@@ -18,21 +17,12 @@ import { UpdateRoutineDto } from './dto/update-routine.dto';
 import { UpdateFavoriteDto } from './dto/update-favorite.dto';
 import { UpdateCompletedDto } from './dto/update-completed.dto';
 import { GetRoutinesFilterDto } from './dto/get-routines-filter.dto';
-import { CreateTmEventDto } from './dto/tm-adjustment.dto';
-import { Request } from 'express';
-import { RoutinesTmService } from './routines-tm.service';
-
-type RequestWithUser = Request & { user: { id: string; email: string } };
+import { RequestWithUser } from '../common/types/request-with-user';
 
 @UseGuards(SupabaseJwtGuard)
 @Controller('routines')
 export class RoutinesController {
-  private readonly logger = new Logger(RoutinesController.name);
-
-  constructor(
-    private readonly routinesService: RoutinesService,
-    private readonly routinesTmService: RoutinesTmService,
-  ) {}
+  constructor(private readonly routinesService: RoutinesService) {}
 
   @Post()
   async create(@Req() req: RequestWithUser, @Body() dto: CreateRoutineDto) {
@@ -58,18 +48,8 @@ export class RoutinesController {
   }
 
   @Get(':id')
-  async findOne(
-    @Req() req: RequestWithUser,
-    @Param('id') id: string,
-    @Query('include') include?: string,
-    @Query('week') week?: string,
-  ) {
-    const includeRtFGoals = include?.split(',').includes('rtfGoals');
-    const weekNum = week ? parseInt(week, 10) : undefined;
-    return this.routinesService.findOne(req.user.id, id, {
-      includeRtFGoals,
-      week: weekNum,
-    });
+  async findOne(@Req() req: RequestWithUser, @Param('id') id: string) {
+    return this.routinesService.findOne(req.user.id, id);
   }
 
   @Patch(':id')
@@ -117,68 +97,5 @@ export class RoutinesController {
   @Delete(':id')
   async remove(@Req() req: RequestWithUser, @Param('id') id: string) {
     return this.routinesService.remove(req.user.id, id);
-  }
-
-  // TM Adjustment endpoints
-
-  /**
-   * Create a new TM adjustment event
-   * POST /routines/:id/tm-events
-   */
-  @Post(':id/tm-events')
-  async createTmAdjustment(
-    @Req() req: RequestWithUser,
-    @Param('id') routineId: string,
-    @Body() dto: CreateTmEventDto,
-  ) {
-    const result = await this.routinesTmService.createTmAdjustment(
-      req.user.id,
-      routineId,
-      dto,
-    );
-
-    if (Math.abs(dto.deltaKg) > 15) {
-      this.logger.warn(
-        `Large TM adjustment detected: ${dto.deltaKg}kg for routine ${routineId}, exercise ${dto.exerciseId}`,
-      );
-    }
-
-    return result;
-  }
-
-  /**
-   * Get TM adjustment events for a routine
-   * GET /routines/:id/tm-events
-   */
-  @Get(':id/tm-events')
-  async getTmAdjustments(
-    @Req() req: RequestWithUser,
-    @Param('id') routineId: string,
-    @Query('exerciseId') exerciseId?: string,
-    @Query('minWeek') minWeek?: string,
-    @Query('maxWeek') maxWeek?: string,
-  ) {
-    return this.routinesTmService.getTmAdjustments(
-      req.user.id,
-      routineId,
-      exerciseId,
-      minWeek ? parseInt(minWeek, 10) : undefined,
-      maxWeek ? parseInt(maxWeek, 10) : undefined,
-    );
-  }
-
-  /**
-   * Get TM adjustment summary statistics
-   * GET /routines/:id/tm-events/summary
-   */
-  @Get(':id/tm-events/summary')
-  async getTmAdjustmentSummary(
-    @Req() req: RequestWithUser,
-    @Param('id') routineId: string,
-  ) {
-    return this.routinesTmService.getTmAdjustmentSummary(
-      req.user.id,
-      routineId,
-    );
   }
 }

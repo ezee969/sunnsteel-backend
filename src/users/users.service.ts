@@ -1,9 +1,3 @@
-// Local input type replacing legacy RegisterDto
-interface CreateUserInput {
-  email: string;
-  password: string;
-  name: string;
-}
 // Utility
 import * as bcrypt from 'bcrypt';
 import {
@@ -13,9 +7,20 @@ import {
 } from '@nestjs/common';
 // Services
 import { DatabaseService } from 'src/database/database.service';
-import { UserWithoutPassword } from './types/user.type';
-import { UpdateProfileRequest } from '@sunsteel/contracts';
+import {
+  PublicUserProfile,
+  UpdateProfileRequest,
+  UserProfile,
+  UserSearchResponse,
+} from '@sunsteel/contracts';
 import { Prisma } from '@prisma/client';
+
+// Local input type replacing legacy RegisterDto
+interface CreateUserInput {
+  email: string;
+  password: string;
+  name: string;
+}
 
 const userProfileSelect = {
   id: true,
@@ -27,7 +32,6 @@ const userProfileSelect = {
   sex: true,
   weight: true,
   height: true,
-  supabaseUserId: true,
   weightUnit: true,
   createdAt: true,
   updatedAt: true,
@@ -39,38 +43,28 @@ const userProfileSelect = {
   },
 } as const;
 
-type UserProfileRecord = Prisma.UserGetPayload<{ select: typeof userProfileSelect }>;
-type UserProfileWithFollowCounts = UserWithoutPassword & {
-  followerCount: number;
-  followingCount: number;
-};
-
-export interface PublicUserProfile {
-  id: string;
-  name: string;
-  lastName?: string | null;
-  avatarUrl?: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-  followerCount: number;
-  followingCount: number;
-  isFollowedByMe: boolean;
-}
+type UserProfileRecord = Prisma.UserGetPayload<{
+  select: typeof userProfileSelect;
+}>;
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly db: DatabaseService) { }
+  constructor(private readonly db: DatabaseService) {}
 
-  private mapUserProfile(user: UserProfileRecord): UserProfileWithFollowCounts {
-    const { _count, ...profile } = user;
+  // Serialization boundary: Prisma record -> `UserProfile` contract
+  // (folds follow counts, converts Date -> ISO string).
+  private mapUserProfile(user: UserProfileRecord): UserProfile {
+    const { _count, createdAt, updatedAt, ...profile } = user;
     return {
       ...profile,
       followerCount: _count.followers,
       followingCount: _count.following,
+      createdAt: createdAt.toISOString(),
+      updatedAt: updatedAt.toISOString(),
     };
   }
 
-  async findByEmail(email: string): Promise<UserProfileWithFollowCounts | null> {
+  async findByEmail(email: string): Promise<UserProfile | null> {
     const user = await this.db.user.findUnique({
       where: { email },
       select: userProfileSelect,
@@ -96,7 +90,7 @@ export class UsersService {
     email,
     password,
     name,
-  }: CreateUserInput): Promise<UserProfileWithFollowCounts> {
+  }: CreateUserInput): Promise<UserProfile> {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const user = await this.db.user.create({
@@ -113,7 +107,7 @@ export class UsersService {
   async updateProfile(
     email: string,
     data: UpdateProfileRequest,
-  ): Promise<UserProfileWithFollowCounts> {
+  ): Promise<UserProfile> {
     const user = await this.db.user.update({
       where: { email },
       data: {
@@ -131,7 +125,11 @@ export class UsersService {
     return this.mapUserProfile(user);
   }
 
-  async searchUsers(query: string, excludeEmail: string, limit: number = 10) {
+  async searchUsers(
+    query: string,
+    excludeEmail: string,
+    limit: number = 10,
+  ): Promise<UserSearchResponse[]> {
     if (!query || query.trim() === '') return [];
 
     // search across name, lastName, and email
@@ -199,8 +197,8 @@ export class UsersService {
       name: user.name,
       lastName: user.lastName,
       avatarUrl: user.avatarUrl,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
+      createdAt: user.createdAt.toISOString(),
+      updatedAt: user.updatedAt.toISOString(),
       followerCount: user._count.followers,
       followingCount: user._count.following,
       isFollowedByMe: !!followRelation,
