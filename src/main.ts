@@ -1,41 +1,48 @@
-// main.ts - Add this at the very top, before any other imports
-import { webcrypto } from 'node:crypto'
+import { webcrypto } from 'node:crypto';
 
 if (!globalThis.crypto) {
-	globalThis.crypto = webcrypto as Crypto
+  globalThis.crypto = webcrypto as Crypto;
 }
 
-import { NestFactory } from '@nestjs/core'
-import { AppModule } from './app.module'
-import { ValidationPipe } from '@nestjs/common'
-import * as cookieParser from 'cookie-parser'
-import { AllExceptionsFilter } from './common/filters/http-exception.filter'
+import { Logger, ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { NestFactory } from '@nestjs/core';
+import * as cookieParser from 'cookie-parser';
+import { AppModule } from './app.module';
+import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 
 async function bootstrap() {
-	const app = await NestFactory.create(AppModule)
+  const logger = new Logger('Bootstrap');
+  const app = await NestFactory.create(AppModule);
+  const configService = app.get(ConfigService);
 
-	// Add global exception filter to log all errors
-	app.useGlobalFilters(new AllExceptionsFilter())
+  const isProduction = configService.get<string>('NODE_ENV') === 'production';
+  app.useGlobalFilters(new AllExceptionsFilter(isProduction));
 
-	app.use(cookieParser())
-	app.useGlobalPipes(
-		new ValidationPipe({
-			transform: true,
-			transformOptions: { enableImplicitConversion: true },
-		}),
-	)
+  app.use(cookieParser());
+  app.useGlobalPipes(
+    new ValidationPipe({
+      transform: true,
+      transformOptions: { enableImplicitConversion: true },
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      validationError: {
+        target: false,
+        value: false,
+      },
+    }),
+  );
 
-	app.setGlobalPrefix('api')
+  app.setGlobalPrefix('api');
 
-	app.enableCors({
-		origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-		credentials: true,
-	})
+  app.enableCors({
+    origin: configService.get<string>('FRONTEND_URL') || 'http://localhost:3000',
+    credentials: true,
+  });
 
-	await app.listen(process.env.PORT ?? 4000)
-	console.log(
-		`🚀 Application is running on: http://localhost:${process.env.PORT ?? 4000}`,
-	)
+  const port = configService.get<number>('PORT') ?? 4000;
+  await app.listen(port);
+  logger.log(`Application is running on: http://localhost:${port}`);
 }
 
-void bootstrap()
+void bootstrap();

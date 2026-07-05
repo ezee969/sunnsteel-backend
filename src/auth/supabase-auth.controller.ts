@@ -1,51 +1,65 @@
 import {
+  BadRequestException,
+  Body,
   Controller,
   Get,
+  HttpCode,
+  HttpException,
+  HttpStatus,
+  InternalServerErrorException,
+  Logger,
   Post,
-  Body,
-  UseGuards,
   Request,
   Response,
-  HttpStatus,
-  HttpCode,
+  UseGuards,
 } from '@nestjs/common';
-import { Response as ExpressResponse } from 'express';
+import { ConfigService } from '@nestjs/config';
+import {
+  Request as ExpressRequest,
+  Response as ExpressResponse,
+} from 'express';
+import * as bcrypt from 'bcrypt';
+import type {
+  SupabaseAuthResponse,
+  SupabaseMigrationResponse,
+} from '@sunsteel/contracts';
 import { SupabaseService } from './supabase.service';
 import { SupabaseJwtGuard } from './guards/supabase-jwt.guard';
 import { DatabaseService } from '../database/database.service';
+import { SupabaseMigrationDto, SupabaseVerifyTokenDto } from './dto/auth.dto';
 
-interface SupabaseTokenDto {
-  token: string;
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : 'Unknown error';
 }
 
-interface UserMigrationDto {
-  email: string;
-  password: string;
-}
+type SupabaseRequestUser = SupabaseAuthResponse['user'];
+type AuthenticatedSupabaseRequest = ExpressRequest & {
+  user: SupabaseRequestUser;
+};
 
 @Controller('auth/supabase')
 export class SupabaseAuthController {
+  private readonly logger = new Logger(SupabaseAuthController.name);
+
   constructor(
-    private supabaseService: SupabaseService,
-    private databaseService: DatabaseService,
+    private readonly supabaseService: SupabaseService,
+    private readonly databaseService: DatabaseService,
+    private readonly configService: ConfigService,
   ) {}
 
   /**
-   * Verify Supabase token and return user profile
-   * This replaces the old /auth/login endpoint for Supabase users
+   * Verify Supabase token and return user profile.
    */
   @Post('verify')
   @HttpCode(HttpStatus.OK)
   async verifyToken(
-    @Body() { token }: SupabaseTokenDto,
+    @Body() { token }: SupabaseVerifyTokenDto,
     @Response({ passthrough: true }) res: ExpressResponse,
-  ) {
+  ): Promise<SupabaseAuthResponse> {
     const startTime = Date.now();
     let isNewUser = false;
 
     try {
-      console.log('[Signup Analytics] Token verification started');
-
       const supabaseUser = await this.supabaseService.verifyToken(token);
 
       // Check if user exists before getOrCreate to track new signups
@@ -59,31 +73,16 @@ export class SupabaseAuthController {
       // Set HttpOnly session cookie for middleware detection
       res.cookie('ss_session', '1', {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: this.configService.get<string>('NODE_ENV') === 'production',
         sameSite: 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        maxAge: 7 * 24 * 60 * 60 * 1000,
         path: '/',
       });
 
       const duration = Date.now() - startTime;
-
-      // Log signup analytics
-      if (isNewUser) {
-        console.log('[Signup Analytics] New user created', {
-          userId: user.id,
-          email: user.email,
-          supabaseUserId: user.supabaseUserId,
-          duration: `${duration}ms`,
-          timestamp: new Date().toISOString(),
-        });
-      } else {
-        console.log('[Signup Analytics] Existing user verified', {
-          userId: user.id,
-          email: user.email,
-          duration: `${duration}ms`,
-          timestamp: new Date().toISOString(),
-        });
-      }
+      this.logger.log(
+        `[Signup Analytics] verification succeeded (${isNewUser ? 'new' : 'existing'} user) in ${duration}ms`,
+      );
 
       return {
         user: {
@@ -97,36 +96,29 @@ export class SupabaseAuthController {
       };
     } catch (error) {
       const duration = Date.now() - startTime;
-
-      // Log verification failure with full details
-      console.error('[Signup Analytics] Token verification failed', {
-        error: error.message,
-        stack: error.stack,
-        name: error.name,
-        code: error.code,
-        meta: error.meta,
-        duration: `${duration}ms`,
-        timestamp: new Date().toISOString(),
-        isNewUser,
-      });
+      this.logger.warn(
+        `[Signup Analytics] verification failed in ${duration}ms (${isNewUser ? 'new' : 'existing'} user path): ${getErrorMessage(error)}`,
+      );
 
       // Clear session cookie on verification failure
       res.clearCookie('ss_session', { path: '/' });
 
-      // Log the full error for debugging
-      console.error('[Signup Analytics] Full error object:', error);
+      if (error instanceof HttpException) {
+        throw error;
+      }
 
-      throw error;
+      throw new InternalServerErrorException('Failed to verify token');
     }
   }
 
   /**
-   * Get user profile using Supabase JWT
-   * This replaces the old /users/profile endpoint
+   * Get user profile using Supabase JWT.
    */
   @Get('profile')
   @UseGuards(SupabaseJwtGuard)
-  async getProfile(@Request() req) {
+  async getProfile(
+    @Request() req: AuthenticatedSupabaseRequest,
+  ): Promise<SupabaseAuthResponse> {
     const user = req.user;
 
     return {
@@ -143,7 +135,7 @@ export class SupabaseAuthController {
   }
 
   /**
-   * Clear session cookie on logout
+   * Clear session cookie on logout.
    */
   @Post('logout')
   @HttpCode(HttpStatus.OK)
@@ -153,26 +145,23 @@ export class SupabaseAuthController {
   }
 
   /**
-   * Migration endpoint for existing users
-   * Allows linking existing accounts to Supabase
+   * Migration endpoint for existing users.
    */
   @Post('migrate')
-  async migrateUser(@Body() { email, password }: UserMigrationDto) {
-    // This endpoint will be used during the migration phase
-    // For now, it just validates that the user exists and password is correct
-    const bcrypt = require('bcrypt');
-
+  async migrateUser(
+    @Body() { email, password }: SupabaseMigrationDto,
+  ): Promise<SupabaseMigrationResponse> {
     const user = await this.databaseService.user.findUnique({
       where: { email },
     });
 
-    if (!user || !user.password) {
-      throw new Error('User not found or already migrated');
+    if (!user?.password) {
+      throw new BadRequestException('Invalid migration credentials');
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
-      throw new Error('Invalid password');
+      throw new BadRequestException('Invalid migration credentials');
     }
 
     return {
@@ -183,7 +172,7 @@ export class SupabaseAuthController {
   }
 
   /**
-   * Health check endpoint
+   * Health check endpoint.
    */
   @Get('health')
   async healthCheck() {

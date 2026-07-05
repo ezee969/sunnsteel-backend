@@ -1,5 +1,10 @@
 // Utilities
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
 // Services
 import { JwtService } from '@nestjs/jwt';
@@ -14,9 +19,31 @@ export class TokenService {
   constructor(
     private jwtService: JwtService,
     private db: DatabaseService,
+    private configService: ConfigService,
   ) {}
 
+  private getAccessSecret(): string {
+    const secret = this.configService.get<string>('JWT_ACCESS_SECRET');
+    if (!secret) {
+      throw new InternalServerErrorException('JWT access secret is not configured');
+    }
+    return secret;
+  }
+
+  private getRefreshSecret(): string {
+    const secret = this.configService.get<string>('JWT_REFRESH_SECRET');
+    if (!secret) {
+      throw new InternalServerErrorException(
+        'JWT refresh secret is not configured',
+      );
+    }
+    return secret;
+  }
+
   async generateTokens(userId: string, email: string): Promise<Tokens> {
+    const accessSecret = this.getAccessSecret();
+    const refreshSecret = this.getRefreshSecret();
+
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(
         {
@@ -24,7 +51,7 @@ export class TokenService {
           email,
         },
         {
-          secret: process.env.JWT_ACCESS_SECRET,
+          secret: accessSecret,
           expiresIn: '15m',
         },
       ),
@@ -35,7 +62,7 @@ export class TokenService {
           jti: randomUUID(),
         },
         {
-          secret: process.env.JWT_REFRESH_SECRET,
+          secret: refreshSecret,
           expiresIn: '7d',
         },
       ),
@@ -67,7 +94,7 @@ export class TokenService {
       where: { id: userId },
     });
     if (!userExists) {
-      throw new Error(
+      throw new InternalServerErrorException(
         `Cannot create refresh token for non-existent user: ${userId}`,
       );
     }
@@ -80,9 +107,13 @@ export class TokenService {
           expiresAt,
         },
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Handle race condition where the same refresh token was created concurrently
-      if (err?.code === 'P2002') {
+      if (
+        typeof err === 'object' &&
+        err !== null &&
+        (err as { code?: unknown }).code === 'P2002'
+      ) {
         // Token already exists; safe to ignore as it belongs to this user/session
         return;
       }
@@ -117,8 +148,9 @@ export class TokenService {
       }
 
       // Verify JWT
+      const refreshSecret = this.getRefreshSecret();
       const payload = await this.jwtService.verifyAsync<JwtPayload>(token, {
-        secret: process.env.JWT_REFRESH_SECRET,
+        secret: refreshSecret,
       });
 
       // Verify token belongs to correct user
@@ -150,7 +182,7 @@ export class TokenService {
     const decoded: JwtPayload = this.jwtService.decode(token);
 
     if (!decoded || !decoded['exp']) {
-      throw new Error('Invalid token payload');
+      throw new UnauthorizedException('Invalid token payload');
     }
 
     const expiresAt = new Date(decoded['exp'] * 1000);

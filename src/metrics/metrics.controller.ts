@@ -23,7 +23,7 @@ export class MetricsController {
     // Respect X-Forwarded-For first element if present (behind proxy)
     const fwd = req.headers['x-forwarded-for'] as string | undefined;
     if (fwd) return fwd.split(',')[0].trim();
-    return req.ip || (req.socket && (req.socket as any).remoteAddress) || '';
+    return req.ip || req.socket?.remoteAddress || '';
   }
 
   @Get()

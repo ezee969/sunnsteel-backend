@@ -11,13 +11,20 @@ export class SupabaseJwtGuard extends AuthGuard('supabase-jwt') {
     return super.canActivate(context);
   }
 
-  handleRequest(err: any, user: any, info: any, context: ExecutionContext) {
+  handleRequest<TUser = unknown>(
+    err: unknown,
+    user: TUser,
+    _info: unknown,
+    context: ExecutionContext,
+    _status?: unknown,
+  ): TUser {
+    void _status;
     if (err || !user) {
       throw err || new UnauthorizedException('Authentication required');
     }
 
     // Ensure request.user is set and return the user provided by Passport
-    const request = context.switchToHttp().getRequest();
+    const request = context.switchToHttp().getRequest<{ user?: TUser }>();
     if (!request.user) {
       request.user = user;
     }
