@@ -23,8 +23,7 @@ import {
   RoutineSet,
 } from '@sunsteel/contracts';
 
-// Live progression schemes accepted by the backend. The shared contracts
-// package still exports legacy RtF schemes, but they are no longer supported.
+// Progression schemes accepted by the backend.
 const LIVE_PROGRESSION_SCHEMES = [
   'NONE',
   'DOUBLE_PROGRESSION',
