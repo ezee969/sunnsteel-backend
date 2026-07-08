@@ -4,10 +4,10 @@ import { SupabaseJwtStrategy } from './strategies/supabase-jwt.strategy';
 import { SupabaseService } from './supabase.service';
 import { SupabaseAuthController } from './supabase-auth.controller';
 import { SupabaseJwtGuard } from './guards/supabase-jwt.guard';
-import { UsersModule } from 'src/users/users.module';
-import { TokenModule } from 'src/token/token.module';
+import { UsersModule } from '../users/users.module';
+import { TokenModule } from '../token/token.module';
 import { PassportModule } from '@nestjs/passport';
-import { DatabaseModule } from 'src/database/database.module';
+import { DatabaseModule } from '../database/database.module';
 
 /**
  * @module AuthModule

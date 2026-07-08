@@ -8,10 +8,10 @@ import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
 // Services
 import { JwtService } from '@nestjs/jwt';
-import { DatabaseService } from 'src/database/database.service';
+import { DatabaseService } from '../database/database.service';
 // Types
 import { Tokens } from './types/tokens.type';
-import { JwtPayload } from 'src/auth/types/jwt-payload.type';
+import { JwtPayload } from '../auth/types/jwt-payload.type';
 import { randomUUID } from 'crypto';
 
 @Injectable()

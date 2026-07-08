@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 // Services
-import { DatabaseService } from 'src/database/database.service';
+import { DatabaseService } from '../database/database.service';
 import {
   PublicUserProfile,
   UpdateProfileRequest,
