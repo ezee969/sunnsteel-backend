@@ -40,7 +40,7 @@
     "@nestjs/schedule": "^5.0.1",
     "@nestjs/throttler": "^6.4.0",
     "@prisma/client": "^6.0.0",
-    "@sunsteel/contracts": "file:../sunsteel-contracts",
+    "@sunsteel/contracts": "^0.3.0",
     "@supabase/supabase-js": "^2.39.8",
     "bcrypt": "^6.0.0",
     "class-transformer": "^0.5.1",
