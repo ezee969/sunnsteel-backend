@@ -48,6 +48,30 @@ export class SupabaseAuthController {
   ) {}
 
   /**
+   * Cookie attributes for the `ss_session` marker cookie.
+   *
+   * In production the frontend (Vercel) and backend (Railway) are on
+   * different registrable domains, so the verify request is cross-site.
+   * Browsers only store cross-site cookies when they are `SameSite=None`
+   * AND `Secure`, so we must use those in production. Locally both run on
+   * `localhost` (same-site over http), where `None` is impossible because
+   * it requires `Secure`, so we fall back to `lax`.
+   *
+   * The same attributes must be used for `clearCookie`, otherwise the
+   * browser will not match and clear the cookie.
+   */
+  private get sessionCookieOptions() {
+    const isProduction =
+      this.configService.get<string>('NODE_ENV') === 'production';
+    return {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? ('none' as const) : ('lax' as const),
+      path: '/',
+    };
+  }
+
+  /**
    * Verify Supabase token and return user profile.
    */
   @Post('verify')
@@ -72,11 +96,8 @@ export class SupabaseAuthController {
 
       // Set HttpOnly session cookie for middleware detection
       res.cookie('ss_session', '1', {
-        httpOnly: true,
-        secure: this.configService.get<string>('NODE_ENV') === 'production',
-        sameSite: 'lax',
+        ...this.sessionCookieOptions,
         maxAge: 7 * 24 * 60 * 60 * 1000,
-        path: '/',
       });
 
       const duration = Date.now() - startTime;
@@ -101,7 +122,7 @@ export class SupabaseAuthController {
       );
 
       // Clear session cookie on verification failure
-      res.clearCookie('ss_session', { path: '/' });
+      res.clearCookie('ss_session', this.sessionCookieOptions);
 
       if (error instanceof HttpException) {
         throw error;
@@ -140,7 +161,7 @@ export class SupabaseAuthController {
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   async logout(@Response({ passthrough: true }) res: ExpressResponse) {
-    res.clearCookie('ss_session', { path: '/' });
+    res.clearCookie('ss_session', this.sessionCookieOptions);
     return { message: 'Logged out successfully' };
   }
 

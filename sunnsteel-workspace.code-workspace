@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../sunsteel-contracts"
+		},
+		{
+			"path": "../sunnsteel-frontend"
+		}
+	],
+	"settings": {}
+}
