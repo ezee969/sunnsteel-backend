@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { WorkoutStatsQueryDto } from './dto/workout-stats.dto';
 import {
   ListSessionsParams,
   WorkoutSession,
@@ -28,6 +29,10 @@ export class WorkoutsService {
   async getActiveSession(userId: string): Promise<WorkoutSession | null> {
     const session = await this.workoutSessionRead.getActiveSession(userId);
     return session ? toWorkoutSessionResponse(session) : null;
+  }
+
+  getStats(userId: string, query: WorkoutStatsQueryDto) {
+    return this.workoutSessionRead.getStats(userId, query);
   }
 
   async getSessionById(userId: string, id: string): Promise<WorkoutSession> {

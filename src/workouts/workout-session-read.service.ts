@@ -1,17 +1,19 @@
 import {
+  BadRequestException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  Prisma,
-  WorkoutSessionStatus,
-} from '@prisma/client';
+import { Prisma, WorkoutSessionStatus } from '@prisma/client';
 import {
   ListSessionsParams,
   WorkoutSessionListResponse,
   WorkoutSessionSummary,
 } from '@sunsteel/contracts';
 import { DatabaseService } from '../database/database.service';
+import {
+  WorkoutStatsQueryDto,
+  WorkoutStatsResponse,
+} from './dto/workout-stats.dto';
 import {
   buildWorkoutSessionSelect,
   dayNameFrom,
@@ -25,6 +27,58 @@ type WorkoutSessionListRow = Prisma.WorkoutSessionGetPayload<{
 @Injectable()
 export class WorkoutSessionReadService {
   constructor(private readonly db: DatabaseService) {}
+
+  async getStats(
+    userId: string,
+    query: WorkoutStatsQueryDto,
+  ): Promise<WorkoutStatsResponse> {
+    const start = new Date(query.weekStart);
+    const end = new Date(query.weekEnd);
+    const duration = end.getTime() - start.getTime();
+    // Bound the timestamp-only weekly read, including daylight-saving weeks.
+    if (
+      !Number.isFinite(duration) ||
+      duration <= 0 ||
+      duration > 8 * 86400000
+    ) {
+      throw new BadRequestException('Invalid week interval');
+    }
+    const [total, totalCompleted, completedThisWeek] = await this.db.$transaction(
+      [
+        this.db.workoutSession.count({
+          where: { userId },
+        }),
+        this.db.workoutSession.count({
+          where: { userId, status: WorkoutSessionStatus.COMPLETED },
+        }),
+        this.db.workoutSession.findMany({
+          where: {
+            userId,
+            status: WorkoutSessionStatus.COMPLETED,
+            endedAt: { gte: start, lt: end },
+          },
+          select: { endedAt: true },
+        }),
+      ],
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    );
+    const dateFormatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: query.timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    return {
+      totalCompleted,
+      completionRate: total ? Math.round((totalCompleted / total) * 100) : 0,
+      weeklyWorkoutsCount: completedThisWeek.length,
+      activeDaysThisWeek: new Set(
+        completedThisWeek
+          .filter((row) => row.endedAt)
+          .map((row) => dateFormatter.format(row.endedAt!)),
+      ).size,
+    };
+  }
 
   private clampTake(limit?: number): number {
     return Math.min(Math.max(limit ?? 20, 1), 50) + 1;
@@ -47,9 +101,7 @@ export class WorkoutSessionReadService {
     };
 
     const useStarted = params.status === WorkoutSessionStatus.IN_PROGRESS;
-    return useStarted
-      ? { startedAt: dateFilter }
-      : { endedAt: dateFilter };
+    return useStarted ? { startedAt: dateFilter } : { endedAt: dateFilter };
   }
 
   private buildWhere(

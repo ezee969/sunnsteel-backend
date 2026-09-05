@@ -19,6 +19,7 @@ import { StartWorkoutResponseDto } from './dto/start-workout-response.dto';
 import { FinishWorkoutDto } from './dto/finish-workout.dto';
 import { UpsertSetLogDto } from './dto/upsert-set-log.dto';
 import { ListSessionsDto } from './dto/list-sessions.dto';
+import { WorkoutStatsQueryDto } from './dto/workout-stats.dto';
 import { RequestWithUser } from '../common/types/request-with-user';
 
 @UseGuards(SupabaseJwtGuard)
@@ -56,6 +57,14 @@ export class WorkoutsController {
   @Get('sessions/:id')
   async getById(@Req() req: RequestWithUser, @Param('id') id: string) {
     return this.workoutsService.getSessionById(req.user.id, id);
+  }
+
+  @Get('stats')
+  async stats(
+    @Req() req: RequestWithUser,
+    @Query() query: WorkoutStatsQueryDto,
+  ) {
+    return this.workoutsService.getStats(req.user.id, query);
   }
 
   @Put('sessions/:id/set-logs')

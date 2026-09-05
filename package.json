@@ -27,7 +27,8 @@
     "docs:check": "node scripts/run-update-docs.js",
     "docs:update": "echo 'Run docs:check first, then update documentation manually'",
     "token:supabase": "powershell -ExecutionPolicy Bypass -File ./scripts/get-supabase-token.ps1",
-    "verify": "npm run lint && npm run typecheck && npm run build",
+    "test": "node -r ts-node/register --test scripts/workout-stats.test.ts",
+    "verify": "npm run lint && npm run typecheck && npm test && npm run build",
     "verify:security": "npm audit --omit=dev"
   },
   "dependencies": {
