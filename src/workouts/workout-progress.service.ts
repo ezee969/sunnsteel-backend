@@ -90,7 +90,12 @@ export class WorkoutProgressService {
         },
       }),
       this.db.workoutSession.findMany({
-        where: { userId, status: WorkoutSessionStatus.COMPLETED },
+        // An abandoned session with nothing logged is noise, not activity.
+        where: {
+          userId,
+          status: WorkoutSessionStatus.COMPLETED,
+          setLogs: { some: { isCompleted: true } },
+        },
         orderBy: { endedAt: 'desc' },
         take: RECENT_ACTIVITY_LIMIT,
         select: {

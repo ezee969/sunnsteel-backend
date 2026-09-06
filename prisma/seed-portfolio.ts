@@ -526,8 +526,6 @@ async function main() {
 		completedAt: Date
 	}[] = []
 
-	let legacyCursor = 0
-	let activeCursor = 0
 	let deloadApplied = false
 	let noteCursor = 0
 	let sessionIndex = 0
@@ -551,11 +549,11 @@ async function main() {
 		// stretch -- recent activity and the streak both read off that window.
 		if (daysAgo > NO_SKIP_RECENT_DAYS && chance(0.1)) continue
 
-		const dayIndex = isLegacy ? legacyCursor % 3 : activeCursor % 4
-		if (isLegacy) legacyCursor += 1
-		else activeCursor += 1
-
-		const day = routine.days[dayIndex]
+		// Match the routine day to the real weekday. Rotating through days with a
+		// cursor would file a Thursday session under the Sunday day, and the UI
+		// labels sessions from `routineDay.dayOfWeek`.
+		const day = routine.days.find((candidate) => candidate.dayOfWeek === dow)
+		if (!day) continue
 
 		// Coming back from the week off: pull the barbell lifts back ~10% and
 		// rebuild. One small deload, exactly where a real one would land.
