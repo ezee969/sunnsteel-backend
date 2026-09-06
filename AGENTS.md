@@ -77,4 +77,6 @@ DTOs/enums are sourced from the published `@sunsteel/contracts` package rather t
 
 ## Documentation
 
-The previous `docs/` folder was removed because it had drifted from the code (see the progression-scheme mismatch above) — don't recreate assumptions from memory of it. A new docs setup is planned; until then, treat source + this file as the only trustworthy reference.
+The previous backend-local `docs/` folder was removed because it had drifted from the code (see the progression-scheme mismatch above). Do not recreate implementation assumptions from memory of it; treat source plus this file as the trustworthy backend reference.
+
+Before proposing or implementing product features, read the canonical cross-repository roadmap at [`../sunnsteel-frontend/docs/roadmaps/product-roadmap.md`](../sunnsteel-frontend/docs/roadmaps/product-roadmap.md). It records shipped capabilities, the active queue, dependencies, deferred work and retained product decisions. Verify backend code before changing a feature to `SHIPPED`; backend implementation guidance still comes from source plus this file.
