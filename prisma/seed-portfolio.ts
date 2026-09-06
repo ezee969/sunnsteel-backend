@@ -35,7 +35,7 @@ const HISTORY_DAYS = 84
 /** Days older than this belong to the earlier full-body block. */
 const LEGACY_CUTOFF_DAYS = 57
 /** Week off sick, roughly five weeks back. */
-const MISSED_WEEK = { from: 30, to: 36 }
+const MISSED_WEEK = { from: 45, to: 51 }
 /** No skipped sessions inside this window, so recent activity stays dense. */
 const NO_SKIP_RECENT_DAYS = 12
 
@@ -97,8 +97,18 @@ function addDays(date: Date, days: number): Date {
  */
 function setDropOff(setIndex: number): number {
 	if (setIndex <= 1) return 0
-	if (setIndex === 2) return 1
+	if (setIndex <= 3) return 1
 	return 2
+}
+
+/**
+ * Reps the lifter opens a weight on: top sets at the ceiling minus the natural
+ * fall-off, so the drop across sets survives every reset.
+ */
+function repShape(spec: ExerciseSpec, setIndex: number): number {
+	const ceiling = targetReps(spec)
+	const floor = floorReps(spec)
+	return clamp(floor + 2 - setDropOff(setIndex), floor, ceiling)
 }
 
 function targetReps(spec: ExerciseSpec): number {
@@ -132,6 +142,12 @@ interface ExerciseState {
 	weights: number[]
 	/** Reps the lifter is currently good for on each set. */
 	reps: number[]
+	/**
+	 * Weight to climb back to after a deload. While set, the weight goes back on
+	 * every session regardless of reps -- post-deload work is submaximal, so a
+	 * real lifter walks it back up rather than re-earning every plate.
+	 */
+	rebuildTo: (number | null)[]
 }
 
 interface PlannedSetLog {
@@ -157,7 +173,6 @@ interface PlannedSetLog {
 function performExercise(state: ExerciseState): PlannedSetLog[] {
 	const { spec } = state
 	const ceiling = targetReps(spec)
-	const floor = floorReps(spec)
 	const logs: PlannedSetLog[] = []
 
 	for (let i = 0; i < spec.setCount; i += 1) {
@@ -174,6 +189,21 @@ function performExercise(state: ExerciseState): PlannedSetLog[] {
 
 	const hits = logs.map((log) => log.reps >= ceiling)
 
+	// Walking back up after a deload takes priority over the normal rules.
+	if (state.rebuildTo.some((target) => target !== null)) {
+		for (let i = 0; i < spec.setCount; i += 1) {
+			const target = state.rebuildTo[i]
+			if (target === null) continue
+			state.weights[i] = roundToIncrement(
+				Math.min(state.weights[i] + spec.increment, target),
+				spec.increment,
+			)
+			state.reps[i] = repShape(spec, i)
+			if (state.weights[i] >= target) state.rebuildTo[i] = null
+		}
+		return logs
+	}
+
 	if (spec.scheme === ProgressionScheme.DOUBLE_PROGRESSION) {
 		if (hits.every(Boolean)) {
 			for (let i = 0; i < spec.setCount; i += 1) {
@@ -181,7 +211,7 @@ function performExercise(state: ExerciseState): PlannedSetLog[] {
 					state.weights[i] + spec.increment,
 					spec.increment,
 				)
-				state.reps[i] = floor
+				state.reps[i] = repShape(spec, i)
 			}
 			return logs
 		}
@@ -192,14 +222,14 @@ function performExercise(state: ExerciseState): PlannedSetLog[] {
 					state.weights[i] + spec.increment,
 					spec.increment,
 				)
-				state.reps[i] = floor
+				state.reps[i] = repShape(spec, i)
 			}
 		}
 	}
 
 	// Sets that did not progress creep up a rep, except on an off day -- which
 	// is what produces the two-to-three session stalls at the same weight.
-	const offDay = chance(0.16)
+	const offDay = chance(0.12)
 	for (let i = 0; i < spec.setCount; i += 1) {
 		if (hits[i] && spec.scheme !== ProgressionScheme.NONE) continue
 		if (spec.scheme === ProgressionScheme.NONE) {
@@ -221,16 +251,15 @@ function initialState(
 	exerciseId: string,
 	spec: ExerciseSpec,
 ): ExerciseState {
-	const ceiling = targetReps(spec)
-	const floor = floorReps(spec)
 	return {
 		routineExerciseId,
 		exerciseId,
 		spec,
 		weights: Array.from({ length: spec.setCount }, () => spec.startWeight),
 		reps: Array.from({ length: spec.setCount }, (_unused, i) =>
-			clamp(floor + 1 - setDropOff(i), 1, ceiling),
+			repShape(spec, i),
 		),
+		rebuildTo: Array.from({ length: spec.setCount }, () => null),
 	}
 }
 
@@ -501,7 +530,8 @@ async function main() {
 	let activeCursor = 0
 	let deloadApplied = false
 	let noteCursor = 0
-	const noteDays = new Set([79, 62, 44, 21, 9])
+	let sessionIndex = 0
+	const noteSessions = new Set([2, 9, 17, 24, 31])
 
 	// Walk forwards through history so progression accumulates in order. Day 0
 	// (today) is deliberately left empty: a completed session today would make
@@ -537,20 +567,22 @@ async function main() {
 				for (const state of routineDay.states) {
 					if (!state.spec.deloads) continue
 					for (let i = 0; i < state.weights.length; i += 1) {
+						state.rebuildTo[i] = state.weights[i]
 						state.weights[i] = roundToIncrement(
-							state.weights[i] * 0.9,
+							state.weights[i] * 0.95,
 							state.spec.increment,
 						)
-						state.reps[i] = floorReps(state.spec)
+						state.reps[i] = repShape(state.spec, i)
 					}
 				}
 			}
-		} else if (noteDays.has(daysAgo)) {
+		} else if (noteSessions.has(sessionIndex)) {
 			note = SESSION_NOTES[noteCursor % SESSION_NOTES.length]
 			noteCursor += 1
 			if (note === SESSION_NOTES[3]) note = SESSION_NOTES[0]
 		}
 
+		sessionIndex += 1
 		const sessionId = seedId('session', routine.id, daysAgo)
 		const startedAt = sessionStart(date)
 

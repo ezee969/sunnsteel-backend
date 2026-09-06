@@ -1,6 +1,6 @@
 {
   "seedVersion": "v1",
-  "generatedAt": "2026-09-06T12:09:03.249Z",
+  "generatedAt": "2026-09-06T14:07:58.792Z",
   "ownerUserId": "99b9c10e-8af9-4b41-ad64-11882c61bc70",
   "ownerEmail": "eze.olivero96@gmail.com",
   "routineIds": [
@@ -19,8 +19,8 @@
     "routines": 2,
     "routineDays": 7,
     "routineExercises": 32,
-    "workoutSessions": 36,
-    "setLogs": 540,
+    "workoutSessions": 37,
+    "setLogs": 557,
     "peerUsers": 6,
     "follows": 12
   }
