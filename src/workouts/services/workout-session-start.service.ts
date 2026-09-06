@@ -1,3 +1,5 @@
+import { lockTrainingAccount } from '../analytics/analytics-lock';
+import { ensureSessionSnapshot } from '../analytics/session-snapshot';
 import {
   BadRequestException,
   Injectable,
@@ -19,8 +21,10 @@ const isPrismaErrorWithCode = (e: unknown): e is { code: string } => {
 
 type StartSessionEntity = {
   id: string;
-  routineId: string;
-  routineDayId: string;
+  routineId: string | null;
+  sourceRoutineId?: string | null;
+  routineDayId: string | null;
+  sourceRoutineDayId?: string | null;
   status: WorkoutSessionStatus;
   startedAt: Date;
   endedAt: Date | null;
@@ -53,8 +57,8 @@ export class WorkoutSessionStartService {
   ): StartWorkoutResponseDto {
     return {
       id: session.id,
-      routineId: session.routineId,
-      routineDayId: session.routineDayId,
+      routineId: session.sourceRoutineId ?? session.routineId!,
+      routineDayId: session.sourceRoutineDayId ?? session.routineDayId!,
       status: session.status,
       startedAt: session.startedAt.toISOString(),
       endedAt: session.endedAt?.toISOString() ?? null,
@@ -78,28 +82,38 @@ export class WorkoutSessionStartService {
       return this.toStartWorkoutResponse(preExisting, true);
     }
 
-    // Validate routine and day ownership/relationship
-    const routineDay = await this.db.routineDay.findFirst({
-      where: { id: dto.routineDayId, routine: { id: dto.routineId, userId } },
-      select: { id: true, dayOfWeek: true },
-    });
-    if (!routineDay) {
-      throw new NotFoundException(
-        'Routine day not found for this user/routine',
-      );
-    }
-
     let created: StartSessionEntity | null = null;
     try {
-      const createdSession = await this.db.workoutSession.create({
-        data: {
-          userId,
-          routineId: dto.routineId,
-          routineDayId: dto.routineDayId,
-          status: WorkoutSessionStatus.IN_PROGRESS,
-          notes: dto.notes,
-        },
-        select: buildWorkoutSessionSelect(),
+      const createdSession = await this.db.$transaction(async (tx) => {
+        await lockTrainingAccount(tx, userId);
+        // Validate routine and day ownership/relationship
+        const routineDay = await tx.routineDay.findFirst({
+          where: {
+            id: dto.routineDayId,
+            routine: { id: dto.routineId, userId },
+          },
+          select: { id: true, dayOfWeek: true },
+        });
+        if (!routineDay) {
+          throw new NotFoundException(
+            'Routine day not found for this user/routine',
+          );
+        }
+
+        const result = await tx.workoutSession.create({
+          data: {
+            userId,
+            routineId: dto.routineId,
+            sourceRoutineId: dto.routineId,
+            sourceRoutineDayId: dto.routineDayId,
+            routineDayId: dto.routineDayId,
+            status: WorkoutSessionStatus.IN_PROGRESS,
+            notes: dto.notes,
+          },
+          select: buildWorkoutSessionSelect(),
+        });
+        await ensureSessionSnapshot(tx, result.id, 'CAPTURED');
+        return result;
       });
       created = createdSession;
       // Initial activity heartbeat (ignore failure)

@@ -17,7 +17,7 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [20]
+        node-version: [22]
 
     steps:
       - name: Checkout repository
@@ -38,5 +38,37 @@ jobs:
       - name: Lint application
         run: npm run lint
 
+      - name: Unit tests
+        run: npm test
+
       - name: Build application
         run: npm run build
+
+  analytics-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: isolated
+          POSTGRES_DB: td27_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:isolated@127.0.0.1:5432/td27_test
+      ANALYTICS_TEST_DATABASE: isolated
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run test:analytics:prepare
+      - run: npm run test:analytics:integration

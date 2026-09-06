@@ -23,6 +23,7 @@ interface CreateUserInput {
 }
 
 const userProfileSelect = {
+  timeZone: true,
   id: true,
   email: true,
   name: true,

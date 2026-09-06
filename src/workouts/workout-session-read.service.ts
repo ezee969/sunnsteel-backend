@@ -1,3 +1,4 @@
+import { readSnapshot } from './analytics/session-snapshot';
 import {
   BadRequestException,
   Injectable,
@@ -41,25 +42,26 @@ export class WorkoutSessionReadService {
     ) {
       throw new BadRequestException('Invalid week interval');
     }
-    const [total, totalCompleted, completedThisWeek] = await this.db.$transaction(
-      [
-        this.db.workoutSession.count({
-          where: { userId },
-        }),
-        this.db.workoutSession.count({
-          where: { userId, status: WorkoutSessionStatus.COMPLETED },
-        }),
-        this.db.workoutSession.findMany({
-          where: {
-            userId,
-            status: WorkoutSessionStatus.COMPLETED,
-            endedAt: { gte: start, lt: end },
-          },
-          select: { endedAt: true },
-        }),
-      ],
-      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
-    );
+    const [total, totalCompleted, completedThisWeek] =
+      await this.db.$transaction(
+        [
+          this.db.workoutSession.count({
+            where: { userId },
+          }),
+          this.db.workoutSession.count({
+            where: { userId, status: WorkoutSessionStatus.COMPLETED },
+          }),
+          this.db.workoutSession.findMany({
+            where: {
+              userId,
+              status: WorkoutSessionStatus.COMPLETED,
+              endedAt: { gte: start, lt: end },
+            },
+            select: { endedAt: true },
+          }),
+        ],
+        { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+      );
     const dateFormatter = new Intl.DateTimeFormat('en-CA', {
       timeZone: query.timeZone,
       year: 'numeric',
@@ -109,7 +111,14 @@ export class WorkoutSessionReadService {
     return {
       userId,
       ...(params.status ? { status: params.status } : {}),
-      ...(params.routineId ? { routineId: params.routineId } : {}),
+      ...(params.routineId
+        ? {
+            OR: [
+              { sourceRoutineId: params.routineId },
+              { sourceRoutineId: null, routineId: params.routineId },
+            ],
+          }
+        : {}),
       ...this.buildDateFilter(params),
       ...(params.q
         ? {
@@ -145,22 +154,29 @@ export class WorkoutSessionReadService {
     const hasNext = list.length === take;
     const page = hasNext ? list.slice(0, -1) : list;
 
-    const items: WorkoutSessionSummary[] = page.map((session) => ({
-      id: session.id,
-      status: session.status,
-      startedAt: session.startedAt.toISOString(),
-      endedAt: session.endedAt ? session.endedAt.toISOString() : null,
-      durationSec: session.durationSec ?? undefined,
-      notes: session.notes ?? undefined,
-      totalVolume: undefined,
-      totalSets: undefined,
-      totalExercises: undefined,
-      routine: {
-        id: session.routine.id,
-        name: session.routine.name,
-        dayName: dayNameFrom(session.routineDay.dayOfWeek),
-      },
-    }));
+    const items: WorkoutSessionSummary[] = page.map((session) => {
+      const snapshot = session.snapshot
+        ? readSnapshot(session.snapshot.payload)
+        : null;
+      return {
+        id: session.id,
+        status: session.status,
+        startedAt: session.startedAt.toISOString(),
+        endedAt: session.endedAt ? session.endedAt.toISOString() : null,
+        durationSec: session.durationSec ?? undefined,
+        notes: session.notes ?? undefined,
+        totalVolume: undefined,
+        totalSets: undefined,
+        totalExercises: undefined,
+        routine: {
+          id: snapshot?.sourceRoutineId ?? session.routine!.id,
+          name: snapshot?.routine.name ?? session.routine!.name,
+          dayName: dayNameFrom(
+            snapshot?.routineDay.dayOfWeek ?? session.routineDay!.dayOfWeek,
+          ),
+        },
+      };
+    });
 
     return {
       items,

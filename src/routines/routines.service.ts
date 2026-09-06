@@ -1,3 +1,5 @@
+import { ConflictException } from '@nestjs/common';
+import { lockTrainingAccount } from '../workouts/analytics/analytics-lock';
 import {
   BadRequestException,
   Injectable,
@@ -167,6 +169,8 @@ export class RoutinesService {
     dto: UpdateRoutineDto,
   ): Promise<Routine> {
     return this.db.$transaction(async (tx) => {
+      await lockTrainingAccount(tx, userId);
+      await this.assertHistorySafe(tx, userId, id, !!dto.days);
       // Verify ownership
       const existing = await tx.routine.findFirst({
         where: { id, userId },
@@ -178,17 +182,6 @@ export class RoutinesService {
           'Routine not found or you do not have permission to edit it.',
         );
       }
-
-      // First, delete any SetLogs that reference RoutineExercises in this routine
-      await tx.setLog.deleteMany({
-        where: {
-          routineExercise: {
-            routineDay: {
-              routineId: id,
-            },
-          },
-        },
-      });
 
       // Remove current days (cascade removes exercises and sets)
       // Only delete and recreate days if days array is provided in the update
@@ -223,29 +216,33 @@ export class RoutinesService {
     routineExerciseId: string,
     note: string,
   ) {
-    // Verify ownership
-    const routine = await this.db.routine.findFirst({
-      where: { id: routineId, userId },
-    });
-    if (!routine) {
-      throw new NotFoundException('Routine not found');
-    }
+    return this.db.$transaction(async (tx) => {
+      await lockTrainingAccount(tx, userId);
+      await this.assertHistorySafe(tx, userId, routineId, false);
+      // Verify ownership
+      const routine = await tx.routine.findFirst({
+        where: { id: routineId, userId },
+      });
+      if (!routine) {
+        throw new NotFoundException('Routine not found');
+      }
 
-    // Verify routineExercise belongs to routine
-    const re = await this.db.routineExercise.findFirst({
-      where: {
-        id: routineExerciseId,
-        routineDay: { routineId },
-      },
-    });
+      // Verify routineExercise belongs to routine
+      const re = await tx.routineExercise.findFirst({
+        where: {
+          id: routineExerciseId,
+          routineDay: { routineId },
+        },
+      });
 
-    if (!re) {
-      throw new NotFoundException('Exercise not found in this routine');
-    }
+      if (!re) {
+        throw new NotFoundException('Exercise not found in this routine');
+      }
 
-    return this.db.routineExercise.update({
-      where: { id: routineExerciseId },
-      data: { note },
+      return tx.routineExercise.update({
+        where: { id: routineExerciseId },
+        data: { note },
+      });
     });
   }
 
@@ -306,20 +303,63 @@ export class RoutinesService {
   }
 
   async remove(userId: string, id: string) {
-    // First, verify the routine exists and belongs to the user
-    const routine = await this.db.routine.findFirst({
-      where: { id, userId },
+    return this.db.$transaction(async (tx) => {
+      await lockTrainingAccount(tx, userId);
+      await this.assertHistorySafe(tx, userId, id, true);
+      const routine = await tx.routine.findFirst({ where: { id, userId } });
+      if (!routine) throw new NotFoundException('Routine not found');
+      return tx.routine.delete({ where: { id } });
     });
+  }
 
-    if (!routine) {
-      throw new NotFoundException(
-        'Routine not found or you do not have permission to delete it.',
+  private async assertHistorySafe(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    routineId: string,
+    structural: boolean,
+  ) {
+    if (
+      structural &&
+      (await tx.workoutSession.findFirst({
+        where: { userId, routineId, status: 'IN_PROGRESS' },
+        select: { id: true },
+      }))
+    ) {
+      throw new ConflictException(
+        'Finish the active session before changing the routine structure',
       );
     }
-
-    // If found, proceed with deletion
-    return this.db.routine.delete({
-      where: { id },
-    });
+    if (
+      await tx.workoutSession.findFirst({
+        where: { userId, routineId, snapshot: { is: null } },
+        select: { id: true },
+      })
+    ) {
+      throw new ConflictException(
+        'Historical snapshots are still being prepared; retry after analytics setup',
+      );
+    }
+    if (
+      structural &&
+      (await tx.workoutSession.findFirst({
+        where: { userId, routineId },
+        select: { id: true },
+      }))
+    ) {
+      // Check the actual FK, not an env flag that could authorize data loss.
+      const constraints = await tx.$queryRaw<
+        Array<{ confdeltype: string }>
+      >`SELECT confdeltype::text FROM pg_constraint
+        WHERE conrelid = '"WorkoutSession"'::regclass AND conname IN ('WorkoutSession_routineId_fkey', 'WorkoutSession_routineDayId_fkey')
+        UNION ALL SELECT confdeltype::text FROM pg_constraint WHERE conrelid = '"SetLog"'::regclass AND conname = 'SetLog_routineExerciseId_fkey'`;
+      if (
+        constraints.length !== 3 ||
+        constraints.some((c) => c.confdeltype !== 'n')
+      ) {
+        throw new ConflictException(
+          'History-preserving routine changes require the analytics FK cutover',
+        );
+      }
+    }
   }
 }

@@ -17,25 +17,30 @@ datasource db {
 }
 
 model User {
-  id              String           @id @default(uuid())
-  email           String           @unique
-  password        String? // Made optional for Supabase migration
-  name            String
-  lastName        String?
-  avatarUrl       String?
-  age             Int?
-  sex             Sex?
-  weight          Float?
-  height          Float?
-  supabaseUserId  String?          @unique // Link to Supabase user
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  refreshTokens   RefreshToken[]
-  weightUnit      WeightUnit       @default(KG)
-  routines        Routine[]
-  workoutSessions WorkoutSession[]
-  following       UserFollow[]     @relation("UserFollowing")
-  followers       UserFollow[]     @relation("UserFollowers")
+  analyticsProjectionId String?
+  timeZone              String?
+  analyticsProjections  WorkoutAnalyticsProjection[]
+  trainingEvents        TrainingEvent[]
+  personalRecords       PersonalRecord[]
+  id                    String                       @id @default(uuid())
+  email                 String                       @unique
+  password              String? // Made optional for Supabase migration
+  name                  String
+  lastName              String?
+  avatarUrl             String?
+  age                   Int?
+  sex                   Sex?
+  weight                Float?
+  height                Float?
+  supabaseUserId        String?                      @unique // Link to Supabase user
+  createdAt             DateTime                     @default(now())
+  updatedAt             DateTime                     @updatedAt
+  refreshTokens         RefreshToken[]
+  weightUnit            WeightUnit                   @default(KG)
+  routines              Routine[]
+  workoutSessions       WorkoutSession[]
+  following             UserFollow[]                 @relation("UserFollowing")
+  followers             UserFollow[]                 @relation("UserFollowers")
 }
 
 model UserFollow {
@@ -200,48 +205,179 @@ enum WorkoutSessionStatus {
 }
 
 model WorkoutSession {
-  id             String               @id @default(uuid())
-  userId         String
-  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  routineId      String
-  routine        Routine              @relation(fields: [routineId], references: [id], onDelete: Cascade)
-  routineDayId   String
-  routineDay     RoutineDay           @relation(fields: [routineDayId], references: [id], onDelete: Cascade)
-  status         WorkoutSessionStatus @default(IN_PROGRESS)
-  startedAt      DateTime             @default(now())
-  endedAt        DateTime?
-  durationSec    Int?
-  notes          String?
-  setLogs        SetLog[]
+  sourceRoutineId    String?
+  sourceRoutineDayId String?
+  totalVolumeKg      Float?
+  completedSets      Int?
+  snapshot           WorkoutSessionSnapshot?
+  id                 String                  @id @default(uuid())
+  userId             String
+  user               User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  routineId          String?
+  routine            Routine?                @relation(fields: [routineId], references: [id], onDelete: SetNull)
+  routineDayId       String?
+  routineDay         RoutineDay?             @relation(fields: [routineDayId], references: [id], onDelete: SetNull)
+  status             WorkoutSessionStatus    @default(IN_PROGRESS)
+  startedAt          DateTime                @default(now())
+  endedAt            DateTime?
+  durationSec        Int?
+  notes              String?
+  setLogs            SetLog[]
   // Updated whenever a set log is created/updated/deleted (activity heartbeat)
-  lastActivityAt DateTime?
+  lastActivityAt     DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([userId, status, startedAt])
+  @@index([userId, id])
+  @@index([userId, status, endedAt, id], map: "workout_analytics_cursor_status")
   @@index([lastActivityAt])
 }
 
 // A log of an executed set during a workout session
 model SetLog {
-  id                String          @id @default(uuid())
-  sessionId         String
-  session           WorkoutSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  routineExerciseId String
-  routineExercise   RoutineExercise @relation(fields: [routineExerciseId], references: [id])
-  exerciseId        String
-  exercise          Exercise        @relation(fields: [exerciseId], references: [id])
-  setNumber         Int
-  reps              Int?
-  weight            Float?
-  rpe               Float?
-  isCompleted       Boolean         @default(false)
-  completedAt       DateTime?
+  sourceRoutineExerciseId String?
+  id                      String           @id @default(uuid())
+  sessionId               String
+  session                 WorkoutSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  routineExerciseId       String?
+  routineExercise         RoutineExercise? @relation(fields: [routineExerciseId], references: [id], onDelete: SetNull)
+  exerciseId              String
+  exercise                Exercise         @relation(fields: [exerciseId], references: [id])
+  setNumber               Int
+  reps                    Int?
+  weight                  Float?
+  rpe                     Float?
+  isCompleted             Boolean          @default(false)
+  completedAt             DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([sessionId, routineExerciseId, setNumber])
+  @@unique([sessionId, sourceRoutineExerciseId, setNumber])
   @@index([sessionId])
+}
+
+model WorkoutSessionSnapshot {
+  sessionId     String         @id
+  session       WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  schemaVersion Int            @default(1)
+  payload       Json
+  provenance    String
+  createdAt     DateTime       @default(now())
+}
+
+model TrainingEvent {
+  id            String            @id @default(uuid())
+  eventKey      String            @unique
+  userId        String
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId     String
+  type          TrainingEventType
+  occurredAt    DateTime
+  schemaVersion Int               @default(1)
+  payload       Json
+
+  @@index([userId, occurredAt, id])
+}
+
+enum TrainingEventType {
+  SESSION_COMPLETED
+  PERSONAL_RECORD
+}
+
+model PersonalRecord {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exerciseId   String
+  exerciseName String
+  sessionId    String
+  setLogId     String
+  weight       Float
+  reps         Int
+  estimated1rm Float
+  achievedAt   DateTime
+
+  @@unique([userId, exerciseId])
+  @@index([userId, achievedAt(sort: Desc)])
+}
+
+model WorkoutAnalyticsProjection {
+  id                String                    @id @default(uuid())
+  userId            String
+  user              User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  schemaVersion     Int                       @default(1)
+  timeZone          String
+  state             String                    @default("BUILDING")
+  active            Boolean                   @default(false)
+  totalVolumeKg     Float                     @default(0)
+  completedSessions Int                       @default(0)
+  completedSets     Int                       @default(0)
+  lastTrainingDate  String?
+  currentRun        Int                       @default(0)
+  bestRun           Int                       @default(0)
+  checksum          String                    @default("")
+  createdAt         DateTime                  @default(now())
+  rollups           WorkoutRollup[]
+  muscleRollups     WorkoutMuscleRollup[]
+  job               AnalyticsBackfillJob?
+  recordFrontier    AnalyticsRecordFrontier[]
+
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+model WorkoutRollup {
+  projectionId  String
+  projection    WorkoutAnalyticsProjection @relation(fields: [projectionId], references: [id], onDelete: Cascade)
+  period        String
+  date          String
+  volumeKg      Float                      @default(0)
+  completedSets Int                        @default(0)
+  sessions      Int                        @default(0)
+  activeDays    Int                        @default(0)
+
+  @@id([projectionId, period, date])
+}
+
+model AnalyticsRecordFrontier {
+  projectionId String
+  projection   WorkoutAnalyticsProjection @relation(fields: [projectionId], references: [id], onDelete: Cascade)
+  exerciseId   String
+  weight       Float
+  reps         Int
+
+  @@id([projectionId, exerciseId])
+}
+
+model WorkoutMuscleRollup {
+  projectionId  String
+  projection    WorkoutAnalyticsProjection @relation(fields: [projectionId], references: [id], onDelete: Cascade)
+  period        String
+  date          String
+  muscle        String
+  volumeKg      Float                      @default(0)
+  completedSets Float                      @default(0)
+
+  @@id([projectionId, period, date, muscle])
+}
+
+model AnalyticsBackfillJob {
+  id                      String                     @id @default(uuid())
+  projectionId            String                     @unique
+  projection              WorkoutAnalyticsProjection @relation(fields: [projectionId], references: [id], onDelete: Cascade)
+  state                   String                     @default("PENDING")
+  cursorEndedAt           DateTime?
+  cursorSessionId         String?
+  snapshotCursorSessionId String?
+  snapshotsComplete       Boolean                    @default(false)
+  attempts                Int                        @default(0)
+  error                   String?
+  approximatedSessions    Int                        @default(0)
+  processedSessions       Int                        @default(0)
+  updatedAt               DateTime                   @updatedAt
+
+  @@index([state, updatedAt])
 }

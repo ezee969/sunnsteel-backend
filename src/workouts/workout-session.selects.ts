@@ -4,6 +4,9 @@ export function buildWorkoutSessionSelect(includeLogs = false) {
   return {
     id: true,
     userId: true,
+    sourceRoutineId: true,
+    sourceRoutineDayId: true,
+    snapshot: { select: { payload: true } },
     routineId: true,
     routineDayId: true,
     status: true,
@@ -25,11 +28,13 @@ export function buildWorkoutSessionSelect(includeLogs = false) {
       select: {
         id: true,
         dayOfWeek: true,
+        order: true,
         exercises: {
           select: {
             id: true,
             order: true,
             restSeconds: true,
+            note: true,
             progressionScheme: true,
             minWeightIncrement: true,
             exercise: {
@@ -37,6 +42,7 @@ export function buildWorkoutSessionSelect(includeLogs = false) {
                 id: true,
                 name: true,
                 primaryMuscles: true,
+                secondaryMuscles: true,
                 equipment: true,
               },
             },
@@ -49,6 +55,7 @@ export function buildWorkoutSessionSelect(includeLogs = false) {
                 minReps: true,
                 maxReps: true,
                 weight: true,
+                rir: true,
               },
               orderBy: { setNumber: 'asc' },
             },
@@ -63,6 +70,7 @@ export function buildWorkoutSessionSelect(includeLogs = false) {
             select: {
               id: true,
               routineExerciseId: true,
+              sourceRoutineExerciseId: true,
               exerciseId: true,
               setNumber: true,
               reps: true,
@@ -92,6 +100,7 @@ export function buildWorkoutSessionSelect(includeLogs = false) {
 }
 
 export const WORKOUT_SESSION_LIST_SELECT = {
+  snapshot: { select: { payload: true } },
   id: true,
   status: true,
   startedAt: true,

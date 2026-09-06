@@ -29,9 +29,12 @@
     "docs:check": "node scripts/run-update-docs.js",
     "docs:update": "echo 'Run docs:check first, then update documentation manually'",
     "token:supabase": "powershell -ExecutionPolicy Bypass -File ./scripts/get-supabase-token.ps1",
-    "test": "node -r ts-node/register --test scripts/workout-stats.test.ts scripts/workout-progress.test.ts",
+    "test": "node -r ts-node/register --test scripts/workout-stats.test.ts scripts/workout-progress.test.ts scripts/analytics-logic.test.ts scripts/analytics-read.test.ts",
     "verify": "npm run lint && npm run typecheck && npm test && npm run build",
-    "verify:security": "npm audit --omit=dev"
+    "verify:security": "npm audit --omit=dev",
+    "test:analytics:integration": "node -r ts-node/register --test scripts/analytics-integration.test.ts",
+    "analytics": "node -r ts-node/register scripts/workout-analytics.ts",
+    "test:analytics:prepare": "node -r ts-node/register scripts/prepare-analytics-test-db.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
@@ -43,7 +46,7 @@
     "@nestjs/schedule": "^5.0.1",
     "@nestjs/throttler": "^6.4.0",
     "@prisma/client": "^6.0.0",
-    "@sunsteel/contracts": "^0.6.0",
+    "@sunsteel/contracts": "^0.7.0",
     "@supabase/supabase-js": "^2.39.8",
     "bcrypt": "^6.0.0",
     "class-transformer": "^0.5.1",

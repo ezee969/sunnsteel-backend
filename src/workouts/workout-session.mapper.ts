@@ -1,3 +1,4 @@
+import { readSnapshot } from './analytics/session-snapshot';
 import { Prisma } from '@prisma/client';
 import { SetLog, WorkoutSession } from '@sunsteel/contracts';
 import { buildWorkoutSessionSelect } from './workout-session.selects';
@@ -19,7 +20,7 @@ function toSetLog(sessionId: string, log: SetLogEntity): SetLog {
   return {
     id: log.id,
     sessionId,
-    routineExerciseId: log.routineExerciseId,
+    routineExerciseId: log.sourceRoutineExerciseId ?? log.routineExerciseId!,
     exerciseId: log.exerciseId,
     setNumber: log.setNumber,
     // Contract requires a number; a logged set without reps maps to 0.
@@ -64,11 +65,14 @@ function toRoutineDay(day: RoutineDayEntity): WorkoutSession['routineDay'] {
 export function toWorkoutSessionResponse(
   session: WorkoutSessionEntity,
 ): WorkoutSession {
+  const snapshot = session.snapshot
+    ? readSnapshot(session.snapshot.payload)
+    : null;
   return {
     id: session.id,
     userId: session.userId,
-    routineId: session.routineId,
-    routineDayId: session.routineDayId,
+    routineId: snapshot?.sourceRoutineId ?? session.routineId!,
+    routineDayId: snapshot?.sourceRoutineDayId ?? session.routineDayId!,
     status: session.status,
     startedAt: session.startedAt.toISOString(),
     endedAt: session.endedAt ? session.endedAt.toISOString() : null,
@@ -77,12 +81,12 @@ export function toWorkoutSessionResponse(
     lastActivityAt: session.lastActivityAt
       ? session.lastActivityAt.toISOString()
       : null,
-    routine: {
-      id: session.routine.id,
-      name: session.routine.name,
-      description: session.routine.description,
+    routine: snapshot?.routine ?? {
+      id: session.routine!.id,
+      name: session.routine!.name,
+      description: session.routine!.description,
     },
-    routineDay: toRoutineDay(session.routineDay),
+    routineDay: snapshot?.routineDay ?? toRoutineDay(session.routineDay!),
     setLogs: session.setLogs
       ? session.setLogs.map((log) => toSetLog(session.id, log))
       : undefined,

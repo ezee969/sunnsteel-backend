@@ -1,3 +1,6 @@
+import { Put } from '@nestjs/common';
+import { AnalyticsService } from '../workouts/analytics/analytics.service';
+import { SetAccountTimeZoneDto } from './dto/set-account-time-zone.dto';
 // Utility
 import {
   Controller,
@@ -23,7 +26,23 @@ import { SearchUsersDto } from './dto/search-users.dto';
 @UseGuards(SupabaseJwtGuard)
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly analytics: AnalyticsService,
+  ) {}
+
+  @Get('time-zone')
+  analyticsStatus(@Request() req: RequestWithUser) {
+    return this.analytics.status(req.user.id);
+  }
+
+  @Put('time-zone')
+  setTimeZone(
+    @Request() req: RequestWithUser,
+    @Body() dto: SetAccountTimeZoneDto,
+  ) {
+    return this.analytics.setTimeZone(req.user.id, dto);
+  }
 
   @Get('profile')
   getProfile(@Request() req: RequestWithUser) {
@@ -39,10 +58,7 @@ export class UsersController {
   }
 
   @Get('search')
-  searchUsers(
-    @Request() req: RequestWithUser,
-    @Query() query: SearchUsersDto,
-  ) {
+  searchUsers(@Request() req: RequestWithUser, @Query() query: SearchUsersDto) {
     return this.usersService.searchUsers(query.q, req.user.email, query.limit);
   }
 
