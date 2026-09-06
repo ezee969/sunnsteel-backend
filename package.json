@@ -24,6 +24,8 @@
     "lint:fix": "eslint \"{src,scripts,prisma}/**/*.ts\" --fix",
     "db:seed": "tsx prisma/add-exercises.ts",
     "db:add-exercises": "tsx prisma/add-exercises.ts",
+    "db:seed:portfolio": "tsx prisma/seed-portfolio.ts",
+    "db:teardown:portfolio": "tsx prisma/teardown-portfolio.ts",
     "docs:check": "node scripts/run-update-docs.js",
     "docs:update": "echo 'Run docs:check first, then update documentation manually'",
     "token:supabase": "powershell -ExecutionPolicy Bypass -File ./scripts/get-supabase-token.ps1",

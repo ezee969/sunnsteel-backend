@@ -15,6 +15,8 @@ import {
   WorkoutSessionStartService,
 } from './services';
 import { WorkoutSessionReadService } from './workout-session-read.service';
+import { WorkoutProgressService } from './workout-progress.service';
+import { WorkoutProgressQueryDto } from './dto/workout-progress.dto';
 import { toWorkoutSessionResponse } from './workout-session.mapper';
 
 @Injectable()
@@ -24,6 +26,7 @@ export class WorkoutsService {
     private readonly workoutSessionStart: WorkoutSessionStartService,
     private readonly workoutSessionFinish: WorkoutSessionFinishService,
     private readonly workoutSessionLog: WorkoutSessionLogService,
+    private readonly workoutProgress: WorkoutProgressService,
   ) {}
 
   async getActiveSession(userId: string): Promise<WorkoutSession | null> {
@@ -33,6 +36,10 @@ export class WorkoutsService {
 
   getStats(userId: string, query: WorkoutStatsQueryDto) {
     return this.workoutSessionRead.getStats(userId, query);
+  }
+
+  getProgress(userId: string, query: WorkoutProgressQueryDto) {
+    return this.workoutProgress.getProgress(userId, query);
   }
 
   async getSessionById(userId: string, id: string): Promise<WorkoutSession> {
