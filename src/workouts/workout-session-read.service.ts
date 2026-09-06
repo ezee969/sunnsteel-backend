@@ -8,12 +8,10 @@ import {
   ListSessionsParams,
   WorkoutSessionListResponse,
   WorkoutSessionSummary,
+  WorkoutStatsResponse,
 } from '@sunsteel/contracts';
 import { DatabaseService } from '../database/database.service';
-import {
-  WorkoutStatsQueryDto,
-  WorkoutStatsResponse,
-} from './dto/workout-stats.dto';
+import { WorkoutStatsQueryDto } from './dto/workout-stats.dto';
 import {
   buildWorkoutSessionSelect,
   dayNameFrom,

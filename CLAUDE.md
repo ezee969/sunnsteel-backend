@@ -14,12 +14,12 @@ NestJS + Prisma backend for Sunnsteel (workout/routine tracking). Runs on Window
 - Lint: `npm run lint` / `npm run lint:fix`
 - Typecheck: `npm run typecheck`
 - Format: `npm run format`
-- Full gate (run before considering work done): `npm run verify` (lint && typecheck && build)
+- Full gate (run before considering work done): `npm run verify` (lint && typecheck && test && build)
 - Prisma migrate: `npx prisma migrate dev`
 - Seed DB / load exercises: `npm run db:seed` (alias `npm run db:add-exercises`) — both run `prisma/add-exercises.ts`, the idempotent exercise-catalog loader. This is also the `prisma migrate reset`/`migrate dev` seed hook.
 - Get a Supabase token for manual API testing: `npm run token:supabase`
 
-There is no test runner/spec suite in this repo — `npm run verify` is the correctness gate.
+`npm test` runs the Node test runner via the existing ts-node dependency. `scripts/workout-stats.test.ts` covers dashboard statistics with mocked database calls; it is included in `npm run verify`.
 
 ## Architecture
 
@@ -55,13 +55,13 @@ Progression is tracked **per exercise** (`RoutineExercise.progressionScheme`), n
 
 Progression is applied on session finish in `workout-session-finish.service.ts`.
 
-⚠️ Reps-to-Failure (RtF / `PROGRAMMED_RTF`) was removed from the backend. The shared `@sunsteel/contracts` package still exports legacy RtF/TM types and the Prisma enum may still carry `PROGRAMMED_RTF`/`PROGRAMMED_RTF_HYPERTROPHY` values until the DB migration lands — do not wire them back up. The DTO restricts accepted schemes to the three above regardless of what contracts exports.
+⚠️ Reps-to-Failure (RtF / `PROGRAMMED_RTF`) was removed from the backend and shared contracts. The Prisma enum may still carry `PROGRAMMED_RTF`/`PROGRAMMED_RTF_HYPERTROPHY` values until the DB migration lands — do not wire them back up. The DTO restricts accepted schemes to the three above regardless of the database enum.
 
 ### Shared contracts
 
-DTOs/enums are often sourced from the local `@sunsteel/contracts` package (`file:../sunsteel-contracts`) rather than redefined — check `src/routines/dto/*` and `src/workouts/dto/*` for examples before adding new shapes.
+DTOs/enums are sourced from the published `@sunsteel/contracts` package rather than redefined — check `src/routines/dto/*` and `src/workouts/dto/*` for examples before adding new shapes. Do not switch the dependency to a local `file:` link: update `../sunnsteel-contracts`, publish a new registry version, and then bump this repository to that version.
 
-**Response serialization boundary.** Read/mutation endpoints return the shared *response* contract types (`Routine`, `WorkoutSession`, `UserProfile`, etc.), not raw Prisma results. Each domain has a mapper that is the single place converting Prisma `Date` → ISO string and asserting, at compile time, that the response matches the contract: `src/routines/routine.mapper.ts`, `src/workouts/workout-session.mapper.ts`, and `mapUserProfile`/inline mappers in `src/users/users.service.ts`. Mapper inputs are typed via `Prisma.*GetPayload<{ select: typeof SOME_SELECT }>` so a select/contract drift breaks the build. When adding an endpoint that returns a persisted entity, map it through (or add) one of these rather than returning the Prisma object directly. Note: the contracts package still carries optional legacy RtF fields — they're simply left unset.
+**Response serialization boundary.** Read/mutation endpoints return the shared *response* contract types (`Routine`, `WorkoutSession`, `UserProfile`, etc.), not raw Prisma results. Each domain has a mapper that is the single place converting Prisma `Date` → ISO string and asserting, at compile time, that the response matches the contract: `src/routines/routine.mapper.ts`, `src/workouts/workout-session.mapper.ts`, and `mapUserProfile`/inline mappers in `src/users/users.service.ts`. Mapper inputs are typed via `Prisma.*GetPayload<{ select: typeof SOME_SELECT }>` so a select/contract drift breaks the build. When adding an endpoint that returns a persisted entity, map it through (or add) one of these rather than returning the Prisma object directly.
 
 ### Runtime conventions
 
