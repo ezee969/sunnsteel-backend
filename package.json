@@ -30,11 +30,12 @@
     "docs:update": "echo 'Run docs:check first, then update documentation manually'",
     "token:supabase": "powershell -ExecutionPolicy Bypass -File ./scripts/get-supabase-token.ps1",
     "test": "node -r ts-node/register --test scripts/workout-stats.test.ts scripts/workout-progress.test.ts scripts/analytics-logic.test.ts scripts/analytics-read.test.ts",
-    "verify": "npm run lint && npm run typecheck && npm test && npm run build",
+    "verify": "npm run lint && npm run typecheck && npm test && npm run build && npm run test:build",
     "verify:security": "npm audit --omit=dev",
     "test:analytics:integration": "node -r ts-node/register --test scripts/analytics-integration.test.ts",
     "analytics": "node -r ts-node/register scripts/workout-analytics.ts",
-    "test:analytics:prepare": "node -r ts-node/register scripts/prepare-analytics-test-db.ts"
+    "test:analytics:prepare": "node -r ts-node/register scripts/prepare-analytics-test-db.ts",
+    "test:build": "node scripts/check-build.cjs"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

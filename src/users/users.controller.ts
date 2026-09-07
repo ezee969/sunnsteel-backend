@@ -19,8 +19,8 @@ import { UsersService } from './users.service';
 // Guards
 import { SupabaseJwtGuard } from '../auth/guards/supabase-jwt.guard';
 // Types
-import { UpdateProfileRequest } from '@sunsteel/contracts';
-import { RequestWithUser } from '../common/types/request-with-user';
+import type { UpdateProfileRequest } from '@sunsteel/contracts';
+import type { RequestWithUser } from '../common/types/request-with-user';
 import { SearchUsersDto } from './dto/search-users.dto';
 
 @UseGuards(SupabaseJwtGuard)

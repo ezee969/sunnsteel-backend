@@ -21,7 +21,7 @@ import { UpsertSetLogDto } from './dto/upsert-set-log.dto';
 import { ListSessionsDto } from './dto/list-sessions.dto';
 import { WorkoutStatsQueryDto } from './dto/workout-stats.dto';
 import { WorkoutProgressQueryDto } from './dto/workout-progress.dto';
-import { RequestWithUser } from '../common/types/request-with-user';
+import type { RequestWithUser } from '../common/types/request-with-user';
 
 @UseGuards(SupabaseJwtGuard)
 @Controller('workouts')

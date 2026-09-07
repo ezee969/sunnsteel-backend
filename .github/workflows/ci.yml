@@ -44,6 +44,9 @@ jobs:
       - name: Build application
         run: npm run build
 
+      - name: Load compiled application modules
+        run: npm run test:build
+
   analytics-integration:
     runs-on: ubuntu-latest
     services:

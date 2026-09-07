@@ -17,7 +17,7 @@ import { UpdateRoutineDto } from './dto/update-routine.dto';
 import { UpdateFavoriteDto } from './dto/update-favorite.dto';
 import { UpdateCompletedDto } from './dto/update-completed.dto';
 import { GetRoutinesFilterDto } from './dto/get-routines-filter.dto';
-import { RequestWithUser } from '../common/types/request-with-user';
+import type { RequestWithUser } from '../common/types/request-with-user';
 
 @UseGuards(SupabaseJwtGuard)
 @Controller('routines')

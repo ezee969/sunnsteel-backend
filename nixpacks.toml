@@ -1,0 +1,5 @@
+[phases.install]
+cmds = ["npm ci --include=dev"]
+
+[phases.build]
+cmds = ["npx prisma generate", "npm run build", "npm run test:build"]
