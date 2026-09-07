@@ -2,6 +2,41 @@ import 'reflect-metadata';
 import * as assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { computeStreaks } from '../src/workouts/workout-progress.service';
+import { LegacyWorkoutProgressService } from '../src/workouts/analytics/legacy-workout-progress.service';
+import { DatabaseService } from '../src/database/database.service';
+
+test('legacy PR exact ties retain the first achievement in either row order', async () => {
+  const first = new Date('2026-08-22T22:30:00Z');
+  const later = new Date('2026-08-24T22:30:00Z');
+  for (const dates of [
+    [first, later],
+    [later, first],
+  ]) {
+    for (const fallback of [false, true]) {
+      const db = {
+        setLog: {
+          findMany: async () =>
+            dates.map((date) => ({
+              exerciseId: 'squat',
+              exercise: { name: 'Squat' },
+              weight: 100,
+              reps: 5,
+              completedAt: fallback ? null : date,
+              session: { endedAt: date },
+            })),
+        },
+        workoutSession: { findMany: async () => [] },
+      } as unknown as DatabaseService;
+      const result = await new LegacyWorkoutProgressService(db).getProgress(
+        'user',
+        { timeZone: 'Europe/Berlin' },
+      );
+      assert.equal(result.personalRecords[0].achievedAt, first.toISOString());
+      assert.equal(result.personalRecords[0].weight, 100);
+      assert.equal(result.totalVolumeKg, 1000);
+    }
+  }
+});
 
 const TODAY = '2026-09-06';
 

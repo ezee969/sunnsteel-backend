@@ -103,7 +103,7 @@ export class LegacyWorkoutProgressService {
           status: WorkoutSessionStatus.COMPLETED,
           setLogs: { some: { isCompleted: true } },
         },
-        orderBy: { endedAt: 'desc' },
+        orderBy: [{ endedAt: 'desc' }, { id: 'desc' }],
         take: RECENT_ACTIVITY_LIMIT,
         select: {
           id: true,
@@ -181,7 +181,8 @@ export class LegacyWorkoutProgressService {
   /**
    * Heaviest completed set per exercise, most recently set record first — so
    * the dashboard reads as "what I've recently got stronger at" rather than a
-   * static all-time table. Ties on weight break toward the higher rep count.
+   * static all-time table. Ties on weight break toward the higher rep count;
+   * exact ties retain the first achievement regardless of database row order.
    */
   private foldPersonalRecords(
     setLogs: {
@@ -207,7 +208,10 @@ export class LegacyWorkoutProgressService {
       const beatsIncumbent =
         !incumbent ||
         weight > incumbent.weight ||
-        (weight === incumbent.weight && reps > incumbent.reps);
+        (weight === incumbent.weight &&
+          (reps > incumbent.reps ||
+            (reps === incumbent.reps &&
+              achievedAt.getTime() < Date.parse(incumbent.achievedAt))));
       if (!beatsIncumbent) continue;
 
       bestByExercise.set(log.exerciseId, {
