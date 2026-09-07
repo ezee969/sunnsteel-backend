@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { WorkoutMaintenanceService } from './workout-maintenance.service';
 import { WorkoutsController } from './workouts.controller';
 import { DatabaseModule } from '../database/database.module';
 import { WorkoutsService } from './workouts.service';
@@ -16,7 +15,6 @@ import { WorkoutProgressService } from './workout-progress.service';
   controllers: [WorkoutsController],
   providers: [
     WorkoutsService,
-    WorkoutMaintenanceService,
     WorkoutSessionStartService,
     WorkoutSessionFinishService,
     WorkoutSessionLogService,

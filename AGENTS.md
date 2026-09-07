@@ -37,11 +37,16 @@ Feature modules under `src/` (auth, users, token, exercises, routines, workouts,
 
 `workouts.service.ts` is a thin facade; behavior lives in single-purpose services under `src/workouts/services/` (barrel-exported via `services/index.ts`) plus a few top-level files in `src/workouts/`:
 
-- `workout-session-start.service.ts` — starting a session
+- `workout-session-start.service.ts` — starting or resuming a session; reuse refreshes `lastActivityAt`
 - `workout-session-log.service.ts` — logging sets during a session
 - `workout-session-finish.service.ts` — finishing a session (applies weight progression)
 - `workout-session-read.service.ts` — reads/listing
-- `workout-maintenance.service.ts` — scheduled/maintenance tasks
+
+Active workout sessions are recoverable user data. Do not restore a timer that
+silently marks stale sessions `ABORTED`: LIVE-10 deliberately leaves them active
+until the owner resumes, completes the saved work, or discards it. Staleness is
+derived by the frontend from the existing `lastActivityAt`/`startedAt` fields;
+resuming through `POST /workouts/sessions/start` refreshes `lastActivityAt`.
 
 When adding workout behavior, add a new focused service (or extend the matching one above) rather than growing `workouts.service.ts` or `WorkoutsController` directly.
 
@@ -61,7 +66,7 @@ Progression is applied on session finish in `workout-session-finish.service.ts`.
 
 DTOs/enums are sourced from the published `@sunsteel/contracts` package rather than redefined — check `src/routines/dto/*` and `src/workouts/dto/*` for examples before adding new shapes. Do not switch the dependency to a local `file:` link: update `../sunnsteel-contracts`, publish a new registry version, and then bump this repository to that version.
 
-**Response serialization boundary.** Read/mutation endpoints return the shared *response* contract types (`Routine`, `WorkoutSession`, `UserProfile`, etc.), not raw Prisma results. Each domain has a mapper that is the single place converting Prisma `Date` → ISO string and asserting, at compile time, that the response matches the contract: `src/routines/routine.mapper.ts`, `src/workouts/workout-session.mapper.ts`, and `mapUserProfile`/inline mappers in `src/users/users.service.ts`. Mapper inputs are typed via `Prisma.*GetPayload<{ select: typeof SOME_SELECT }>` so a select/contract drift breaks the build. When adding an endpoint that returns a persisted entity, map it through (or add) one of these rather than returning the Prisma object directly.
+**Response serialization boundary.** Read/mutation endpoints return the shared _response_ contract types (`Routine`, `WorkoutSession`, `UserProfile`, etc.), not raw Prisma results. Each domain has a mapper that is the single place converting Prisma `Date` → ISO string and asserting, at compile time, that the response matches the contract: `src/routines/routine.mapper.ts`, `src/workouts/workout-session.mapper.ts`, and `mapUserProfile`/inline mappers in `src/users/users.service.ts`. Mapper inputs are typed via `Prisma.*GetPayload<{ select: typeof SOME_SELECT }>` so a select/contract drift breaks the build. When adding an endpoint that returns a persisted entity, map it through (or add) one of these rather than returning the Prisma object directly.
 
 ### Runtime conventions
 

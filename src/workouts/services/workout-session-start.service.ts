@@ -79,6 +79,7 @@ export class WorkoutSessionStartService {
   ): Promise<StartWorkoutResponseDto> {
     const preExisting = await this.workoutSessionRead.getActiveSession(userId);
     if (preExisting) {
+      await this.heartbeatSession(preExisting.id);
       return this.toStartWorkoutResponse(preExisting, true);
     }
 
