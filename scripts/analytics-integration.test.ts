@@ -10,7 +10,7 @@ import { WorkoutSessionFinishService } from '../src/workouts/services/workout-se
 import { WorkoutSessionLogService } from '../src/workouts/services/workout-session-log.service';
 import { WorkoutSessionReadService } from '../src/workouts/workout-session-read.service';
 import { WorkoutProgressService } from '../src/workouts/workout-progress.service';
-import { LegacyWorkoutProgressService } from '../src/workouts/analytics/legacy-workout-progress.service';
+import { LegacyWorkoutProgressService } from './fixtures/legacy-workout-progress';
 import { RoutinesService } from '../src/routines/routines.service';
 import { toWorkoutSessionResponse } from '../src/workouts/workout-session.mapper';
 

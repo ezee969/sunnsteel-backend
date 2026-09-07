@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 import { DatabaseService } from '../src/database/database.service';
 import { AnalyticsService } from '../src/workouts/analytics/analytics.service';
 import { WorkoutProgressService } from '../src/workouts/workout-progress.service';
-import { LegacyWorkoutProgressService } from '../src/workouts/analytics/legacy-workout-progress.service';
+import { LegacyWorkoutProgressService } from './fixtures/legacy-workout-progress';
 import { lockTrainingAccount } from '../src/workouts/analytics/analytics-lock';
 
 /** Offline administration: never mounts the Nest application or starts its scheduler. */

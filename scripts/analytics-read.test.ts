@@ -41,7 +41,7 @@ test('projected progress has three bounded reads in repeatable read, with static
       );
     },
   } as unknown as DatabaseService;
-  const response = await new WorkoutProgressService(db).getProjectedProgress(
+  const response = await new WorkoutProgressService(db).getProgress(
     'user',
     { timeZone: 'Europe/Berlin' },
   );
@@ -72,7 +72,7 @@ test('missing projection rejects before any other reads', async () => {
     $transaction: async (read: any) => read({ $queryRaw: async () => [] }),
   } as unknown as DatabaseService;
   await assert.rejects(
-    new WorkoutProgressService(db).getProjectedProgress('user', {
+    new WorkoutProgressService(db).getProgress('user', {
       timeZone: 'UTC',
     }),
     /not ready/,

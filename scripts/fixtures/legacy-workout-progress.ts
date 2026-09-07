@@ -1,14 +1,15 @@
-import { readSnapshot } from './session-snapshot';
+// Frozen comparison oracle for offline diagnostics and tests; never imported by src.
+import { readSnapshot } from '../../src/workouts/analytics/session-snapshot';
 import { Injectable } from '@nestjs/common';
 import { WorkoutSessionStatus } from '@prisma/client';
-import { DatabaseService } from '../../database/database.service';
-import { WorkoutProgressQueryDto } from '../dto/workout-progress.dto';
+import { DatabaseService } from '../../src/database/database.service';
+import { WorkoutProgressQueryDto } from '../../src/workouts/dto/workout-progress.dto';
 import {
   PersonalRecordEntry,
   RecentActivityEntry,
   WorkoutProgressResponse,
 } from '@sunsteel/contracts';
-import { dayNameFrom } from '../workout-session.selects';
+import { dayNameFrom } from '../../src/workouts/workout-session.selects';
 
 /**
  * Largest gap, in calendar days, between two training days that still counts as

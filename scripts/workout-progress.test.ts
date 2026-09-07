@@ -1,8 +1,8 @@
 import 'reflect-metadata';
 import * as assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { computeStreaks } from '../src/workouts/workout-progress.service';
-import { LegacyWorkoutProgressService } from '../src/workouts/analytics/legacy-workout-progress.service';
+import { computeStreaks } from './fixtures/legacy-workout-progress';
+import { LegacyWorkoutProgressService } from './fixtures/legacy-workout-progress';
 import { DatabaseService } from '../src/database/database.service';
 
 test('legacy PR exact ties retain the first achievement in either row order', async () => {

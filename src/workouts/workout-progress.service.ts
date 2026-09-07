@@ -4,10 +4,8 @@ import { WorkoutProgressResponse } from '@sunsteel/contracts';
 import { DatabaseService } from '../database/database.service';
 import { WorkoutProgressQueryDto } from './dto/workout-progress.dto';
 import { dayNameFrom } from './workout-session.selects';
-import { LegacyWorkoutProgressService } from './analytics/legacy-workout-progress.service';
 import { dayDifference, localDate } from './analytics/analytics-contribution';
 import { readSnapshot } from './analytics/session-snapshot';
-export { computeStreaks } from './analytics/legacy-workout-progress.service';
 
 @Injectable()
 export class WorkoutProgressService {
@@ -17,12 +15,6 @@ export class WorkoutProgressService {
     userId: string,
     query: WorkoutProgressQueryDto,
   ): Promise<WorkoutProgressResponse> {
-    if (process.env.WORKOUT_PROGRESS_PROJECTION_READS !== 'true') {
-      return new LegacyWorkoutProgressService(this.db).getProgress(
-        userId,
-        query,
-      );
-    }
     return this.getProjectedProgress(userId, query);
   }
 
