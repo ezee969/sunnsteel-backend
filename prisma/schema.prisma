@@ -232,6 +232,7 @@ model WorkoutSession {
   @@index([userId, status, startedAt])
   @@index([userId, id])
   @@index([userId, status, endedAt, id], map: "workout_analytics_cursor_status")
+  @@index([userId, sourceRoutineDayId, status, endedAt(sort: Desc), id(sort: Desc)], map: "workout_previous_performance")
   @@index([lastActivityAt])
 }
 

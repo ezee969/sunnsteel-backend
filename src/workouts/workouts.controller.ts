@@ -60,6 +60,14 @@ export class WorkoutsController {
     return this.workoutsService.getSessionById(req.user.id, id);
   }
 
+  @Get('sessions/:id/previous-performance')
+  async getPreviousPerformance(
+    @Req() req: RequestWithUser,
+    @Param('id') id: string,
+  ) {
+    return this.workoutsService.getPreviousPerformance(req.user.id, id);
+  }
+
   @Get('stats')
   async stats(
     @Req() req: RequestWithUser,

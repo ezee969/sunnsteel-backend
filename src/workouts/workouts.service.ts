@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { WorkoutStatsQueryDto } from './dto/workout-stats.dto';
 import {
   ListSessionsParams,
+  PreviousPerformanceResponse,
   WorkoutSession,
   WorkoutSessionListResponse,
 } from '@sunsteel/contracts';
@@ -45,6 +46,13 @@ export class WorkoutsService {
   async getSessionById(userId: string, id: string): Promise<WorkoutSession> {
     const session = await this.workoutSessionRead.getSessionById(userId, id);
     return toWorkoutSessionResponse(session);
+  }
+
+  getPreviousPerformance(
+    userId: string,
+    id: string,
+  ): Promise<PreviousPerformanceResponse | null> {
+    return this.workoutSessionRead.getPreviousPerformance(userId, id);
   }
 
   async startSession(

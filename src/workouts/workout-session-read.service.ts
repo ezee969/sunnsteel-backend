@@ -7,6 +7,7 @@ import {
 import { Prisma, WorkoutSessionStatus } from '@prisma/client';
 import {
   ListSessionsParams,
+  PreviousPerformanceResponse,
   WorkoutSessionListResponse,
   WorkoutSessionSummary,
   WorkoutStatsResponse,
@@ -203,6 +204,84 @@ export class WorkoutSessionReadService {
     }
 
     return session;
+  }
+
+  async getPreviousPerformance(
+    userId: string,
+    id: string,
+  ): Promise<PreviousPerformanceResponse | null> {
+    const current = await this.db.workoutSession.findFirst({
+      where: { id, userId },
+      select: {
+        sourceRoutineDayId: true,
+        routineDayId: true,
+        startedAt: true,
+      },
+    });
+
+    if (!current) {
+      throw new NotFoundException('Workout session not found');
+    }
+
+    const routineDayId = current.sourceRoutineDayId ?? current.routineDayId;
+    if (!routineDayId) return null;
+
+    const previous = await this.db.workoutSession.findFirst({
+      where: {
+        userId,
+        status: WorkoutSessionStatus.COMPLETED,
+        endedAt: { lt: current.startedAt },
+        OR: [
+          { sourceRoutineDayId: routineDayId },
+          { sourceRoutineDayId: null, routineDayId },
+        ],
+      },
+      orderBy: [{ endedAt: 'desc' }, { id: 'desc' }],
+      select: {
+        id: true,
+        endedAt: true,
+        setLogs: {
+          where: { isCompleted: true, reps: { not: null } },
+          orderBy: [
+            { sourceRoutineExerciseId: 'asc' },
+            { routineExerciseId: 'asc' },
+            { setNumber: 'asc' },
+          ],
+          select: {
+            sourceRoutineExerciseId: true,
+            routineExerciseId: true,
+            exerciseId: true,
+            setNumber: true,
+            reps: true,
+            weight: true,
+            rpe: true,
+          },
+        },
+      },
+    });
+
+    if (!previous?.endedAt) return null;
+
+    return {
+      sessionId: previous.id,
+      endedAt: previous.endedAt.toISOString(),
+      sets: previous.setLogs.flatMap((set) => {
+        const routineExerciseId =
+          set.sourceRoutineExerciseId ?? set.routineExerciseId;
+        return routineExerciseId && set.reps !== null
+          ? [
+              {
+                routineExerciseId,
+                exerciseId: set.exerciseId,
+                setNumber: set.setNumber,
+                reps: set.reps,
+                weight: set.weight,
+                rpe: set.rpe,
+              },
+            ]
+          : [];
+      }),
+    };
   }
 
   async listSessions(userId: string, params: ListSessionsParams) {
