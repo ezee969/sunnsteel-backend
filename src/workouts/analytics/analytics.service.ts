@@ -112,7 +112,9 @@ export class AnalyticsService {
     }
   }
 
-  async runBatch(batchSize = 25) {
+  // Snapshot capture makes several round trips per session. Keep the default
+  // small enough for a remote database and the 30-second transaction budget.
+  async runBatch(batchSize = 2) {
     const started = Date.now();
     // Account before job is the lock order used by every writer. Skip a busy
     // account instead of blocking another worker or a live session finish.
