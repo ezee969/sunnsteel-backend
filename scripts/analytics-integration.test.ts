@@ -367,7 +367,7 @@ test(
           'db',
           'execute',
           '--file',
-          'prisma/deferred/analytics-fk-cutover.sql',
+          'prisma/migrations/20260907090000_analytics_fk_cutover/migration.sql',
           '--url',
           process.env.DATABASE_URL!,
         ],

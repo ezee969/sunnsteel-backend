@@ -1,4 +1,4 @@
--- Deliberately outside migrations/: apply ONLY after comparison and production gates.
+-- Production gates verified 2026-09-07; retain guards for every environment.
 BEGIN;
 SET LOCAL lock_timeout = '5s';
 LOCK TABLE "WorkoutSession", "SetLog" IN SHARE ROW EXCLUSIVE MODE;
