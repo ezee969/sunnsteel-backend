@@ -39,8 +39,25 @@ model User {
   weightUnit            WeightUnit                   @default(KG)
   routines              Routine[]
   workoutSessions       WorkoutSession[]
+  trainingLocations     TrainingLocationPreference[]
   following             UserFollow[]                 @relation("UserFollowing")
   followers             UserFollow[]                 @relation("UserFollowers")
+}
+
+model TrainingLocationPreference {
+  id                  String   @id @default(uuid())
+  userId              String
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name                String
+  isDefault           Boolean  @default(false)
+  barWeightKg         Float
+  availablePlatePairs Json     @default("[]")
+  equipment           String[] @default([])
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([userId, name])
+  @@index([userId, isDefault])
 }
 
 model UserFollow {

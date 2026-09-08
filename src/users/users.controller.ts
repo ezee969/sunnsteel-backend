@@ -22,6 +22,8 @@ import { SupabaseJwtGuard } from '../auth/guards/supabase-jwt.guard';
 import type { UpdateProfileRequest } from '@sunsteel/contracts';
 import type { RequestWithUser } from '../common/types/request-with-user';
 import { SearchUsersDto } from './dto/search-users.dto';
+import { ReplaceTrainingLocationsDto } from './dto/replace-training-locations.dto';
+import { TrainingLocationPreferencesService } from './training-location-preferences.service';
 
 @UseGuards(SupabaseJwtGuard)
 @Controller('users')
@@ -29,6 +31,7 @@ export class UsersController {
   constructor(
     private readonly usersService: UsersService,
     private readonly analytics: AnalyticsService,
+    private readonly trainingLocations: TrainingLocationPreferencesService,
   ) {}
 
   @Get('time-zone')
@@ -55,6 +58,19 @@ export class UsersController {
     @Body() data: UpdateProfileRequest,
   ) {
     return this.usersService.updateProfile(req.user.email, data);
+  }
+
+  @Get('training-locations')
+  getTrainingLocations(@Request() req: RequestWithUser) {
+    return this.trainingLocations.list(req.user.id);
+  }
+
+  @Put('training-locations')
+  replaceTrainingLocations(
+    @Request() req: RequestWithUser,
+    @Body() dto: ReplaceTrainingLocationsDto,
+  ) {
+    return this.trainingLocations.replace(req.user.id, dto.locations);
   }
 
   @Get('search')
