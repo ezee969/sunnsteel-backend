@@ -3,6 +3,7 @@ import { WorkoutStatsQueryDto } from './dto/workout-stats.dto';
 import {
   ListSessionsParams,
   PreviousPerformanceResponse,
+  UpsertSetLogResponse,
   WorkoutSession,
   WorkoutSessionListResponse,
 } from '@sunsteel/contracts';
@@ -75,7 +76,11 @@ export class WorkoutsService {
     return toWorkoutSessionResponse(session);
   }
 
-  async upsertSetLog(userId: string, sessionId: string, dto: UpsertSetLogDto) {
+  async upsertSetLog(
+    userId: string,
+    sessionId: string,
+    dto: UpsertSetLogDto,
+  ): Promise<UpsertSetLogResponse> {
     return this.workoutSessionLog.upsertSetLog(userId, sessionId, dto);
   }
 

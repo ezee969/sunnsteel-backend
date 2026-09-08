@@ -5,8 +5,15 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { WorkoutSessionStatus } from '@prisma/client';
+import type { UpsertSetLogResponse } from '@sunsteel/contracts';
 import { DatabaseService } from '../../database/database.service';
 import { UpsertSetLogDto } from '../dto/upsert-set-log.dto';
+import {
+  earnedPersonalRecords,
+  recordFrontier,
+  type RecordSet,
+} from '../live-personal-records';
+import { toSetLogResponse } from '../workout-session.mapper';
 
 // Narrow unknown error objects that include a Prisma error code
 const isPrismaErrorWithCode = (e: unknown): e is { code: string } => {
@@ -19,7 +26,11 @@ const isPrismaErrorWithCode = (e: unknown): e is { code: string } => {
 export class WorkoutSessionLogService {
   constructor(private readonly db: DatabaseService) {}
 
-  async upsertSetLog(userId: string, sessionId: string, dto: UpsertSetLogDto) {
+  async upsertSetLog(
+    userId: string,
+    sessionId: string,
+    dto: UpsertSetLogDto,
+  ): Promise<UpsertSetLogResponse> {
     return this.db.$transaction(async (tx) => {
       await lockTrainingAccount(tx, userId);
       // Validate session ownership and status
@@ -42,7 +53,11 @@ export class WorkoutSessionLogService {
           id: dto.routineExerciseId,
           routineDayId: session.routineDayId!,
         },
-        select: { id: true, exerciseId: true },
+        select: {
+          id: true,
+          exerciseId: true,
+          exercise: { select: { name: true } },
+        },
       });
       if (!routineExercise) {
         throw new BadRequestException(
@@ -66,6 +81,28 @@ export class WorkoutSessionLogService {
           setNumber: dto.setNumber,
         },
       } as const;
+
+      const existing = await tx.setLog.findUnique({
+        where,
+        select: {
+          id: true,
+          reps: true,
+          weight: true,
+          isCompleted: true,
+        },
+      });
+      const priorSets = await tx.setLog.findMany({
+        where: {
+          exerciseId: dto.exerciseId,
+          isCompleted: true,
+          ...(existing ? { id: { not: existing.id } } : {}),
+          session: {
+            userId,
+            OR: [{ status: WorkoutSessionStatus.COMPLETED }, { id: sessionId }],
+          },
+        },
+        select: { reps: true, weight: true, isCompleted: true },
+      });
 
       const upserted = await tx.setLog.upsert({
         where,
@@ -93,6 +130,7 @@ export class WorkoutSessionLogService {
           id: true,
           sessionId: true,
           routineExerciseId: true,
+          sourceRoutineExerciseId: true,
           exerciseId: true,
           setNumber: true,
           reps: true,
@@ -111,7 +149,18 @@ export class WorkoutSessionLogService {
         data: { lastActivityAt: new Date() },
       });
 
-      return upserted;
+      const earnedRecords = earnedPersonalRecords({
+        candidate: upserted,
+        existing: existing as RecordSet | null,
+        previous: recordFrontier(priorSets),
+        exerciseId: dto.exerciseId,
+        exerciseName: routineExercise.exercise.name,
+      });
+
+      return {
+        setLog: toSetLogResponse(sessionId, upserted),
+        earnedRecords,
+      };
     });
   }
 

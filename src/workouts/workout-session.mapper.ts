@@ -16,7 +16,10 @@ type WorkoutSessionEntity = Prisma.WorkoutSessionGetPayload<{
 type SetLogEntity = NonNullable<WorkoutSessionEntity['setLogs']>[number];
 type RoutineDayEntity = NonNullable<WorkoutSessionEntity['routineDay']>;
 
-function toSetLog(sessionId: string, log: SetLogEntity): SetLog {
+export function toSetLogResponse(
+  sessionId: string,
+  log: Omit<SetLogEntity, 'exercise'> | SetLogEntity,
+): SetLog {
   return {
     id: log.id,
     sessionId,
@@ -88,7 +91,7 @@ export function toWorkoutSessionResponse(
     },
     routineDay: snapshot?.routineDay ?? toRoutineDay(session.routineDay!),
     setLogs: session.setLogs
-      ? session.setLogs.map((log) => toSetLog(session.id, log))
+      ? session.setLogs.map((log) => toSetLogResponse(session.id, log))
       : undefined,
   };
 }
