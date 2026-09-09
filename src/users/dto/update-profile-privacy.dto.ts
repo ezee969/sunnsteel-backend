@@ -14,6 +14,10 @@ export class UpdateProfilePrivacyDto implements UpdateProfilePrivacyRequest {
   @IsIn(PROFILE_VISIBILITY_VALUES)
   location?: ProfileVisibility;
 
+  @IsOptional()
+  @IsIn(PROFILE_VISIBILITY_VALUES)
+  trainingIdentity?: ProfileVisibility;
+
   @IsIn(PROFILE_VISIBILITY_VALUES)
   workoutHistory!: ProfileVisibility;
 

@@ -22,6 +22,10 @@ const profileRecord = {
   avatarUrl: null,
   bio: null,
   location: null,
+  trainingGoals: [],
+  trainingExperienceLevel: null,
+  trainingDisciplines: [],
+  preferredTrainingStyle: null,
   age: null,
   sex: null,
   weight: null,
@@ -29,6 +33,7 @@ const profileRecord = {
   weightUnit: 'KG' as const,
   bioVisibility: 'PRIVATE' as const,
   locationVisibility: 'PRIVATE' as const,
+  trainingIdentityVisibility: 'PRIVATE' as const,
   historyVisibility: 'PRIVATE' as const,
   recordsVisibility: 'PRIVATE' as const,
   routinesVisibility: 'PRIVATE' as const,
@@ -37,6 +42,7 @@ const profileRecord = {
   createdAt: new Date('2026-01-01T00:00:00.000Z'),
   updatedAt: new Date('2026-01-02T00:00:00.000Z'),
   _count: { followers: 2, following: 3 },
+  favoriteExercises: [],
 };
 
 describe('username rules', () => {
@@ -129,6 +135,114 @@ describe('UsersService usernames', () => {
       }),
       BadRequestException,
     );
+  });
+
+  it('validates and stores structured training identity selections', async () => {
+    let updateArgs: unknown;
+    const db = {
+      exercise: {
+        findMany: async () => [{ id: 'exercise-1' }, { id: 'exercise-2' }],
+      },
+      user: {
+        update: async (args: unknown) => {
+          updateArgs = args;
+          return {
+            ...profileRecord,
+            trainingGoals: ['STRENGTH', 'MUSCLE_GROWTH'],
+            trainingExperienceLevel: 'INTERMEDIATE',
+            trainingDisciplines: ['POWERLIFTING'],
+            preferredTrainingStyle: 'UPPER_LOWER',
+            favoriteExercises: [
+              { exercise: { id: 'exercise-1', name: 'Bench Press' } },
+              { exercise: { id: 'exercise-2', name: 'Squat' } },
+            ],
+          };
+        },
+      },
+    } as unknown as DatabaseService;
+    const service = new UsersService(db);
+
+    const result = await service.updateProfile('owner@example.test', {
+      trainingGoals: ['STRENGTH', 'MUSCLE_GROWTH'],
+      trainingExperienceLevel: 'INTERMEDIATE',
+      trainingDisciplines: ['POWERLIFTING'],
+      preferredTrainingStyle: 'UPPER_LOWER',
+      favoriteExerciseIds: ['exercise-1', 'exercise-2'],
+    });
+
+    const data = (updateArgs as { data: Record<string, unknown> }).data;
+    assert.deepEqual(data.trainingGoals, ['STRENGTH', 'MUSCLE_GROWTH']);
+    assert.equal(data.trainingExperienceLevel, 'INTERMEDIATE');
+    assert.deepEqual(data.trainingDisciplines, ['POWERLIFTING']);
+    assert.equal(data.preferredTrainingStyle, 'UPPER_LOWER');
+    assert.deepEqual(data.favoriteExercises, {
+      deleteMany: {},
+      create: [
+        {
+          position: 0,
+          exercise: { connect: { id: 'exercise-1' } },
+        },
+        {
+          position: 1,
+          exercise: { connect: { id: 'exercise-2' } },
+        },
+      ],
+    });
+    assert.deepEqual(result.trainingIdentity, {
+      goals: ['STRENGTH', 'MUSCLE_GROWTH'],
+      experienceLevel: 'INTERMEDIATE',
+      disciplines: ['POWERLIFTING'],
+      preferredStyle: 'UPPER_LOWER',
+      favoriteExercises: [
+        { id: 'exercise-1', name: 'Bench Press' },
+        { id: 'exercise-2', name: 'Squat' },
+      ],
+    });
+  });
+
+  it('rejects invalid training identity selections before updating', async () => {
+    let updates = 0;
+    const db = {
+      exercise: { findMany: async () => [{ id: 'exercise-1' }] },
+      user: {
+        update: async () => {
+          updates += 1;
+          return profileRecord;
+        },
+      },
+    } as unknown as DatabaseService;
+    const service = new UsersService(db);
+
+    await assert.rejects(
+      service.updateProfile('owner@example.test', {
+        trainingGoals: ['STRENGTH', 'STRENGTH'],
+      }),
+      BadRequestException,
+    );
+    await assert.rejects(
+      service.updateProfile('owner@example.test', {
+        trainingDisciplines: [
+          'BODYBUILDING',
+          'POWERLIFTING',
+          'WEIGHTLIFTING',
+          'CALISTHENICS',
+        ],
+      }),
+      BadRequestException,
+    );
+    await assert.rejects(
+      service.updateProfile('owner@example.test', {
+        preferredTrainingStyle: 'INVALID' as 'FULL_BODY',
+      }),
+      BadRequestException,
+    );
+    await assert.rejects(
+      service.updateProfile('owner@example.test', {
+        favoriteExerciseIds: ['exercise-1', 'missing-exercise'],
+      }),
+      BadRequestException,
+    );
+    assert.equal(updates, 0);
   });
 
   it('rejects reserved handles before writing and maps unique conflicts', async () => {

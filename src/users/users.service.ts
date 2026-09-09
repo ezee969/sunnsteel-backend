@@ -9,10 +9,17 @@ import {
 // Services
 import { DatabaseService } from '../database/database.service';
 import {
+  PREFERRED_TRAINING_STYLE_VALUES,
   PROFILE_BIO_MAX_LENGTH,
+  PROFILE_FAVORITE_EXERCISES_MAX,
   PROFILE_LOCATION_MAX_LENGTH,
+  PROFILE_TRAINING_DISCIPLINES_MAX,
+  PROFILE_TRAINING_GOALS_MAX,
   ProfilePrivacySettings,
   PublicUserProfile,
+  TRAINING_DISCIPLINE_VALUES,
+  TRAINING_EXPERIENCE_LEVEL_VALUES,
+  TRAINING_GOAL_VALUES,
   UpdateProfilePrivacyRequest,
   UpdateProfileRequest,
   UserProfile,
@@ -46,6 +53,10 @@ const userProfileSelect = {
   avatarUrl: true,
   bio: true,
   location: true,
+  trainingGoals: true,
+  trainingExperienceLevel: true,
+  trainingDisciplines: true,
+  preferredTrainingStyle: true,
   age: true,
   sex: true,
   weight: true,
@@ -53,6 +64,7 @@ const userProfileSelect = {
   weightUnit: true,
   bioVisibility: true,
   locationVisibility: true,
+  trainingIdentityVisibility: true,
   historyVisibility: true,
   recordsVisibility: true,
   routinesVisibility: true,
@@ -64,6 +76,14 @@ const userProfileSelect = {
     select: {
       followers: true,
       following: true,
+    },
+  },
+  favoriteExercises: {
+    orderBy: { position: 'asc' as const },
+    select: {
+      exercise: {
+        select: { id: true, name: true },
+      },
     },
   },
 } as const;
@@ -85,6 +105,12 @@ export class UsersService {
       updatedAt,
       bioVisibility,
       locationVisibility,
+      trainingIdentityVisibility,
+      trainingGoals,
+      trainingExperienceLevel,
+      trainingDisciplines,
+      preferredTrainingStyle,
+      favoriteExercises,
       historyVisibility,
       recordsVisibility,
       routinesVisibility,
@@ -97,12 +123,20 @@ export class UsersService {
       privacySettings: mapProfilePrivacy({
         bioVisibility,
         locationVisibility,
+        trainingIdentityVisibility,
         historyVisibility,
         recordsVisibility,
         routinesVisibility,
         achievementsVisibility,
         bodyMetricsVisibility,
       }),
+      trainingIdentity: {
+        goals: trainingGoals,
+        experienceLevel: trainingExperienceLevel,
+        disciplines: trainingDisciplines,
+        preferredStyle: preferredTrainingStyle,
+        favoriteExercises: favoriteExercises.map(({ exercise }) => exercise),
+      },
       followerCount: _count.followers,
       followingCount: _count.following,
       createdAt: createdAt.toISOString(),
@@ -169,6 +203,31 @@ export class UsersService {
       PROFILE_LOCATION_MAX_LENGTH,
       'Location',
     );
+    const trainingGoals = this.validateSelection(
+      data.trainingGoals,
+      TRAINING_GOAL_VALUES,
+      PROFILE_TRAINING_GOALS_MAX,
+      'Training goals',
+    );
+    const trainingExperienceLevel = this.validateOptionalChoice(
+      data.trainingExperienceLevel,
+      TRAINING_EXPERIENCE_LEVEL_VALUES,
+      'Training experience level',
+    );
+    const trainingDisciplines = this.validateSelection(
+      data.trainingDisciplines,
+      TRAINING_DISCIPLINE_VALUES,
+      PROFILE_TRAINING_DISCIPLINES_MAX,
+      'Training disciplines',
+    );
+    const preferredTrainingStyle = this.validateOptionalChoice(
+      data.preferredTrainingStyle,
+      PREFERRED_TRAINING_STYLE_VALUES,
+      'Preferred training style',
+    );
+    const favoriteExerciseIds = await this.validateFavoriteExerciseIds(
+      data.favoriteExerciseIds,
+    );
 
     try {
       const user = await this.db.user.update({
@@ -180,6 +239,20 @@ export class UsersService {
           avatarUrl: data.avatarUrl,
           bio,
           location,
+          trainingGoals,
+          trainingExperienceLevel,
+          trainingDisciplines,
+          preferredTrainingStyle,
+          favoriteExercises:
+            favoriteExerciseIds === undefined
+              ? undefined
+              : {
+                  deleteMany: {},
+                  create: favoriteExerciseIds.map((exerciseId, position) => ({
+                    position,
+                    exercise: { connect: { id: exerciseId } },
+                  })),
+                },
           age: data.age,
           sex: data.sex,
           weight: data.weight,
@@ -210,6 +283,9 @@ export class UsersService {
         ...(data.location === undefined
           ? {}
           : { locationVisibility: data.location }),
+        ...(data.trainingIdentity === undefined
+          ? {}
+          : { trainingIdentityVisibility: data.trainingIdentity }),
         historyVisibility: data.workoutHistory,
         recordsVisibility: data.records,
         routinesVisibility: data.routines,
@@ -277,6 +353,7 @@ export class UsersService {
         updatedAt: true,
         bioVisibility: true,
         locationVisibility: true,
+        trainingIdentityVisibility: true,
         historyVisibility: true,
         recordsVisibility: true,
         routinesVisibility: true,
@@ -314,8 +391,14 @@ export class UsersService {
       isFollower,
     });
 
-    const [projection, personalRecords, bodyMetrics, biography, location] =
-      await Promise.all([
+    const [
+      projection,
+      personalRecords,
+      bodyMetrics,
+      biography,
+      location,
+      trainingIdentity,
+    ] = await Promise.all([
         viewerAccess.workoutHistory
           ? this.db.workoutAnalyticsProjection.findFirst({
               where: { userId: user.id, active: true, state: 'READY' },
@@ -359,6 +442,23 @@ export class UsersService {
               select: { location: true },
             })
           : null,
+        viewerAccess.trainingIdentity
+          ? this.db.user.findUnique({
+              where: { id: user.id },
+              select: {
+                trainingGoals: true,
+                trainingExperienceLevel: true,
+                trainingDisciplines: true,
+                preferredTrainingStyle: true,
+                favoriteExercises: {
+                  orderBy: [{ position: 'asc' }, { exerciseId: 'asc' }],
+                  select: {
+                    exercise: { select: { id: true, name: true } },
+                  },
+                },
+              },
+            })
+          : null,
       ]);
 
     return {
@@ -375,6 +475,22 @@ export class UsersService {
       viewerAccess,
       ...(viewerAccess.biography ? { bio: biography?.bio ?? null } : {}),
       ...(viewerAccess.location ? { location: location?.location ?? null } : {}),
+      ...(viewerAccess.trainingIdentity
+        ? {
+            trainingIdentity: {
+              goals: trainingIdentity?.trainingGoals ?? [],
+              experienceLevel:
+                trainingIdentity?.trainingExperienceLevel ?? null,
+              disciplines: trainingIdentity?.trainingDisciplines ?? [],
+              preferredStyle:
+                trainingIdentity?.preferredTrainingStyle ?? null,
+              favoriteExercises:
+                trainingIdentity?.favoriteExercises.map(
+                  ({ exercise }) => exercise,
+                ) ?? [],
+            },
+          }
+        : {}),
       ...(viewerAccess.workoutHistory
         ? {
             trainingSummary: {
@@ -494,6 +610,77 @@ export class UsersService {
       );
     }
     return normalized || null;
+  }
+
+  private validateSelection<T extends string>(
+    value: T[] | undefined,
+    allowed: readonly T[],
+    maxItems: number,
+    label: string,
+  ): T[] | undefined {
+    if (value === undefined) return undefined;
+    if (!Array.isArray(value)) {
+      throw new BadRequestException(`${label} must be an array`);
+    }
+    const unique = [...new Set(value)];
+    if (unique.length !== value.length) {
+      throw new BadRequestException(`${label} cannot contain duplicates`);
+    }
+    if (unique.length > maxItems) {
+      throw new BadRequestException(
+        `${label} can contain at most ${maxItems} selections`,
+      );
+    }
+    if (unique.some(item => !allowed.includes(item))) {
+      throw new BadRequestException(`${label} contains an invalid selection`);
+    }
+    return unique;
+  }
+
+  private validateOptionalChoice<T extends string>(
+    value: T | null | undefined,
+    allowed: readonly T[],
+    label: string,
+  ): T | null | undefined {
+    if (value === undefined || value === null) return value;
+    if (!allowed.includes(value)) {
+      throw new BadRequestException(`${label} is invalid`);
+    }
+    return value;
+  }
+
+  private async validateFavoriteExerciseIds(
+    value: string[] | undefined,
+  ): Promise<string[] | undefined> {
+    if (value === undefined) return undefined;
+    if (!Array.isArray(value)) {
+      throw new BadRequestException('Favorite exercises must be an array');
+    }
+    if (value.some(id => typeof id !== 'string' || !id.trim())) {
+      throw new BadRequestException(
+        'Favorite exercises contains an invalid selection',
+      );
+    }
+    const ids = [...new Set(value)];
+    if (ids.length !== value.length) {
+      throw new BadRequestException(
+        'Favorite exercises cannot contain duplicates',
+      );
+    }
+    if (ids.length > PROFILE_FAVORITE_EXERCISES_MAX) {
+      throw new BadRequestException(
+        `Favorite exercises can contain at most ${PROFILE_FAVORITE_EXERCISES_MAX} selections`,
+      );
+    }
+    if (ids.length === 0) return ids;
+    const existing = await this.db.exercise.findMany({
+      where: { id: { in: ids } },
+      select: { id: true },
+    });
+    if (existing.length !== ids.length) {
+      throw new BadRequestException('One or more favorite exercises do not exist');
+    }
+    return ids;
   }
 
   private isUniqueUsernameViolation(error: unknown): boolean {

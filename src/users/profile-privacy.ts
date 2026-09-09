@@ -7,6 +7,7 @@ import {
 export interface StoredProfilePrivacy {
   bioVisibility: ProfileVisibility;
   locationVisibility: ProfileVisibility;
+  trainingIdentityVisibility: ProfileVisibility;
   historyVisibility: ProfileVisibility;
   recordsVisibility: ProfileVisibility;
   routinesVisibility: ProfileVisibility;
@@ -20,6 +21,7 @@ export function mapProfilePrivacy(
   return {
     biography: stored.bioVisibility,
     location: stored.locationVisibility,
+    trainingIdentity: stored.trainingIdentityVisibility,
     workoutHistory: stored.historyVisibility,
     records: stored.recordsVisibility,
     routines: stored.routinesVisibility,
@@ -44,6 +46,10 @@ export function resolveProfileViewerAccess(
   return {
     biography: canViewProfileSection(settings.biography, context),
     location: canViewProfileSection(settings.location, context),
+    trainingIdentity: canViewProfileSection(
+      settings.trainingIdentity,
+      context,
+    ),
     workoutHistory: canViewProfileSection(settings.workoutHistory, context),
     records: canViewProfileSection(settings.records, context),
     routines: canViewProfileSection(settings.routines, context),

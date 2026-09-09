@@ -11,6 +11,7 @@ import { UsersService } from '../src/users/users.service';
 const privateSettings = {
   biography: 'PRIVATE',
   location: 'PRIVATE',
+  trainingIdentity: 'PRIVATE',
   workoutHistory: 'PRIVATE',
   records: 'PRIVATE',
   routines: 'PRIVATE',
@@ -28,6 +29,10 @@ const storedProfile = {
   avatarUrl: null,
   bio: null,
   location: null,
+  trainingGoals: [],
+  trainingExperienceLevel: null,
+  trainingDisciplines: [],
+  preferredTrainingStyle: null,
   age: 30,
   sex: 'MALE' as const,
   weight: 80,
@@ -35,6 +40,7 @@ const storedProfile = {
   weightUnit: 'KG' as const,
   bioVisibility: 'PRIVATE' as const,
   locationVisibility: 'PRIVATE' as const,
+  trainingIdentityVisibility: 'PRIVATE' as const,
   historyVisibility: 'PRIVATE' as const,
   recordsVisibility: 'PRIVATE' as const,
   routinesVisibility: 'PRIVATE' as const,
@@ -43,6 +49,7 @@ const storedProfile = {
   createdAt: new Date('2026-01-01T00:00:00.000Z'),
   updatedAt: new Date('2026-01-02T00:00:00.000Z'),
   _count: { followers: 2, following: 3 },
+  favoriteExercises: [],
 };
 
 describe('profile privacy rules', () => {
@@ -90,6 +97,7 @@ describe('profile privacy rules', () => {
         {
           biography: 'PUBLIC',
           location: 'FOLLOWERS',
+          trainingIdentity: 'PUBLIC',
           workoutHistory: 'PUBLIC',
           records: 'FOLLOWERS',
           routines: 'PRIVATE',
@@ -101,6 +109,7 @@ describe('profile privacy rules', () => {
       {
         biography: true,
         location: true,
+        trainingIdentity: true,
         workoutHistory: true,
         records: true,
         routines: false,
@@ -122,6 +131,7 @@ describe('UsersService privacy boundary', () => {
             ...storedProfile,
             bioVisibility: 'PUBLIC',
             locationVisibility: 'FOLLOWERS',
+            trainingIdentityVisibility: 'PUBLIC',
             historyVisibility: 'PUBLIC',
             recordsVisibility: 'FOLLOWERS',
           };
@@ -133,6 +143,7 @@ describe('UsersService privacy boundary', () => {
     const result = await service.updateProfilePrivacy('owner@example.test', {
       biography: 'PUBLIC',
       location: 'FOLLOWERS',
+      trainingIdentity: 'PUBLIC',
       workoutHistory: 'PUBLIC',
       records: 'FOLLOWERS',
       routines: 'PRIVATE',
@@ -145,6 +156,7 @@ describe('UsersService privacy boundary', () => {
       {
         bioVisibility: 'PUBLIC',
         locationVisibility: 'FOLLOWERS',
+        trainingIdentityVisibility: 'PUBLIC',
         historyVisibility: 'PUBLIC',
         recordsVisibility: 'FOLLOWERS',
         routinesVisibility: 'PRIVATE',
@@ -156,13 +168,14 @@ describe('UsersService privacy boundary', () => {
       ...privateSettings,
       biography: 'PUBLIC',
       location: 'FOLLOWERS',
+      trainingIdentity: 'PUBLIC',
       workoutHistory: 'PUBLIC',
       records: 'FOLLOWERS',
     });
     assert.equal(result.email, 'owner@example.test');
   });
 
-  it('keeps new detail visibility unchanged for a legacy five-field client', async () => {
+  it('keeps newer visibility fields unchanged for a legacy five-field client', async () => {
     let updateArgs: unknown;
     const db = {
       user: {
@@ -185,6 +198,7 @@ describe('UsersService privacy boundary', () => {
     const data = (updateArgs as { data: Record<string, string> }).data;
     assert.equal('bioVisibility' in data, false);
     assert.equal('locationVisibility' in data, false);
+    assert.equal('trainingIdentityVisibility' in data, false);
   });
 
   it('does not even query sensitive sections when the viewer lacks access', async () => {
@@ -219,6 +233,7 @@ describe('UsersService privacy boundary', () => {
     assert.deepEqual(result.viewerAccess, {
       biography: false,
       location: false,
+      trainingIdentity: false,
       workoutHistory: false,
       records: false,
       routines: false,
@@ -228,6 +243,7 @@ describe('UsersService privacy boundary', () => {
     assert.equal('trainingSummary' in result, false);
     assert.equal('bio' in result, false);
     assert.equal('location' in result, false);
+    assert.equal('trainingIdentity' in result, false);
     assert.equal('personalRecords' in result, false);
     assert.equal('bodyMetrics' in result, false);
     assert.equal('email' in result, false);
@@ -240,6 +256,7 @@ describe('UsersService privacy boundary', () => {
           ...storedProfile,
           bioVisibility: 'PUBLIC',
           locationVisibility: 'FOLLOWERS',
+          trainingIdentityVisibility: 'FOLLOWERS',
           historyVisibility: 'FOLLOWERS',
           recordsVisibility: 'PUBLIC',
           routinesVisibility: 'PRIVATE',
@@ -249,6 +266,17 @@ describe('UsersService privacy boundary', () => {
         findUnique: async (args: { select: Record<string, boolean> }) => {
           if (args.select.bio) return { bio: 'Strength built patiently.' };
           if (args.select.location) return { location: 'Berlin, Germany' };
+          if (args.select.trainingGoals) {
+            return {
+              trainingGoals: ['STRENGTH', 'MUSCLE_GROWTH'],
+              trainingExperienceLevel: 'INTERMEDIATE',
+              trainingDisciplines: ['POWERLIFTING'],
+              preferredTrainingStyle: 'UPPER_LOWER',
+              favoriteExercises: [
+                { exercise: { id: 'exercise-1', name: 'Bench Press' } },
+              ],
+            };
+          }
           return {
             age: 30,
             sex: 'MALE',
@@ -288,6 +316,7 @@ describe('UsersService privacy boundary', () => {
     assert.deepEqual(result.viewerAccess, {
       biography: true,
       location: true,
+      trainingIdentity: true,
       workoutHistory: true,
       records: true,
       routines: false,
@@ -302,6 +331,13 @@ describe('UsersService privacy boundary', () => {
     });
     assert.equal(result.bio, 'Strength built patiently.');
     assert.equal(result.location, 'Berlin, Germany');
+    assert.deepEqual(result.trainingIdentity, {
+      goals: ['STRENGTH', 'MUSCLE_GROWTH'],
+      experienceLevel: 'INTERMEDIATE',
+      disciplines: ['POWERLIFTING'],
+      preferredStyle: 'UPPER_LOWER',
+      favoriteExercises: [{ id: 'exercise-1', name: 'Bench Press' }],
+    });
     assert.equal(
       result.personalRecords?.[0].achievedAt,
       '2026-02-01T12:00:00.000Z',

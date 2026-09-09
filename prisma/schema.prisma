@@ -17,41 +17,47 @@ datasource db {
 }
 
 model User {
-  analyticsProjectionId  String?
-  timeZone               String?
-  analyticsProjections   WorkoutAnalyticsProjection[]
-  trainingEvents         TrainingEvent[]
-  personalRecords        PersonalRecord[]
-  id                     String                       @id @default(uuid())
-  email                  String                       @unique
-  username               String                       @unique @db.VarChar(30)
-  password               String? // Made optional for Supabase migration
-  name                   String
-  lastName               String?
-  avatarUrl              String?
-  bio                    String?                      @db.VarChar(500)
-  location               String?                      @db.VarChar(100)
-  age                    Int?
-  sex                    Sex?
-  weight                 Float?
-  height                 Float?
-  supabaseUserId         String?                      @unique // Link to Supabase user
-  createdAt              DateTime                     @default(now())
-  updatedAt              DateTime                     @updatedAt
-  refreshTokens          RefreshToken[]
-  weightUnit             WeightUnit                   @default(KG)
-  bioVisibility          ProfileVisibility            @default(PRIVATE)
-  locationVisibility     ProfileVisibility            @default(PRIVATE)
-  historyVisibility      ProfileVisibility            @default(PRIVATE)
-  recordsVisibility      ProfileVisibility            @default(PRIVATE)
-  routinesVisibility     ProfileVisibility            @default(PRIVATE)
-  achievementsVisibility ProfileVisibility            @default(PRIVATE)
-  bodyMetricsVisibility  ProfileVisibility            @default(PRIVATE)
-  routines               Routine[]
-  workoutSessions        WorkoutSession[]
-  trainingLocations      TrainingLocationPreference[]
-  following              UserFollow[]                 @relation("UserFollowing")
-  followers              UserFollow[]                 @relation("UserFollowers")
+  analyticsProjectionId      String?
+  timeZone                   String?
+  analyticsProjections       WorkoutAnalyticsProjection[]
+  trainingEvents             TrainingEvent[]
+  personalRecords            PersonalRecord[]
+  id                         String                       @id @default(uuid())
+  email                      String                       @unique
+  username                   String                       @unique @db.VarChar(30)
+  password                   String? // Made optional for Supabase migration
+  name                       String
+  lastName                   String?
+  avatarUrl                  String?
+  bio                        String?                      @db.VarChar(500)
+  location                   String?                      @db.VarChar(100)
+  trainingGoals              TrainingGoal[]               @default([])
+  trainingExperienceLevel    TrainingExperienceLevel?
+  trainingDisciplines        TrainingDiscipline[]         @default([])
+  preferredTrainingStyle     PreferredTrainingStyle?
+  age                        Int?
+  sex                        Sex?
+  weight                     Float?
+  height                     Float?
+  supabaseUserId             String?                      @unique // Link to Supabase user
+  createdAt                  DateTime                     @default(now())
+  updatedAt                  DateTime                     @updatedAt
+  refreshTokens              RefreshToken[]
+  weightUnit                 WeightUnit                   @default(KG)
+  bioVisibility              ProfileVisibility            @default(PRIVATE)
+  locationVisibility         ProfileVisibility            @default(PRIVATE)
+  trainingIdentityVisibility ProfileVisibility            @default(PRIVATE)
+  historyVisibility          ProfileVisibility            @default(PRIVATE)
+  recordsVisibility          ProfileVisibility            @default(PRIVATE)
+  routinesVisibility         ProfileVisibility            @default(PRIVATE)
+  achievementsVisibility     ProfileVisibility            @default(PRIVATE)
+  bodyMetricsVisibility      ProfileVisibility            @default(PRIVATE)
+  routines                   Routine[]
+  workoutSessions            WorkoutSession[]
+  trainingLocations          TrainingLocationPreference[]
+  following                  UserFollow[]                 @relation("UserFollowing")
+  followers                  UserFollow[]                 @relation("UserFollowers")
+  favoriteExercises          UserFavoriteExercise[]
 }
 
 model TrainingLocationPreference {
@@ -117,6 +123,40 @@ enum ProfileVisibility {
   PRIVATE
 }
 
+enum TrainingGoal {
+  STRENGTH
+  MUSCLE_GROWTH
+  FAT_LOSS
+  ENDURANCE
+  GENERAL_FITNESS
+  ATHLETIC_PERFORMANCE
+  MOBILITY
+}
+
+enum TrainingExperienceLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum TrainingDiscipline {
+  BODYBUILDING
+  POWERLIFTING
+  WEIGHTLIFTING
+  CALISTHENICS
+  STRONGMAN
+  HYBRID_TRAINING
+  GENERAL_STRENGTH
+}
+
+enum PreferredTrainingStyle {
+  FULL_BODY
+  UPPER_LOWER
+  PUSH_PULL_LEGS
+  BODY_PART_SPLIT
+  CIRCUIT
+}
+
 // Muscle groups for exercise targeting
 enum MuscleGroup {
   PECTORAL
@@ -140,15 +180,29 @@ enum MuscleGroup {
 
 // Catalog of exercises selectable when building routines
 model Exercise {
-  id               String            @id @default(uuid())
-  name             String            @unique
+  id               String                 @id @default(uuid())
+  name             String                 @unique
   primaryMuscles   MuscleGroup[] // Primary muscle movers (counts as 1.0 for volume)
   secondaryMuscles MuscleGroup[] // Secondary muscle movers (counts as 0.5 for volume)
   equipment        String // e.g., "barbell", "dumbbell", "bodyweight"
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
   routineExercises RoutineExercise[]
   setLogs          SetLog[]
+  favoritedBy      UserFavoriteExercise[]
+}
+
+model UserFavoriteExercise {
+  userId     String
+  exerciseId String
+  position   Int
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exercise   Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+
+  @@id([userId, exerciseId])
+  @@index([userId, position])
+  @@index([exerciseId])
 }
 
 // A training routine owned by a single user (non-shareable for now)
