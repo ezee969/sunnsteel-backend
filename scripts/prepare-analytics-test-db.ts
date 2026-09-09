@@ -66,6 +66,11 @@ async function main() {
           'prisma/migrations/20260906180000_analytics_expand/migration.sql',
           'utf8',
         ),
+				'\n' +
+				readFileSync(
+					'prisma/migrations/20260909090000_progression_changed_event/migration.sql',
+					'utf8',
+				),
     );
     prisma(
       'db',
@@ -76,7 +81,7 @@ async function main() {
       process.env.DATABASE_URL!,
     );
     console.log(
-      'Isolated analytics database prepared with the legacy schema and expansion migration.',
+      'Isolated analytics database prepared with the legacy schema and analytics migrations.',
     );
   } finally {
     try {
