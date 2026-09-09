@@ -17,32 +17,37 @@ datasource db {
 }
 
 model User {
-  analyticsProjectionId String?
-  timeZone              String?
-  analyticsProjections  WorkoutAnalyticsProjection[]
-  trainingEvents        TrainingEvent[]
-  personalRecords       PersonalRecord[]
-  id                    String                       @id @default(uuid())
-  email                 String                       @unique
-  username              String                       @unique @db.VarChar(30)
-  password              String? // Made optional for Supabase migration
-  name                  String
-  lastName              String?
-  avatarUrl             String?
-  age                   Int?
-  sex                   Sex?
-  weight                Float?
-  height                Float?
-  supabaseUserId        String?                      @unique // Link to Supabase user
-  createdAt             DateTime                     @default(now())
-  updatedAt             DateTime                     @updatedAt
-  refreshTokens         RefreshToken[]
-  weightUnit            WeightUnit                   @default(KG)
-  routines              Routine[]
-  workoutSessions       WorkoutSession[]
-  trainingLocations     TrainingLocationPreference[]
-  following             UserFollow[]                 @relation("UserFollowing")
-  followers             UserFollow[]                 @relation("UserFollowers")
+  analyticsProjectionId  String?
+  timeZone               String?
+  analyticsProjections   WorkoutAnalyticsProjection[]
+  trainingEvents         TrainingEvent[]
+  personalRecords        PersonalRecord[]
+  id                     String                       @id @default(uuid())
+  email                  String                       @unique
+  username               String                       @unique @db.VarChar(30)
+  password               String? // Made optional for Supabase migration
+  name                   String
+  lastName               String?
+  avatarUrl              String?
+  age                    Int?
+  sex                    Sex?
+  weight                 Float?
+  height                 Float?
+  supabaseUserId         String?                      @unique // Link to Supabase user
+  createdAt              DateTime                     @default(now())
+  updatedAt              DateTime                     @updatedAt
+  refreshTokens          RefreshToken[]
+  weightUnit             WeightUnit                   @default(KG)
+  historyVisibility      ProfileVisibility            @default(PRIVATE)
+  recordsVisibility      ProfileVisibility            @default(PRIVATE)
+  routinesVisibility     ProfileVisibility            @default(PRIVATE)
+  achievementsVisibility ProfileVisibility            @default(PRIVATE)
+  bodyMetricsVisibility  ProfileVisibility            @default(PRIVATE)
+  routines               Routine[]
+  workoutSessions        WorkoutSession[]
+  trainingLocations      TrainingLocationPreference[]
+  following              UserFollow[]                 @relation("UserFollowing")
+  followers              UserFollow[]                 @relation("UserFollowers")
 }
 
 model TrainingLocationPreference {
@@ -100,6 +105,12 @@ enum WeightUnit {
 enum Sex {
   MALE
   FEMALE
+}
+
+enum ProfileVisibility {
+  PUBLIC
+  FOLLOWERS
+  PRIVATE
 }
 
 // Muscle groups for exercise targeting

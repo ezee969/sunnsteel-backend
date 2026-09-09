@@ -9,7 +9,9 @@ import {
 // Services
 import { DatabaseService } from '../database/database.service';
 import {
+  ProfilePrivacySettings,
   PublicUserProfile,
+  UpdateProfilePrivacyRequest,
   UpdateProfileRequest,
   UserProfile,
   UserSearchResponse,
@@ -20,6 +22,10 @@ import {
   getUsernameValidationError,
   normalizeUsername,
 } from './username';
+import {
+  mapProfilePrivacy,
+  resolveProfileViewerAccess,
+} from './profile-privacy';
 
 // Local input type replacing legacy RegisterDto
 interface CreateUserInput {
@@ -41,6 +47,11 @@ const userProfileSelect = {
   weight: true,
   height: true,
   weightUnit: true,
+  historyVisibility: true,
+  recordsVisibility: true,
+  routinesVisibility: true,
+  achievementsVisibility: true,
+  bodyMetricsVisibility: true,
   createdAt: true,
   updatedAt: true,
   _count: {
@@ -62,9 +73,26 @@ export class UsersService {
   // Serialization boundary: Prisma record -> `UserProfile` contract
   // (folds follow counts, converts Date -> ISO string).
   private mapUserProfile(user: UserProfileRecord): UserProfile {
-    const { _count, createdAt, updatedAt, ...profile } = user;
+    const {
+      _count,
+      createdAt,
+      updatedAt,
+      historyVisibility,
+      recordsVisibility,
+      routinesVisibility,
+      achievementsVisibility,
+      bodyMetricsVisibility,
+      ...profile
+    } = user;
     return {
       ...profile,
+      privacySettings: mapProfilePrivacy({
+        historyVisibility,
+        recordsVisibility,
+        routinesVisibility,
+        achievementsVisibility,
+        bodyMetricsVisibility,
+      }),
       followerCount: _count.followers,
       followingCount: _count.following,
       createdAt: createdAt.toISOString(),
@@ -147,6 +175,24 @@ export class UsersService {
     }
   }
 
+  async updateProfilePrivacy(
+    email: string,
+    data: UpdateProfilePrivacyRequest,
+  ): Promise<UserProfile> {
+    const user = await this.db.user.update({
+      where: { email },
+      data: {
+        historyVisibility: data.workoutHistory,
+        recordsVisibility: data.records,
+        routinesVisibility: data.routines,
+        achievementsVisibility: data.achievements,
+        bodyMetricsVisibility: data.bodyMetrics,
+      },
+      select: userProfileSelect,
+    });
+    return this.mapUserProfile(user);
+  }
+
   async searchUsers(
     query: string,
     excludeUserId: string,
@@ -201,6 +247,11 @@ export class UsersService {
         avatarUrl: true,
         createdAt: true,
         updatedAt: true,
+        historyVisibility: true,
+        recordsVisibility: true,
+        routinesVisibility: true,
+        achievementsVisibility: true,
+        bodyMetricsVisibility: true,
         _count: {
           select: {
             followers: true,
@@ -214,15 +265,58 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    const followRelation = await this.db.userFollow.findUnique({
-      where: {
-        followerId_followingId: {
-          followerId: viewerUserId,
-          followingId: user.id,
-        },
-      },
-      select: { followerId: true },
+    const isOwner = viewerUserId === user.id;
+    const followRelation = isOwner
+      ? null
+      : await this.db.userFollow.findUnique({
+          where: {
+            followerId_followingId: {
+              followerId: viewerUserId,
+              followingId: user.id,
+            },
+          },
+          select: { followerId: true },
+        });
+    const isFollower = !!followRelation;
+    const privacySettings: ProfilePrivacySettings = mapProfilePrivacy(user);
+    const viewerAccess = resolveProfileViewerAccess(privacySettings, {
+      isOwner,
+      isFollower,
     });
+
+    const [projection, personalRecords, bodyMetrics] = await Promise.all([
+      viewerAccess.workoutHistory
+        ? this.db.workoutAnalyticsProjection.findFirst({
+            where: { userId: user.id, active: true, state: 'READY' },
+            select: {
+              completedSessions: true,
+              totalVolumeKg: true,
+              currentRun: true,
+              bestRun: true,
+            },
+          })
+        : null,
+      viewerAccess.records
+        ? this.db.personalRecord.findMany({
+            where: { userId: user.id },
+            orderBy: [{ achievedAt: 'desc' }, { id: 'desc' }],
+            select: {
+              exerciseId: true,
+              exerciseName: true,
+              weight: true,
+              reps: true,
+              estimated1rm: true,
+              achievedAt: true,
+            },
+          })
+        : [],
+      viewerAccess.bodyMetrics
+        ? this.db.user.findUnique({
+            where: { id: user.id },
+            select: { age: true, sex: true, weight: true, height: true },
+          })
+        : null,
+    ]);
 
     return {
       id: user.id,
@@ -234,7 +328,36 @@ export class UsersService {
       updatedAt: user.updatedAt.toISOString(),
       followerCount: user._count.followers,
       followingCount: user._count.following,
-      isFollowedByMe: !!followRelation,
+      isFollowedByMe: isFollower,
+      viewerAccess,
+      ...(viewerAccess.workoutHistory
+        ? {
+            trainingSummary: {
+              completedWorkouts: projection?.completedSessions ?? 0,
+              totalVolumeKg: projection?.totalVolumeKg ?? 0,
+              currentStreakDays: projection?.currentRun ?? 0,
+              bestStreakDays: projection?.bestRun ?? 0,
+            },
+          }
+        : {}),
+      ...(viewerAccess.records
+        ? {
+            personalRecords: personalRecords.map((record) => ({
+              ...record,
+              achievedAt: record.achievedAt.toISOString(),
+            })),
+          }
+        : {}),
+      ...(viewerAccess.bodyMetrics
+        ? {
+            bodyMetrics: {
+              age: bodyMetrics?.age ?? null,
+              sex: bodyMetrics?.sex ?? null,
+              weightKg: bodyMetrics?.weight ?? null,
+              heightCm: bodyMetrics?.height ?? null,
+            },
+          }
+        : {}),
     };
   }
 

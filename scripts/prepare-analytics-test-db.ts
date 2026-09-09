@@ -75,6 +75,11 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260909150000_unique_usernames/migration.sql',
 					'utf8',
+				) +
+				'\n' +
+				readFileSync(
+					'prisma/migrations/20260909200000_profile_privacy/migration.sql',
+					'utf8',
 				),
     );
     prisma(
