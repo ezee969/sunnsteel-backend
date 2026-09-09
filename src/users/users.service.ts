@@ -9,6 +9,8 @@ import {
 // Services
 import { DatabaseService } from '../database/database.service';
 import {
+  PROFILE_BIO_MAX_LENGTH,
+  PROFILE_LOCATION_MAX_LENGTH,
   ProfilePrivacySettings,
   PublicUserProfile,
   UpdateProfilePrivacyRequest,
@@ -42,11 +44,15 @@ const userProfileSelect = {
   name: true,
   lastName: true,
   avatarUrl: true,
+  bio: true,
+  location: true,
   age: true,
   sex: true,
   weight: true,
   height: true,
   weightUnit: true,
+  bioVisibility: true,
+  locationVisibility: true,
   historyVisibility: true,
   recordsVisibility: true,
   routinesVisibility: true,
@@ -77,6 +83,8 @@ export class UsersService {
       _count,
       createdAt,
       updatedAt,
+      bioVisibility,
+      locationVisibility,
       historyVisibility,
       recordsVisibility,
       routinesVisibility,
@@ -87,6 +95,8 @@ export class UsersService {
     return {
       ...profile,
       privacySettings: mapProfilePrivacy({
+        bioVisibility,
+        locationVisibility,
         historyVisibility,
         recordsVisibility,
         routinesVisibility,
@@ -149,6 +159,16 @@ export class UsersService {
       data.username === undefined
         ? undefined
         : this.validateUsername(data.username);
+    const bio = this.normalizeProfileText(
+      data.bio,
+      PROFILE_BIO_MAX_LENGTH,
+      'Biography',
+    );
+    const location = this.normalizeProfileText(
+      data.location,
+      PROFILE_LOCATION_MAX_LENGTH,
+      'Location',
+    );
 
     try {
       const user = await this.db.user.update({
@@ -158,6 +178,8 @@ export class UsersService {
           name: data.name,
           lastName: data.lastName,
           avatarUrl: data.avatarUrl,
+          bio,
+          location,
           age: data.age,
           sex: data.sex,
           weight: data.weight,
@@ -182,6 +204,12 @@ export class UsersService {
     const user = await this.db.user.update({
       where: { email },
       data: {
+        ...(data.biography === undefined
+          ? {}
+          : { bioVisibility: data.biography }),
+        ...(data.location === undefined
+          ? {}
+          : { locationVisibility: data.location }),
         historyVisibility: data.workoutHistory,
         recordsVisibility: data.records,
         routinesVisibility: data.routines,
@@ -247,6 +275,8 @@ export class UsersService {
         avatarUrl: true,
         createdAt: true,
         updatedAt: true,
+        bioVisibility: true,
+        locationVisibility: true,
         historyVisibility: true,
         recordsVisibility: true,
         routinesVisibility: true,
@@ -284,39 +314,52 @@ export class UsersService {
       isFollower,
     });
 
-    const [projection, personalRecords, bodyMetrics] = await Promise.all([
-      viewerAccess.workoutHistory
-        ? this.db.workoutAnalyticsProjection.findFirst({
-            where: { userId: user.id, active: true, state: 'READY' },
-            select: {
-              completedSessions: true,
-              totalVolumeKg: true,
-              currentRun: true,
-              bestRun: true,
-            },
-          })
-        : null,
-      viewerAccess.records
-        ? this.db.personalRecord.findMany({
-            where: { userId: user.id },
-            orderBy: [{ achievedAt: 'desc' }, { id: 'desc' }],
-            select: {
-              exerciseId: true,
-              exerciseName: true,
-              weight: true,
-              reps: true,
-              estimated1rm: true,
-              achievedAt: true,
-            },
-          })
-        : [],
-      viewerAccess.bodyMetrics
-        ? this.db.user.findUnique({
-            where: { id: user.id },
-            select: { age: true, sex: true, weight: true, height: true },
-          })
-        : null,
-    ]);
+    const [projection, personalRecords, bodyMetrics, biography, location] =
+      await Promise.all([
+        viewerAccess.workoutHistory
+          ? this.db.workoutAnalyticsProjection.findFirst({
+              where: { userId: user.id, active: true, state: 'READY' },
+              select: {
+                completedSessions: true,
+                totalVolumeKg: true,
+                currentRun: true,
+                bestRun: true,
+              },
+            })
+          : null,
+        viewerAccess.records
+          ? this.db.personalRecord.findMany({
+              where: { userId: user.id },
+              orderBy: [{ achievedAt: 'desc' }, { id: 'desc' }],
+              select: {
+                exerciseId: true,
+                exerciseName: true,
+                weight: true,
+                reps: true,
+                estimated1rm: true,
+                achievedAt: true,
+              },
+            })
+          : [],
+        viewerAccess.bodyMetrics
+          ? this.db.user.findUnique({
+              where: { id: user.id },
+              select: { age: true, sex: true, weight: true, height: true },
+            })
+          : null,
+        viewerAccess.biography
+          ? this.db.user.findUnique({
+              where: { id: user.id },
+              select: { bio: true },
+            })
+          : null,
+        viewerAccess.location
+          ? this.db.user.findUnique({
+              where: { id: user.id },
+              select: { location: true },
+            })
+          : null,
+      ]);
 
     return {
       id: user.id,
@@ -330,6 +373,8 @@ export class UsersService {
       followingCount: user._count.following,
       isFollowedByMe: isFollower,
       viewerAccess,
+      ...(viewerAccess.biography ? { bio: biography?.bio ?? null } : {}),
+      ...(viewerAccess.location ? { location: location?.location ?? null } : {}),
       ...(viewerAccess.workoutHistory
         ? {
             trainingSummary: {
@@ -434,6 +479,21 @@ export class UsersService {
       );
     }
     return username;
+  }
+
+  private normalizeProfileText(
+    value: string | null | undefined,
+    maxLength: number,
+    label: string,
+  ): string | null | undefined {
+    if (value === undefined || value === null) return value;
+    const normalized = value.trim();
+    if (normalized.length > maxLength) {
+      throw new BadRequestException(
+        `${label} must be ${maxLength} characters or fewer`,
+      );
+    }
+    return normalized || null;
   }
 
   private isUniqueUsernameViolation(error: unknown): boolean {

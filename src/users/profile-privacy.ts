@@ -5,6 +5,8 @@ import {
 } from '@sunsteel/contracts';
 
 export interface StoredProfilePrivacy {
+  bioVisibility: ProfileVisibility;
+  locationVisibility: ProfileVisibility;
   historyVisibility: ProfileVisibility;
   recordsVisibility: ProfileVisibility;
   routinesVisibility: ProfileVisibility;
@@ -16,6 +18,8 @@ export function mapProfilePrivacy(
   stored: StoredProfilePrivacy,
 ): ProfilePrivacySettings {
   return {
+    biography: stored.bioVisibility,
+    location: stored.locationVisibility,
     workoutHistory: stored.historyVisibility,
     records: stored.recordsVisibility,
     routines: stored.routinesVisibility,
@@ -38,6 +42,8 @@ export function resolveProfileViewerAccess(
   context: { isOwner: boolean; isFollower: boolean },
 ): ProfileViewerAccess {
   return {
+    biography: canViewProfileSection(settings.biography, context),
+    location: canViewProfileSection(settings.location, context),
     workoutHistory: canViewProfileSection(settings.workoutHistory, context),
     records: canViewProfileSection(settings.records, context),
     routines: canViewProfileSection(settings.routines, context),

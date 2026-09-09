@@ -9,6 +9,8 @@ import {
 import { UsersService } from '../src/users/users.service';
 
 const privateSettings = {
+  biography: 'PRIVATE',
+  location: 'PRIVATE',
   workoutHistory: 'PRIVATE',
   records: 'PRIVATE',
   routines: 'PRIVATE',
@@ -24,11 +26,15 @@ const storedProfile = {
   name: 'Owner',
   lastName: null,
   avatarUrl: null,
+  bio: null,
+  location: null,
   age: 30,
   sex: 'MALE' as const,
   weight: 80,
   height: 180,
   weightUnit: 'KG' as const,
+  bioVisibility: 'PRIVATE' as const,
+  locationVisibility: 'PRIVATE' as const,
   historyVisibility: 'PRIVATE' as const,
   recordsVisibility: 'PRIVATE' as const,
   routinesVisibility: 'PRIVATE' as const,
@@ -82,6 +88,8 @@ describe('profile privacy rules', () => {
     assert.deepEqual(
       resolveProfileViewerAccess(
         {
+          biography: 'PUBLIC',
+          location: 'FOLLOWERS',
           workoutHistory: 'PUBLIC',
           records: 'FOLLOWERS',
           routines: 'PRIVATE',
@@ -91,6 +99,8 @@ describe('profile privacy rules', () => {
         { isOwner: false, isFollower: true },
       ),
       {
+        biography: true,
+        location: true,
         workoutHistory: true,
         records: true,
         routines: false,
@@ -110,6 +120,8 @@ describe('UsersService privacy boundary', () => {
           updateArgs = args;
           return {
             ...storedProfile,
+            bioVisibility: 'PUBLIC',
+            locationVisibility: 'FOLLOWERS',
             historyVisibility: 'PUBLIC',
             recordsVisibility: 'FOLLOWERS',
           };
@@ -119,6 +131,8 @@ describe('UsersService privacy boundary', () => {
     const service = new UsersService(db);
 
     const result = await service.updateProfilePrivacy('owner@example.test', {
+      biography: 'PUBLIC',
+      location: 'FOLLOWERS',
       workoutHistory: 'PUBLIC',
       records: 'FOLLOWERS',
       routines: 'PRIVATE',
@@ -129,6 +143,8 @@ describe('UsersService privacy boundary', () => {
     assert.deepEqual(
       (updateArgs as { data: Record<string, string> }).data,
       {
+        bioVisibility: 'PUBLIC',
+        locationVisibility: 'FOLLOWERS',
         historyVisibility: 'PUBLIC',
         recordsVisibility: 'FOLLOWERS',
         routinesVisibility: 'PRIVATE',
@@ -138,10 +154,37 @@ describe('UsersService privacy boundary', () => {
     );
     assert.deepEqual(result.privacySettings, {
       ...privateSettings,
+      biography: 'PUBLIC',
+      location: 'FOLLOWERS',
       workoutHistory: 'PUBLIC',
       records: 'FOLLOWERS',
     });
     assert.equal(result.email, 'owner@example.test');
+  });
+
+  it('keeps new detail visibility unchanged for a legacy five-field client', async () => {
+    let updateArgs: unknown;
+    const db = {
+      user: {
+        update: async (args: unknown) => {
+          updateArgs = args;
+          return storedProfile;
+        },
+      },
+    } as unknown as DatabaseService;
+    const service = new UsersService(db);
+
+    await service.updateProfilePrivacy('owner@example.test', {
+      workoutHistory: 'PRIVATE',
+      records: 'PRIVATE',
+      routines: 'PRIVATE',
+      achievements: 'PRIVATE',
+      bodyMetrics: 'PRIVATE',
+    });
+
+    const data = (updateArgs as { data: Record<string, string> }).data;
+    assert.equal('bioVisibility' in data, false);
+    assert.equal('locationVisibility' in data, false);
   });
 
   it('does not even query sensitive sections when the viewer lacks access', async () => {
@@ -174,6 +217,8 @@ describe('UsersService privacy boundary', () => {
 
     assert.equal(sensitiveReads, 0);
     assert.deepEqual(result.viewerAccess, {
+      biography: false,
+      location: false,
       workoutHistory: false,
       records: false,
       routines: false,
@@ -181,6 +226,8 @@ describe('UsersService privacy boundary', () => {
       bodyMetrics: false,
     });
     assert.equal('trainingSummary' in result, false);
+    assert.equal('bio' in result, false);
+    assert.equal('location' in result, false);
     assert.equal('personalRecords' in result, false);
     assert.equal('bodyMetrics' in result, false);
     assert.equal('email' in result, false);
@@ -191,18 +238,24 @@ describe('UsersService privacy boundary', () => {
       user: {
         findFirst: async () => ({
           ...storedProfile,
+          bioVisibility: 'PUBLIC',
+          locationVisibility: 'FOLLOWERS',
           historyVisibility: 'FOLLOWERS',
           recordsVisibility: 'PUBLIC',
           routinesVisibility: 'PRIVATE',
           achievementsVisibility: 'FOLLOWERS',
           bodyMetricsVisibility: 'FOLLOWERS',
         }),
-        findUnique: async () => ({
-          age: 30,
-          sex: 'MALE',
-          weight: 80,
-          height: 180,
-        }),
+        findUnique: async (args: { select: Record<string, boolean> }) => {
+          if (args.select.bio) return { bio: 'Strength built patiently.' };
+          if (args.select.location) return { location: 'Berlin, Germany' };
+          return {
+            age: 30,
+            sex: 'MALE',
+            weight: 80,
+            height: 180,
+          };
+        },
       },
       userFollow: {
         findUnique: async () => ({ followerId: 'viewer-1' }),
@@ -233,6 +286,8 @@ describe('UsersService privacy boundary', () => {
     const result = await service.getPublicProfile('viewer-1', 'owner_handle');
 
     assert.deepEqual(result.viewerAccess, {
+      biography: true,
+      location: true,
       workoutHistory: true,
       records: true,
       routines: false,
@@ -245,6 +300,8 @@ describe('UsersService privacy boundary', () => {
       currentStreakDays: 3,
       bestStreakDays: 6,
     });
+    assert.equal(result.bio, 'Strength built patiently.');
+    assert.equal(result.location, 'Berlin, Germany');
     assert.equal(
       result.personalRecords?.[0].achievedAt,
       '2026-02-01T12:00:00.000Z',

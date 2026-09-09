@@ -20,11 +20,15 @@ const profileRecord = {
   name: 'Owner',
   lastName: null,
   avatarUrl: null,
+  bio: null,
+  location: null,
   age: null,
   sex: null,
   weight: null,
   height: null,
   weightUnit: 'KG' as const,
+  bioVisibility: 'PRIVATE' as const,
+  locationVisibility: 'PRIVATE' as const,
   historyVisibility: 'PRIVATE' as const,
   recordsVisibility: 'PRIVATE' as const,
   routinesVisibility: 'PRIVATE' as const,
@@ -83,6 +87,48 @@ describe('UsersService usernames', () => {
     );
     assert.equal(result.username, 'new_handle');
     assert.equal(result.createdAt, '2026-01-01T00:00:00.000Z');
+  });
+
+  it('normalizes optional profile details and rejects oversized values', async () => {
+    let updateArgs: unknown;
+    const db = {
+      user: {
+        update: async (args: unknown) => {
+          updateArgs = args;
+          return {
+            ...profileRecord,
+            bio: 'Lift with patience.',
+            location: null,
+          };
+        },
+      },
+    } as unknown as DatabaseService;
+    const service = new UsersService(db);
+
+    const result = await service.updateProfile('owner@example.test', {
+      bio: '  Lift with patience.  ',
+      location: '   ',
+    });
+
+    assert.equal(
+      (updateArgs as { data: { bio: string } }).data.bio,
+      'Lift with patience.',
+    );
+    assert.equal(
+      (updateArgs as { data: { location: null } }).data.location,
+      null,
+    );
+    assert.equal(result.bio, 'Lift with patience.');
+    await assert.rejects(
+      service.updateProfile('owner@example.test', { bio: 'a'.repeat(501) }),
+      BadRequestException,
+    );
+    await assert.rejects(
+      service.updateProfile('owner@example.test', {
+        location: 'a'.repeat(101),
+      }),
+      BadRequestException,
+    );
   });
 
   it('rejects reserved handles before writing and maps unique conflicts', async () => {

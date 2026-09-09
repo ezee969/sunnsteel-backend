@@ -29,6 +29,8 @@ model User {
   name                   String
   lastName               String?
   avatarUrl              String?
+  bio                    String?                      @db.VarChar(500)
+  location               String?                      @db.VarChar(100)
   age                    Int?
   sex                    Sex?
   weight                 Float?
@@ -38,6 +40,8 @@ model User {
   updatedAt              DateTime                     @updatedAt
   refreshTokens          RefreshToken[]
   weightUnit             WeightUnit                   @default(KG)
+  bioVisibility          ProfileVisibility            @default(PRIVATE)
+  locationVisibility     ProfileVisibility            @default(PRIVATE)
   historyVisibility      ProfileVisibility            @default(PRIVATE)
   recordsVisibility      ProfileVisibility            @default(PRIVATE)
   routinesVisibility     ProfileVisibility            @default(PRIVATE)

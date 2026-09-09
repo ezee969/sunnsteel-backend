@@ -3,9 +3,17 @@ import {
   ProfileVisibility,
   UpdateProfilePrivacyRequest,
 } from '@sunsteel/contracts';
-import { IsIn } from 'class-validator';
+import { IsIn, IsOptional } from 'class-validator';
 
 export class UpdateProfilePrivacyDto implements UpdateProfilePrivacyRequest {
+  @IsOptional()
+  @IsIn(PROFILE_VISIBILITY_VALUES)
+  biography?: ProfileVisibility;
+
+  @IsOptional()
+  @IsIn(PROFILE_VISIBILITY_VALUES)
+  location?: ProfileVisibility;
+
   @IsIn(PROFILE_VISIBILITY_VALUES)
   workoutHistory!: ProfileVisibility;
 
