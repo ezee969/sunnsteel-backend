@@ -5,6 +5,7 @@ import { WorkoutsService } from './workouts.service';
 import {
   WorkoutSessionFinishService,
   WorkoutSessionLogService,
+  WorkoutSessionRecapService,
   WorkoutSessionStartService,
 } from './services';
 import { WorkoutSessionReadService } from './workout-session-read.service';
@@ -18,6 +19,7 @@ import { WorkoutProgressService } from './workout-progress.service';
     WorkoutSessionStartService,
     WorkoutSessionFinishService,
     WorkoutSessionLogService,
+    WorkoutSessionRecapService,
     WorkoutSessionReadService,
     WorkoutProgressService,
   ],

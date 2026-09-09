@@ -68,6 +68,11 @@ export class WorkoutsController {
     return this.workoutsService.getPreviousPerformance(req.user.id, id);
   }
 
+  @Get('sessions/:id/recap')
+  async getRecap(@Req() req: RequestWithUser, @Param('id') id: string) {
+    return this.workoutsService.getSessionRecap(req.user.id, id);
+  }
+
   @Get('stats')
   async stats(
     @Req() req: RequestWithUser,

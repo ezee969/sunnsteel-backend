@@ -15,6 +15,7 @@ import { UpsertSetLogDto } from './dto/upsert-set-log.dto';
 import {
   WorkoutSessionFinishService,
   WorkoutSessionLogService,
+  WorkoutSessionRecapService,
   WorkoutSessionStartService,
 } from './services';
 import { WorkoutSessionReadService } from './workout-session-read.service';
@@ -29,6 +30,7 @@ export class WorkoutsService {
     private readonly workoutSessionStart: WorkoutSessionStartService,
     private readonly workoutSessionFinish: WorkoutSessionFinishService,
     private readonly workoutSessionLog: WorkoutSessionLogService,
+    private readonly workoutSessionRecap: WorkoutSessionRecapService,
     private readonly workoutProgress: WorkoutProgressService,
   ) {}
 
@@ -77,7 +79,15 @@ export class WorkoutsService {
     return {
       session: toWorkoutSessionResponse(result.session),
       progressionChanges: result.progressionChanges,
+      recap:
+        dto.status === 'COMPLETED'
+          ? await this.workoutSessionRecap.getSessionRecap(userId, id)
+          : null,
     };
+  }
+
+  getSessionRecap(userId: string, id: string) {
+    return this.workoutSessionRecap.getSessionRecap(userId, id);
   }
 
   async upsertSetLog(
