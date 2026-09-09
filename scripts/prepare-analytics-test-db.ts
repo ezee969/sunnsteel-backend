@@ -70,6 +70,11 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260909090000_progression_changed_event/migration.sql',
 					'utf8',
+				) +
+				'\n' +
+				readFileSync(
+					'prisma/migrations/20260909150000_unique_usernames/migration.sql',
+					'utf8',
 				),
     );
     prisma(
