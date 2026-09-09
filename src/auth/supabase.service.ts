@@ -13,6 +13,7 @@ import {
 } from '@supabase/supabase-js';
 import { Prisma } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
+import { createInitialUsername } from '../users/username';
 
 function isUniqueEmailViolation(error: unknown): boolean {
   return (
@@ -110,6 +111,7 @@ export class SupabaseService {
       return await this.databaseService.user.create({
         data: {
           email: supabaseUser.email!,
+          username: createInitialUsername(userName, supabaseUser.id),
           name: userName,
           supabaseUserId: supabaseUser.id,
         },

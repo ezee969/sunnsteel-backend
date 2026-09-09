@@ -2,6 +2,7 @@
 import * as bcrypt from 'bcrypt';
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -14,6 +15,11 @@ import {
   UserSearchResponse,
 } from '@sunsteel/contracts';
 import { Prisma } from '@prisma/client';
+import {
+  createInitialUsername,
+  getUsernameValidationError,
+  normalizeUsername,
+} from './username';
 
 // Local input type replacing legacy RegisterDto
 interface CreateUserInput {
@@ -26,6 +32,7 @@ const userProfileSelect = {
   timeZone: true,
   id: true,
   email: true,
+  username: true,
   name: true,
   lastName: true,
   avatarUrl: true,
@@ -97,6 +104,7 @@ export class UsersService {
     const user = await this.db.user.create({
       data: {
         email,
+        username: createInitialUsername(name, email),
         password: hashedPassword,
         name,
       },
@@ -109,62 +117,85 @@ export class UsersService {
     email: string,
     data: UpdateProfileRequest,
   ): Promise<UserProfile> {
-    const user = await this.db.user.update({
-      where: { email },
-      data: {
-        name: data.name,
-        lastName: data.lastName,
-        avatarUrl: data.avatarUrl,
-        age: data.age,
-        sex: data.sex,
-        weight: data.weight,
-        height: data.height,
-        weightUnit: data.weightUnit,
-      },
-      select: userProfileSelect,
-    });
-    return this.mapUserProfile(user);
+    const username =
+      data.username === undefined
+        ? undefined
+        : this.validateUsername(data.username);
+
+    try {
+      const user = await this.db.user.update({
+        where: { email },
+        data: {
+          username,
+          name: data.name,
+          lastName: data.lastName,
+          avatarUrl: data.avatarUrl,
+          age: data.age,
+          sex: data.sex,
+          weight: data.weight,
+          height: data.height,
+          weightUnit: data.weightUnit,
+        },
+        select: userProfileSelect,
+      });
+      return this.mapUserProfile(user);
+    } catch (error) {
+      if (this.isUniqueUsernameViolation(error)) {
+        throw new ConflictException('Username is already taken');
+      }
+      throw error;
+    }
   }
 
   async searchUsers(
     query: string,
-    excludeEmail: string,
+    excludeUserId: string,
     limit: number = 10,
   ): Promise<UserSearchResponse[]> {
     if (!query || query.trim() === '') return [];
 
-    // search across name, lastName, and email
+    const trimmedQuery = query.trim();
+    const usernameQuery = normalizeUsername(trimmedQuery);
+    if (trimmedQuery.startsWith('@') && !usernameQuery) return [];
+    const searches: Prisma.UserWhereInput[] = trimmedQuery.startsWith('@')
+      ? [{ username: { contains: usernameQuery, mode: 'insensitive' } }]
+      : [
+          { name: { contains: trimmedQuery, mode: 'insensitive' } },
+          { lastName: { contains: trimmedQuery, mode: 'insensitive' } },
+          { username: { contains: usernameQuery, mode: 'insensitive' } },
+        ];
+
     return this.db.user.findMany({
       where: {
-        email: { not: excludeEmail },
-        OR: [
-          { name: { contains: query, mode: 'insensitive' } },
-          { lastName: { contains: query, mode: 'insensitive' } },
-          { email: { contains: query, mode: 'insensitive' } },
-        ],
+        id: { not: excludeUserId },
+        OR: searches,
       },
       select: {
         id: true,
-        email: true,
+        username: true,
         name: true,
         lastName: true,
         avatarUrl: true,
       },
       take: limit,
-      orderBy: {
-        name: 'asc',
-      },
+      orderBy: [{ username: 'asc' }, { name: 'asc' }],
     });
   }
 
-  async getPublicProfileById(
+  async getPublicProfile(
     viewerUserId: string,
-    targetUserId: string,
+    targetIdentifier: string,
   ): Promise<PublicUserProfile> {
-    const user = await this.db.user.findUnique({
-      where: { id: targetUserId },
+    const user = await this.db.user.findFirst({
+      where: {
+        OR: [
+          { id: targetIdentifier },
+          { username: normalizeUsername(targetIdentifier) },
+        ],
+      },
       select: {
         id: true,
+        username: true,
         name: true,
         lastName: true,
         avatarUrl: true,
@@ -187,7 +218,7 @@ export class UsersService {
       where: {
         followerId_followingId: {
           followerId: viewerUserId,
-          followingId: targetUserId,
+          followingId: user.id,
         },
       },
       select: { followerId: true },
@@ -195,6 +226,7 @@ export class UsersService {
 
     return {
       id: user.id,
+      username: user.username,
       name: user.name,
       lastName: user.lastName,
       avatarUrl: user.avatarUrl,
@@ -238,7 +270,7 @@ export class UsersService {
       }
     }
 
-    return this.getPublicProfileById(viewerUserId, targetUserId);
+    return this.getPublicProfile(viewerUserId, targetUserId);
   }
 
   async unfollowUser(
@@ -264,6 +296,30 @@ export class UsersService {
       },
     });
 
-    return this.getPublicProfileById(viewerUserId, targetUserId);
+    return this.getPublicProfile(viewerUserId, targetUserId);
+  }
+
+  private validateUsername(value: string): string {
+    const username = normalizeUsername(value);
+    const error = getUsernameValidationError(username);
+    if (error === 'RESERVED') {
+      throw new BadRequestException('This username is reserved');
+    }
+    if (error === 'INVALID_FORMAT') {
+      throw new BadRequestException(
+        'Username must be 3-30 characters, use letters, numbers, underscores or hyphens, and start and end with a letter or number',
+      );
+    }
+    return username;
+  }
+
+  private isUniqueUsernameViolation(error: unknown): boolean {
+    return (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002' &&
+      (Array.isArray(error.meta?.target)
+        ? error.meta.target.includes('username')
+        : String(error.meta?.target).includes('username'))
+    );
   }
 }

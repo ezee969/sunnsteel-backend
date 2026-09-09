@@ -75,15 +75,15 @@ export class UsersController {
 
   @Get('search')
   searchUsers(@Request() req: RequestWithUser, @Query() query: SearchUsersDto) {
-    return this.usersService.searchUsers(query.q, req.user.email, query.limit);
+    return this.usersService.searchUsers(query.q, req.user.id, query.limit);
   }
 
-  @Get(':id')
+  @Get(':identifier')
   getPublicProfile(
     @Request() req: RequestWithUser,
-    @Param('id') userId: string,
+    @Param('identifier') identifier: string,
   ) {
-    return this.usersService.getPublicProfileById(req.user.id, userId);
+    return this.usersService.getPublicProfile(req.user.id, identifier);
   }
 
   @Post(':id/follow')

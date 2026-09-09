@@ -24,6 +24,7 @@ model User {
   personalRecords       PersonalRecord[]
   id                    String                       @id @default(uuid())
   email                 String                       @unique
+  username              String                       @unique @db.VarChar(30)
   password              String? // Made optional for Supabase migration
   name                  String
   lastName              String?

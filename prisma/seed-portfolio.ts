@@ -666,6 +666,7 @@ async function main() {
 		data: PEERS.map((peer, index) => ({
 			id: peerIds[index],
 			email: `${peer.handle}@${SEED_EMAIL_DOMAIN}`,
+			username: peer.handle,
 			name: peer.name,
 			lastName: peer.lastName,
 			avatarUrl: `https://api.dicebear.com/9.x/avataaars/svg?seed=${peer.handle}`,

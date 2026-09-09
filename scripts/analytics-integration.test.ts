@@ -50,7 +50,11 @@ test(
     };
     try {
       const user = await db.user.create({
-        data: { email: 'analytics@isolated.test', name: 'Analytics fixture' },
+        data: {
+          email: 'analytics@isolated.test',
+          username: 'analytics_fixture',
+          name: 'Analytics fixture',
+        },
       });
       const exercise = await db.exercise.create({
         data: {
@@ -408,7 +412,7 @@ test(
       SELECT 'record-' || i, ${user.id}, 'exercise-' || i, 'Fixture', 'fixture', 'fixture', 100, 5, 116.7, timestamp '2020-01-01' + i * interval '1 minute' FROM generate_series(1,2000) i`;
       await db.$executeRawUnsafe('ANALYZE "WorkoutSession"');
       await db.$executeRawUnsafe('ANALYZE "PersonalRecord"');
-      await db.$executeRaw`INSERT INTO "User" ("id", "email", "name", "updatedAt") SELECT 'plan-user-' || i, 'plan-' || i || '@isolated.test', 'Plan', now() FROM generate_series(1,2000) i`;
+      await db.$executeRaw`INSERT INTO "User" ("id", "email", "username", "name", "updatedAt") SELECT 'plan-user-' || i, 'plan-' || i || '@isolated.test', 'plan_' || i, 'Plan', now() FROM generate_series(1,2000) i`;
       await db.$executeRaw`INSERT INTO "WorkoutAnalyticsProjection" ("id", "userId", "timeZone", "state", "active") SELECT 'plan-projection-' || i, 'plan-user-' || i, 'UTC', 'READY', true FROM generate_series(1,2000) i`;
       await db.$executeRawUnsafe('ANALYZE "WorkoutAnalyticsProjection"');
       captured.length = 0;
