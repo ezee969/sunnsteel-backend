@@ -282,8 +282,8 @@ test(
         finishes.finishSession(user.id, started.id, { status: 'COMPLETED' }),
       ]);
       assert.equal(
-        finished[0].endedAt!.getTime(),
-        finished[1].endedAt!.getTime(),
+        finished[0].session.endedAt!.getTime(),
+        finished[1].session.endedAt!.getTime(),
       );
       assert.equal(
         await db.trainingEvent.count({

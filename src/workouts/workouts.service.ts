@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { WorkoutStatsQueryDto } from './dto/workout-stats.dto';
-import {
+import type {
+  FinishWorkoutResponse,
   ListSessionsParams,
   PreviousPerformanceResponse,
   UpsertSetLogResponse,
@@ -67,13 +68,16 @@ export class WorkoutsService {
     userId: string,
     id: string,
     dto: FinishWorkoutDto,
-  ): Promise<WorkoutSession> {
-    const session = await this.workoutSessionFinish.finishSession(
+  ): Promise<FinishWorkoutResponse> {
+    const result = await this.workoutSessionFinish.finishSession(
       userId,
       id,
       dto,
     );
-    return toWorkoutSessionResponse(session);
+    return {
+      session: toWorkoutSessionResponse(result.session),
+      progressionChanges: result.progressionChanges,
+    };
   }
 
   async upsertSetLog(

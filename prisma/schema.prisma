@@ -304,6 +304,7 @@ model TrainingEvent {
 enum TrainingEventType {
   SESSION_COMPLETED
   PERSONAL_RECORD
+  PROGRESSION_CHANGED
 }
 
 model PersonalRecord {
