@@ -85,3 +85,9 @@ DTOs/enums are sourced from the published `@sunsteel/contracts` package rather t
 The previous backend-local `docs/` folder was removed because it had drifted from the code (see the progression-scheme mismatch above). Do not recreate implementation assumptions from memory of it; treat source plus this file as the trustworthy backend reference.
 
 Before proposing or implementing product features, read the canonical cross-repository roadmap at [`../sunnsteel-frontend/docs/roadmaps/product-roadmap.md`](../sunnsteel-frontend/docs/roadmaps/product-roadmap.md). It records shipped capabilities, the active queue, dependencies, deferred work and retained product decisions. Verify backend code before changing a feature to `SHIPPED`; backend implementation guidance still comes from source plus this file.
+
+### Portfolio docs (monorepo parent folder)
+
+`../FEATURES.md` (product-facing) and `../TECH_STACK.md` (technical/portfolio-facing) live in the parent workspace folder (`sunsteel/`), outside all three repositories. They are derived documents: the code and the canonical roadmap above are the sources of truth.
+
+Update them in the same change when backend work moves a roadmap feature to `SHIPPED`, removes or hides an active user-facing capability, changes a dependency/CI/build script, or changes an architecture decision recorded in this file. Keep `FEATURES.md` free of technical details and `TECH_STACK.md` free of unverified claims; update its "Last verified" date only when actually verified against code. Do not sync them for refactors, fixes, or in-progress work with no user-visible or stack-visible effect.
