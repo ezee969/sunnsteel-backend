@@ -23,6 +23,7 @@ import type { UpdateProfileRequest } from '@sunsteel/contracts';
 import type { RequestWithUser } from '../common/types/request-with-user';
 import { SearchUsersDto } from './dto/search-users.dto';
 import { ReplaceTrainingLocationsDto } from './dto/replace-training-locations.dto';
+import { UpdateProfileDiscoveryDto } from './dto/update-profile-discovery.dto';
 import { UpdateProfilePrivacyDto } from './dto/update-profile-privacy.dto';
 import { TrainingLocationPreferencesService } from './training-location-preferences.service';
 
@@ -67,6 +68,14 @@ export class UsersController {
     @Body() data: UpdateProfilePrivacyDto,
   ) {
     return this.usersService.updateProfilePrivacy(req.user.email, data);
+  }
+
+  @Put('profile/discovery')
+  updateProfileDiscovery(
+    @Request() req: RequestWithUser,
+    @Body() data: UpdateProfileDiscoveryDto,
+  ) {
+    return this.usersService.updateProfileDiscovery(req.user.email, data);
   }
 
   @Get('training-locations')

@@ -39,6 +39,9 @@ const profileRecord = {
   routinesVisibility: 'PRIVATE' as const,
   achievementsVisibility: 'PRIVATE' as const,
   bodyMetricsVisibility: 'PRIVATE' as const,
+  discoverableByName: true,
+  discoverableByUsername: true,
+  discoverableByContacts: false,
   createdAt: new Date('2026-01-01T00:00:00.000Z'),
   updatedAt: new Date('2026-01-02T00:00:00.000Z'),
   _count: { followers: 2, following: 3 },
@@ -297,10 +300,77 @@ describe('UsersService usernames', () => {
 
     assert.equal(args.where.id.not, 'user-1');
     assert.deepEqual(args.where.OR, [
-      { username: { contains: 'atlas', mode: 'insensitive' } },
+      {
+        discoverableByUsername: true,
+        username: { contains: 'atlas', mode: 'insensitive' },
+      },
     ]);
     assert.equal('email' in args.select, false);
     assert.equal(result[0].username, 'atlas_lifts');
+  });
+
+  it('gates name and username search independently', async () => {
+    let findManyArgs: unknown;
+    const db = {
+      user: {
+        findMany: async (args: unknown) => {
+          findManyArgs = args;
+          return [];
+        },
+      },
+    } as unknown as DatabaseService;
+    const service = new UsersService(db);
+
+    await service.searchUsers('Atlas', 'user-1', 5);
+
+    assert.deepEqual((findManyArgs as { where: { OR: unknown[] } }).where.OR, [
+      {
+        discoverableByName: true,
+        OR: [
+          { name: { contains: 'Atlas', mode: 'insensitive' } },
+          { lastName: { contains: 'Atlas', mode: 'insensitive' } },
+        ],
+      },
+      {
+        discoverableByUsername: true,
+        username: { contains: 'atlas', mode: 'insensitive' },
+      },
+    ]);
+  });
+
+  it('stores all discovery controls and maps them into the private profile', async () => {
+    let updateArgs: unknown;
+    const db = {
+      user: {
+        update: async (args: unknown) => {
+          updateArgs = args;
+          return {
+            ...profileRecord,
+            discoverableByName: false,
+            discoverableByUsername: true,
+            discoverableByContacts: true,
+          };
+        },
+      },
+    } as unknown as DatabaseService;
+    const service = new UsersService(db);
+
+    const result = await service.updateProfileDiscovery('owner@example.test', {
+      discoverableByName: false,
+      discoverableByUsername: true,
+      discoverableByContacts: true,
+    });
+
+    assert.deepEqual((updateArgs as { data: Record<string, boolean> }).data, {
+      discoverableByName: false,
+      discoverableByUsername: true,
+      discoverableByContacts: true,
+    });
+    assert.deepEqual(result.discoverySettings, {
+      discoverableByName: false,
+      discoverableByUsername: true,
+      discoverableByContacts: true,
+    });
   });
 
   it('resolves a public profile by handle while follow state uses its id', async () => {

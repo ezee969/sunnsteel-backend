@@ -10,6 +10,7 @@ import {
 import { DatabaseService } from '../database/database.service';
 import {
   PREFERRED_TRAINING_STYLE_VALUES,
+  ProfileDiscoverySettings,
   PROFILE_BIO_MAX_LENGTH,
   PROFILE_FAVORITE_EXERCISES_MAX,
   PROFILE_LOCATION_MAX_LENGTH,
@@ -21,6 +22,7 @@ import {
   TRAINING_EXPERIENCE_LEVEL_VALUES,
   TRAINING_GOAL_VALUES,
   UpdateProfilePrivacyRequest,
+  UpdateProfileDiscoveryRequest,
   UpdateProfileRequest,
   UserProfile,
   UserSearchResponse,
@@ -70,6 +72,9 @@ const userProfileSelect = {
   routinesVisibility: true,
   achievementsVisibility: true,
   bodyMetricsVisibility: true,
+  discoverableByName: true,
+  discoverableByUsername: true,
+  discoverableByContacts: true,
   createdAt: true,
   updatedAt: true,
   _count: {
@@ -116,6 +121,9 @@ export class UsersService {
       routinesVisibility,
       achievementsVisibility,
       bodyMetricsVisibility,
+      discoverableByName,
+      discoverableByUsername,
+      discoverableByContacts,
       ...profile
     } = user;
     return {
@@ -130,6 +138,11 @@ export class UsersService {
         achievementsVisibility,
         bodyMetricsVisibility,
       }),
+      discoverySettings: {
+        discoverableByName,
+        discoverableByUsername,
+        discoverableByContacts,
+      },
       trainingIdentity: {
         goals: trainingGoals,
         experienceLevel: trainingExperienceLevel,
@@ -297,6 +310,19 @@ export class UsersService {
     return this.mapUserProfile(user);
   }
 
+  async updateProfileDiscovery(
+    email: string,
+    data: UpdateProfileDiscoveryRequest,
+  ): Promise<UserProfile> {
+    const discoverySettings: ProfileDiscoverySettings = data;
+    const user = await this.db.user.update({
+      where: { email },
+      data: discoverySettings,
+      select: userProfileSelect,
+    });
+    return this.mapUserProfile(user);
+  }
+
   async searchUsers(
     query: string,
     excludeUserId: string,
@@ -308,11 +334,31 @@ export class UsersService {
     const usernameQuery = normalizeUsername(trimmedQuery);
     if (trimmedQuery.startsWith('@') && !usernameQuery) return [];
     const searches: Prisma.UserWhereInput[] = trimmedQuery.startsWith('@')
-      ? [{ username: { contains: usernameQuery, mode: 'insensitive' } }]
+      ? [
+          {
+            discoverableByUsername: true,
+            username: { contains: usernameQuery, mode: 'insensitive' },
+          },
+        ]
       : [
-          { name: { contains: trimmedQuery, mode: 'insensitive' } },
-          { lastName: { contains: trimmedQuery, mode: 'insensitive' } },
-          { username: { contains: usernameQuery, mode: 'insensitive' } },
+          {
+            discoverableByName: true,
+            OR: [
+              { name: { contains: trimmedQuery, mode: 'insensitive' } },
+              { lastName: { contains: trimmedQuery, mode: 'insensitive' } },
+            ],
+          },
+          ...(usernameQuery
+            ? [
+                {
+                  discoverableByUsername: true,
+                  username: {
+                    contains: usernameQuery,
+                    mode: 'insensitive' as const,
+                  },
+                },
+              ]
+            : []),
         ];
 
     return this.db.user.findMany({

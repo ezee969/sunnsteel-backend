@@ -52,6 +52,9 @@ model User {
   routinesVisibility         ProfileVisibility            @default(PRIVATE)
   achievementsVisibility     ProfileVisibility            @default(PRIVATE)
   bodyMetricsVisibility      ProfileVisibility            @default(PRIVATE)
+  discoverableByName         Boolean                      @default(true)
+  discoverableByUsername     Boolean                      @default(true)
+  discoverableByContacts     Boolean                      @default(false)
   routines                   Routine[]
   workoutSessions            WorkoutSession[]
   trainingLocations          TrainingLocationPreference[]
