@@ -70,6 +70,8 @@ DTOs/enums are sourced from the published `@sunsteel/contracts` package rather t
 
 **Profile privacy is an authorization boundary, not a presentation filter.** `User` stores independent `PUBLIC`/`FOLLOWERS`/`PRIVATE` settings for biography, location, training identity, workout history, records, routines, achievements and body metrics, all defaulting to `PRIVATE`. `src/users/profile-privacy.ts` is the central owner/follower/public resolver. `getPublicProfile` must resolve access before issuing biography, location, training-identity, analytics, personal-record or body-metric reads, and `PublicUserProfile` must never include email. Denied biography/location/training-identity values are not selected or serialized. Owners always retain access; `FOLLOWERS` means the viewer follows the profile owner. Favorite exercises use an ordered relation to catalog `Exercise` rows rather than free text. Routine and achievement policies are persisted for future surfaces but expose no content yet.
 
+**Discovery controls filter search, not direct profile reads.** `discoverableByName` and `discoverableByUsername` default to `true`; `discoverableByContacts` defaults to `false` and is only persisted for a future contact-matching feature. `searchUsers` gates its name and username branches independently. Do not apply those flags inside `getPublicProfile`: direct routes still resolve and the profile privacy boundary decides which sections are readable.
+
 ### Runtime conventions
 
 - `src/main.ts` polyfills `globalThis.crypto` via Node's `webcrypto` — this must stay as the very first thing in the file (before other imports run).
