@@ -252,6 +252,56 @@ describe('UsersService privacy boundary', () => {
     assert.equal('email' in result, false);
   });
 
+  it('treats a signed-out visitor as neither owner nor follower', async () => {
+    let followReads = 0;
+    let biographyReads = 0;
+    let locationReads = 0;
+    const db = {
+      user: {
+        findFirst: async () => ({
+          ...storedProfile,
+          bioVisibility: 'PUBLIC',
+          locationVisibility: 'FOLLOWERS',
+        }),
+        findUnique: async (args: { select: Record<string, boolean> }) => {
+          if (args.select.bio) {
+            biographyReads += 1;
+            return { bio: 'Visible to everyone.' };
+          }
+          if (args.select.location) {
+            locationReads += 1;
+            return { location: 'Followers only' };
+          }
+          return null;
+        },
+      },
+      userFollow: {
+        findUnique: async () => {
+          followReads += 1;
+          return { followerId: 'anonymous' };
+        },
+      },
+      workoutAnalyticsProjection: { findFirst: async () => null },
+      personalRecord: { findMany: async () => [] },
+    } as unknown as DatabaseService;
+    const service = new UsersService(db);
+
+    const result = await service.getPublicProfile(null, 'owner_handle');
+
+    assert.equal(followReads, 0);
+    assert.equal(biographyReads, 1);
+    assert.equal(locationReads, 0);
+    assert.equal(result.bio, 'Visible to everyone.');
+    assert.equal('location' in result, false);
+    assert.equal(result.isFollowedByMe, false);
+    assert.equal(result.viewerAccess.biography, true);
+    assert.equal(result.viewerAccess.location, false);
+    assert.equal(result.viewerAccess.workoutHistory, false);
+    assert.equal(result.viewerAccess.records, false);
+    assert.equal(result.viewerAccess.bodyMetrics, false);
+    assert.equal('email' in result, false);
+  });
+
   it('returns only sections allowed to a follower and keeps dates serialized', async () => {
     const db = {
       user: {

@@ -379,7 +379,7 @@ export class UsersService {
   }
 
   async getPublicProfile(
-    viewerUserId: string,
+    viewerUserId: string | null,
     targetIdentifier: string,
   ): Promise<PublicUserProfile> {
     const user = await this.db.user.findFirst({
@@ -419,7 +419,7 @@ export class UsersService {
     }
 
     const isOwner = viewerUserId === user.id;
-    const followRelation = isOwner
+    const followRelation = !viewerUserId || isOwner
       ? null
       : await this.db.userFollow.findUnique({
           where: {
