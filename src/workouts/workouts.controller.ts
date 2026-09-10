@@ -21,6 +21,7 @@ import { UpsertSetLogDto } from './dto/upsert-set-log.dto';
 import { ListSessionsDto } from './dto/list-sessions.dto';
 import { WorkoutStatsQueryDto } from './dto/workout-stats.dto';
 import { WorkoutProgressQueryDto } from './dto/workout-progress.dto';
+import { ExerciseStrengthTrendQueryDto } from './dto/exercise-strength-trend.dto';
 import type { RequestWithUser } from '../common/types/request-with-user';
 
 @UseGuards(SupabaseJwtGuard)
@@ -87,6 +88,14 @@ export class WorkoutsController {
     @Query() query: WorkoutProgressQueryDto,
   ) {
     return this.workoutsService.getProgress(req.user.id, query);
+  }
+
+  @Get('progress/strength')
+  async strengthTrend(
+    @Req() req: RequestWithUser,
+    @Query() query: ExerciseStrengthTrendQueryDto,
+  ) {
+    return this.workoutsService.getStrengthTrend(req.user.id, query);
   }
 
   @Put('sessions/:id/set-logs')
