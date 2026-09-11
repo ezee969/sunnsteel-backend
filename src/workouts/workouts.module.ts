@@ -11,6 +11,7 @@ import {
 import { WorkoutSessionReadService } from './workout-session-read.service';
 import { WorkoutProgressService } from './workout-progress.service';
 import { WorkoutStrengthTrendService } from './workout-strength-trend.service';
+import { WorkoutExercisePerformanceService } from './workout-exercise-performance.service';
 
 @Module({
   imports: [DatabaseModule],
@@ -24,6 +25,7 @@ import { WorkoutStrengthTrendService } from './workout-strength-trend.service';
     WorkoutSessionReadService,
     WorkoutProgressService,
     WorkoutStrengthTrendService,
+    WorkoutExercisePerformanceService,
   ],
   exports: [WorkoutsService],
 })

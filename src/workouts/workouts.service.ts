@@ -24,6 +24,8 @@ import { WorkoutProgressQueryDto } from './dto/workout-progress.dto';
 import { ExerciseStrengthTrendQueryDto } from './dto/exercise-strength-trend.dto';
 import { toWorkoutSessionResponse } from './workout-session.mapper';
 import { WorkoutStrengthTrendService } from './workout-strength-trend.service';
+import { WorkoutExercisePerformanceService } from './workout-exercise-performance.service';
+import { ExercisePerformanceHistoryQueryDto } from './dto/exercise-performance-history.dto';
 
 @Injectable()
 export class WorkoutsService {
@@ -35,6 +37,7 @@ export class WorkoutsService {
     private readonly workoutSessionRecap: WorkoutSessionRecapService,
     private readonly workoutProgress: WorkoutProgressService,
     private readonly workoutStrengthTrend: WorkoutStrengthTrendService,
+    private readonly workoutExercisePerformance: WorkoutExercisePerformanceService,
   ) {}
 
   async getActiveSession(userId: string): Promise<WorkoutSession | null> {
@@ -52,6 +55,13 @@ export class WorkoutsService {
 
   getStrengthTrend(userId: string, query: ExerciseStrengthTrendQueryDto) {
     return this.workoutStrengthTrend.getStrengthTrend(userId, query);
+  }
+
+  getExercisePerformance(
+    userId: string,
+    query: ExercisePerformanceHistoryQueryDto,
+  ) {
+    return this.workoutExercisePerformance.getExercisePerformance(userId, query);
   }
 
   async getSessionById(userId: string, id: string): Promise<WorkoutSession> {
