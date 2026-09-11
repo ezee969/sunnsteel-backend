@@ -84,7 +84,10 @@ export class WorkoutExercisePerformanceService {
             AND logs."isCompleted"
             AND logs."reps" > 0
           GROUP BY logs."exerciseId", exercises."name"
-          ORDER BY MAX(sessions."endedAt") DESC, exercises."name" ASC`;
+          ORDER BY
+            BOOL_OR(records."exerciseId" IS NOT NULL) DESC,
+            MAX(records."achievedAt") DESC NULLS LAST,
+            exercises."name" ASC`;
         const exercises: ExercisePerformanceSummary[] = exerciseRows.map(
           (row) => ({
             exerciseId: row.exerciseId,

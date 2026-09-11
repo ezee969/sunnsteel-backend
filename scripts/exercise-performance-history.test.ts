@@ -136,6 +136,7 @@ test("exercise history maps session context, completed sets, notes and progressi
   assert.equal(result.items[0].progressionChanges[0].sets[0].newWeightKg, 102.5);
   assert.equal(rawCalls.length, 2);
   assert.match(rawCalls[0], /logs\."exerciseId"/);
+  assert.match(rawCalls[0], /records\."achievedAt"/);
   assert.match(rawCalls[1], /PROGRESSION_CHANGED/);
 });
 
