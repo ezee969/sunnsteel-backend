@@ -11,26 +11,27 @@ import {
   Put,
   Req,
   UseGuards,
-} from '@nestjs/common';
-import { SupabaseJwtGuard } from '../auth/guards/supabase-jwt.guard';
-import { WorkoutsService } from './workouts.service';
-import { StartWorkoutDto } from './dto/start-workout.dto';
-import { StartWorkoutResponseDto } from './dto/start-workout-response.dto';
-import { FinishWorkoutDto } from './dto/finish-workout.dto';
-import { UpsertSetLogDto } from './dto/upsert-set-log.dto';
-import { ListSessionsDto } from './dto/list-sessions.dto';
-import { WorkoutStatsQueryDto } from './dto/workout-stats.dto';
-import { WorkoutProgressQueryDto } from './dto/workout-progress.dto';
-import { ExerciseStrengthTrendQueryDto } from './dto/exercise-strength-trend.dto';
-import { ExercisePerformanceHistoryQueryDto } from './dto/exercise-performance-history.dto';
-import type { RequestWithUser } from '../common/types/request-with-user';
+} from "@nestjs/common";
+import { SupabaseJwtGuard } from "../auth/guards/supabase-jwt.guard";
+import { WorkoutsService } from "./workouts.service";
+import { StartWorkoutDto } from "./dto/start-workout.dto";
+import { StartWorkoutResponseDto } from "./dto/start-workout-response.dto";
+import { FinishWorkoutDto } from "./dto/finish-workout.dto";
+import { UpsertSetLogDto } from "./dto/upsert-set-log.dto";
+import { ListSessionsDto } from "./dto/list-sessions.dto";
+import { WorkoutStatsQueryDto } from "./dto/workout-stats.dto";
+import { WorkoutProgressQueryDto } from "./dto/workout-progress.dto";
+import { ExerciseStrengthTrendQueryDto } from "./dto/exercise-strength-trend.dto";
+import { ExercisePerformanceHistoryQueryDto } from "./dto/exercise-performance-history.dto";
+import { MuscleGroupHeatmapQueryDto } from "./dto/muscle-group-heatmap.dto";
+import type { RequestWithUser } from "../common/types/request-with-user";
 
 @UseGuards(SupabaseJwtGuard)
-@Controller('workouts')
+@Controller("workouts")
 export class WorkoutsController {
   constructor(private readonly workoutsService: WorkoutsService) {}
 
-  @Post('sessions/start')
+  @Post("sessions/start")
   async start(
     @Req() req: RequestWithUser,
     @Body() dto: StartWorkoutDto,
@@ -38,44 +39,44 @@ export class WorkoutsController {
     return this.workoutsService.startSession(req.user.id, dto);
   }
 
-  @Patch('sessions/:id/finish')
+  @Patch("sessions/:id/finish")
   async finish(
     @Req() req: RequestWithUser,
-    @Param('id') id: string,
+    @Param("id") id: string,
     @Body() dto: FinishWorkoutDto,
   ) {
     return this.workoutsService.finishSession(req.user.id, id, dto);
   }
 
-  @Get('sessions/active')
+  @Get("sessions/active")
   async getActive(@Req() req: RequestWithUser) {
     return this.workoutsService.getActiveSession(req.user.id);
   }
 
-  @Get('sessions')
+  @Get("sessions")
   async list(@Req() req: RequestWithUser, @Query() query: ListSessionsDto) {
     return this.workoutsService.listSessions(req.user.id, query);
   }
 
-  @Get('sessions/:id')
-  async getById(@Req() req: RequestWithUser, @Param('id') id: string) {
+  @Get("sessions/:id")
+  async getById(@Req() req: RequestWithUser, @Param("id") id: string) {
     return this.workoutsService.getSessionById(req.user.id, id);
   }
 
-  @Get('sessions/:id/previous-performance')
+  @Get("sessions/:id/previous-performance")
   async getPreviousPerformance(
     @Req() req: RequestWithUser,
-    @Param('id') id: string,
+    @Param("id") id: string,
   ) {
     return this.workoutsService.getPreviousPerformance(req.user.id, id);
   }
 
-  @Get('sessions/:id/recap')
-  async getRecap(@Req() req: RequestWithUser, @Param('id') id: string) {
+  @Get("sessions/:id/recap")
+  async getRecap(@Req() req: RequestWithUser, @Param("id") id: string) {
     return this.workoutsService.getSessionRecap(req.user.id, id);
   }
 
-  @Get('stats')
+  @Get("stats")
   async stats(
     @Req() req: RequestWithUser,
     @Query() query: WorkoutStatsQueryDto,
@@ -83,7 +84,7 @@ export class WorkoutsController {
     return this.workoutsService.getStats(req.user.id, query);
   }
 
-  @Get('progress')
+  @Get("progress")
   async progress(
     @Req() req: RequestWithUser,
     @Query() query: WorkoutProgressQueryDto,
@@ -91,7 +92,7 @@ export class WorkoutsController {
     return this.workoutsService.getProgress(req.user.id, query);
   }
 
-  @Get('progress/strength')
+  @Get("progress/strength")
   async strengthTrend(
     @Req() req: RequestWithUser,
     @Query() query: ExerciseStrengthTrendQueryDto,
@@ -99,7 +100,7 @@ export class WorkoutsController {
     return this.workoutsService.getStrengthTrend(req.user.id, query);
   }
 
-  @Get('progress/performance')
+  @Get("progress/performance")
   async exercisePerformance(
     @Req() req: RequestWithUser,
     @Query() query: ExercisePerformanceHistoryQueryDto,
@@ -107,21 +108,29 @@ export class WorkoutsController {
     return this.workoutsService.getExercisePerformance(req.user.id, query);
   }
 
-  @Put('sessions/:id/set-logs')
+  @Get("progress/muscles")
+  async muscleHeatmap(
+    @Req() req: RequestWithUser,
+    @Query() query: MuscleGroupHeatmapQueryDto,
+  ) {
+    return this.workoutsService.getMuscleHeatmap(req.user.id, query);
+  }
+
+  @Put("sessions/:id/set-logs")
   async upsertSetLog(
     @Req() req: RequestWithUser,
-    @Param('id') sessionId: string,
+    @Param("id") sessionId: string,
     @Body() dto: UpsertSetLogDto,
   ) {
     return this.workoutsService.upsertSetLog(req.user.id, sessionId, dto);
   }
 
-  @Delete('sessions/:id/set-logs/:routineExerciseId/:setNumber')
+  @Delete("sessions/:id/set-logs/:routineExerciseId/:setNumber")
   async deleteSetLog(
     @Req() req: RequestWithUser,
-    @Param('id') sessionId: string,
-    @Param('routineExerciseId') routineExerciseId: string,
-    @Param('setNumber', ParseIntPipe) setNumber: number,
+    @Param("id") sessionId: string,
+    @Param("routineExerciseId") routineExerciseId: string,
+    @Param("setNumber", ParseIntPipe) setNumber: number,
   ) {
     return this.workoutsService.deleteSetLog(
       req.user.id,

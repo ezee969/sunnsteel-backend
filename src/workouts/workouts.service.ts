@@ -1,5 +1,5 @@
-import { Injectable } from '@nestjs/common';
-import { WorkoutStatsQueryDto } from './dto/workout-stats.dto';
+import { Injectable } from "@nestjs/common";
+import { WorkoutStatsQueryDto } from "./dto/workout-stats.dto";
 import type {
   FinishWorkoutResponse,
   ListSessionsParams,
@@ -7,25 +7,27 @@ import type {
   UpsertSetLogResponse,
   WorkoutSession,
   WorkoutSessionListResponse,
-} from '@sunsteel/contracts';
-import { StartWorkoutDto } from './dto/start-workout.dto';
-import { StartWorkoutResponseDto } from './dto/start-workout-response.dto';
-import { FinishWorkoutDto } from './dto/finish-workout.dto';
-import { UpsertSetLogDto } from './dto/upsert-set-log.dto';
+} from "@sunsteel/contracts";
+import { StartWorkoutDto } from "./dto/start-workout.dto";
+import { StartWorkoutResponseDto } from "./dto/start-workout-response.dto";
+import { FinishWorkoutDto } from "./dto/finish-workout.dto";
+import { UpsertSetLogDto } from "./dto/upsert-set-log.dto";
 import {
   WorkoutSessionFinishService,
   WorkoutSessionLogService,
   WorkoutSessionRecapService,
   WorkoutSessionStartService,
-} from './services';
-import { WorkoutSessionReadService } from './workout-session-read.service';
-import { WorkoutProgressService } from './workout-progress.service';
-import { WorkoutProgressQueryDto } from './dto/workout-progress.dto';
-import { ExerciseStrengthTrendQueryDto } from './dto/exercise-strength-trend.dto';
-import { toWorkoutSessionResponse } from './workout-session.mapper';
-import { WorkoutStrengthTrendService } from './workout-strength-trend.service';
-import { WorkoutExercisePerformanceService } from './workout-exercise-performance.service';
-import { ExercisePerformanceHistoryQueryDto } from './dto/exercise-performance-history.dto';
+} from "./services";
+import { WorkoutSessionReadService } from "./workout-session-read.service";
+import { WorkoutProgressService } from "./workout-progress.service";
+import { WorkoutProgressQueryDto } from "./dto/workout-progress.dto";
+import { ExerciseStrengthTrendQueryDto } from "./dto/exercise-strength-trend.dto";
+import { toWorkoutSessionResponse } from "./workout-session.mapper";
+import { WorkoutStrengthTrendService } from "./workout-strength-trend.service";
+import { WorkoutExercisePerformanceService } from "./workout-exercise-performance.service";
+import { ExercisePerformanceHistoryQueryDto } from "./dto/exercise-performance-history.dto";
+import { MuscleGroupHeatmapQueryDto } from "./dto/muscle-group-heatmap.dto";
+import { WorkoutMuscleHeatmapService } from "./workout-muscle-heatmap.service";
 
 @Injectable()
 export class WorkoutsService {
@@ -38,6 +40,7 @@ export class WorkoutsService {
     private readonly workoutProgress: WorkoutProgressService,
     private readonly workoutStrengthTrend: WorkoutStrengthTrendService,
     private readonly workoutExercisePerformance: WorkoutExercisePerformanceService,
+    private readonly workoutMuscleHeatmap: WorkoutMuscleHeatmapService,
   ) {}
 
   async getActiveSession(userId: string): Promise<WorkoutSession | null> {
@@ -61,7 +64,14 @@ export class WorkoutsService {
     userId: string,
     query: ExercisePerformanceHistoryQueryDto,
   ) {
-    return this.workoutExercisePerformance.getExercisePerformance(userId, query);
+    return this.workoutExercisePerformance.getExercisePerformance(
+      userId,
+      query,
+    );
+  }
+
+  getMuscleHeatmap(userId: string, query: MuscleGroupHeatmapQueryDto) {
+    return this.workoutMuscleHeatmap.getMuscleHeatmap(userId, query);
   }
 
   async getSessionById(userId: string, id: string): Promise<WorkoutSession> {
@@ -97,7 +107,7 @@ export class WorkoutsService {
       session: toWorkoutSessionResponse(result.session),
       progressionChanges: result.progressionChanges,
       recap:
-        dto.status === 'COMPLETED'
+        dto.status === "COMPLETED"
           ? await this.workoutSessionRecap.getSessionRecap(userId, id)
           : null,
     };
