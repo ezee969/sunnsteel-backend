@@ -28,6 +28,8 @@ import { WorkoutExercisePerformanceService } from "./workout-exercise-performanc
 import { ExercisePerformanceHistoryQueryDto } from "./dto/exercise-performance-history.dto";
 import { MuscleGroupHeatmapQueryDto } from "./dto/muscle-group-heatmap.dto";
 import { WorkoutMuscleHeatmapService } from "./workout-muscle-heatmap.service";
+import { VolumeTrendQueryDto } from "./dto/volume-trend.dto";
+import { WorkoutVolumeTrendService } from "./workout-volume-trend.service";
 
 @Injectable()
 export class WorkoutsService {
@@ -41,6 +43,7 @@ export class WorkoutsService {
     private readonly workoutStrengthTrend: WorkoutStrengthTrendService,
     private readonly workoutExercisePerformance: WorkoutExercisePerformanceService,
     private readonly workoutMuscleHeatmap: WorkoutMuscleHeatmapService,
+    private readonly workoutVolumeTrend: WorkoutVolumeTrendService,
   ) {}
 
   async getActiveSession(userId: string): Promise<WorkoutSession | null> {
@@ -72,6 +75,10 @@ export class WorkoutsService {
 
   getMuscleHeatmap(userId: string, query: MuscleGroupHeatmapQueryDto) {
     return this.workoutMuscleHeatmap.getMuscleHeatmap(userId, query);
+  }
+
+  getVolumeTrend(userId: string, query: VolumeTrendQueryDto) {
+    return this.workoutVolumeTrend.getVolumeTrend(userId, query);
   }
 
   async getSessionById(userId: string, id: string): Promise<WorkoutSession> {
