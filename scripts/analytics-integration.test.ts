@@ -10,6 +10,7 @@ import { WorkoutSessionFinishService } from '../src/workouts/services/workout-se
 import { WorkoutSessionLogService } from '../src/workouts/services/workout-session-log.service';
 import { WorkoutSessionReadService } from '../src/workouts/workout-session-read.service';
 import { WorkoutProgressService } from '../src/workouts/workout-progress.service';
+import { WorkoutVolumeTrendService } from '../src/workouts/workout-volume-trend.service';
 import { LegacyWorkoutProgressService } from './fixtures/legacy-workout-progress';
 import { RoutinesService } from '../src/routines/routines.service';
 import { toWorkoutSessionResponse } from '../src/workouts/workout-session.mapper';
@@ -41,6 +42,7 @@ test(
     const logs = new WorkoutSessionLogService(db);
     const routines = new RoutinesService(db);
     const progress = new WorkoutProgressService(db);
+    const volumeTrends = new WorkoutVolumeTrendService(db);
     const legacy = new LegacyWorkoutProgressService(db);
     const drain = async () => {
       for (let i = 0; i < 100; i++) {
@@ -213,6 +215,21 @@ test(
           timeZone: 'Europe/Berlin',
         }),
         before,
+      );
+      const volumeTrend = await volumeTrends.getVolumeTrend(user.id, {
+        timeZone: 'Europe/Berlin',
+        weeks: 4,
+      });
+      assert.equal(volumeTrend.overall.length, 4);
+      assert.ok(volumeTrend.overall.some(point => point.volumeKg > 0));
+      assert.equal(volumeTrend.routines[0]?.name, 'Original prescription');
+      assert.ok(volumeTrend.routines[0]?.totalVolumeKg > 0);
+      assert.equal(volumeTrend.exercises[0]?.name, 'Analytics Squat');
+      assert.ok(volumeTrend.exercises[0]?.totalVolumeKg > 0);
+      assert.ok(
+        volumeTrend.muscles.some(
+          muscle => muscle.id === 'QUADRICEPS' && muscle.totalVolumeKg > 0,
+        ),
       );
       const first = await db.workoutAnalyticsProjection.findFirstOrThrow({
         where: { userId: user.id, active: true },

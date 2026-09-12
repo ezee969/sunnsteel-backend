@@ -19,7 +19,7 @@ NestJS + Prisma backend for Sunnsteel (workout/routine tracking). Runs on Window
 - Seed DB / load exercises: `npm run db:seed` (alias `npm run db:add-exercises`) — both run `prisma/add-exercises.ts`, the idempotent exercise-catalog loader. This is also the `prisma migrate reset`/`migrate dev` seed hook.
 - Get a Supabase token for manual API testing: `npm run token:supabase`
 
-`npm test` runs the Node test runner via the existing ts-node dependency. It currently covers 66 tests across fifteen script files, including dashboard statistics, projected progress, strength trends, exercise-performance history, muscle-group heatmaps, session recap/recovery, live records, progression, profile privacy/discovery and training locations; it is included in `npm run verify`.
+`npm test` runs the Node test runner via the existing ts-node dependency. It currently covers 69 tests across sixteen script files, including dashboard statistics, projected progress, strength trends, exercise-performance history, muscle-group heatmaps, volume trends, session recap/recovery, live records, progression, profile privacy/discovery and training locations; it is included in `npm run verify`.
 
 ## Architecture
 
@@ -44,6 +44,7 @@ Feature modules under `src/` (auth, users, token, exercises, routines, workouts,
 - `workout-strength-trend.service.ts` — bounded best-set/e1RM record-frontier series from indexed `PERSONAL_RECORD` events
 - `workout-exercise-performance.service.ts` — paginated terminal-session history with completed sets, snapshot context, notes and progression events
 - `workout-muscle-heatmap.service.ts` — bounded 4–12-week muscle distribution from the active timezone-matched analytics projection
+- `workout-volume-trend.service.ts` — bounded weekly volume and completed-set comparisons across the total, muscles, historical routines and exercises
 
 Active workout sessions are recoverable user data. Do not restore a timer that
 silently marks stale sessions `ABORTED`: LIVE-10 deliberately leaves them active
