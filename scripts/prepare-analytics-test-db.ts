@@ -95,6 +95,13 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260910120000_profile_discovery/migration.sql',
 					'utf8',
+				) +
+				'\n' +
+				// EXER-09: the integration test creates Exercise rows, and the
+				// generated client selects every Exercise column.
+				readFileSync(
+					'prisma/migrations/20260913200000_exercise_metadata/migration.sql',
+					'utf8',
 				),
     );
     prisma(
