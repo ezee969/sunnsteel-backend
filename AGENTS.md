@@ -94,6 +94,8 @@ The previous backend-local `docs/` folder was removed because it had drifted fro
 
 Before proposing or implementing product features, read the canonical cross-repository roadmap at [`../sunnsteel-frontend/docs/roadmaps/product-roadmap.md`](../sunnsteel-frontend/docs/roadmaps/product-roadmap.md). It records shipped capabilities, the active queue, dependencies, deferred work and retained product decisions. Verify backend code before changing a feature to `SHIPPED`; backend implementation guidance still comes from source plus this file.
 
+Several agents work in parallel, each in its own git worktree. Before starting a roadmap item, read the roadmap's **In-flight work** table on the frontend's `main`: never start a claimed item or one whose modules overlap a claim, and claim yours there (status plus a row with owner and branch) before creating the worktree. A status changed only inside a feature branch is invisible to the other agents.
+
 ### Portfolio docs (monorepo parent folder)
 
 `../FEATURES.md` (product-facing) and `../TECH_STACK.md` (technical/portfolio-facing) live in the parent workspace folder (`sunsteel/`), outside all three repositories. They are derived documents: the code and the canonical roadmap above are the sources of truth.
