@@ -34,6 +34,7 @@ import { WorkoutSessionComparisonService } from "./workout-session-comparison.se
 import { SessionComparisonQueryDto } from "./dto/session-comparison.dto";
 import { WorkoutProgressTimelineService } from "./workout-progress-timeline.service";
 import { ProgressTimelineQueryDto } from "./dto/progress-timeline.dto";
+import { WorkoutPersonalGoalsService } from "./workout-personal-goals.service";
 
 @Injectable()
 export class WorkoutsService {
@@ -50,6 +51,7 @@ export class WorkoutsService {
     private readonly workoutVolumeTrend: WorkoutVolumeTrendService,
     private readonly workoutSessionComparison: WorkoutSessionComparisonService,
     private readonly workoutProgressTimeline: WorkoutProgressTimelineService,
+    private readonly workoutPersonalGoals: WorkoutPersonalGoalsService,
   ) {}
 
   async getActiveSession(userId: string): Promise<WorkoutSession | null> {
@@ -93,6 +95,10 @@ export class WorkoutsService {
 
   getProgressTimeline(userId: string, query: ProgressTimelineQueryDto) {
     return this.workoutProgressTimeline.getProgressTimeline(userId, query);
+  }
+
+  getPersonalGoals(userId: string, query: WorkoutProgressQueryDto) {
+    return this.workoutPersonalGoals.getPersonalGoals(userId, query);
   }
 
   async getSessionById(userId: string, id: string): Promise<WorkoutSession> {

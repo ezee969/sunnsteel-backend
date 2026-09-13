@@ -62,6 +62,7 @@ model User {
   followers                  UserFollow[]                 @relation("UserFollowers")
   favoriteExercises          UserFavoriteExercise[]
   sessionShares              SessionShare[]
+  measurableGoals            MeasurableGoal[]
 }
 
 model TrainingLocationPreference {
@@ -232,9 +233,39 @@ model Exercise {
   routineExercises  RoutineExercise[]
   setLogs           SetLog[]
   favoritedBy       UserFavoriteExercise[]
+  measurableGoals   MeasurableGoal[]
 
   @@index([movementPattern])
   @@index([substitutionGroup])
+}
+
+enum MeasurableGoalType {
+  WEEKLY_SESSIONS
+  WEEKLY_VOLUME
+  STREAK_DAYS
+  EXERCISE_ESTIMATED_1RM
+  BODY_WEIGHT
+}
+
+enum MeasurableGoalDirection {
+  AT_LEAST
+  AT_MOST
+}
+
+model MeasurableGoal {
+  id          String                  @id @default(uuid())
+  userId      String
+  user        User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        MeasurableGoalType
+  targetValue Float
+  direction   MeasurableGoalDirection @default(AT_LEAST)
+  exerciseId  String?
+  exercise    Exercise?               @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([exerciseId])
 }
 
 model UserFavoriteExercise {

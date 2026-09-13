@@ -143,6 +143,14 @@ export class WorkoutsController {
     return this.workoutsService.getProgressTimeline(req.user.id, query);
   }
 
+  @Get("progress/goals")
+  async personalGoals(
+    @Req() req: RequestWithUser,
+    @Query() query: WorkoutProgressQueryDto,
+  ) {
+    return this.workoutsService.getPersonalGoals(req.user.id, query);
+  }
+
   @Put("sessions/:id/set-logs")
   async upsertSetLog(
     @Req() req: RequestWithUser,

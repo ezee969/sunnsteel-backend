@@ -21,9 +21,11 @@ import {
   SessionSharesController,
   SharedSessionsController,
 } from "./session-shares.controller";
+import { GoalsModule } from "../goals/goals.module";
+import { WorkoutPersonalGoalsService } from "./workout-personal-goals.service";
 
 @Module({
-  imports: [DatabaseModule],
+  imports: [DatabaseModule, GoalsModule],
   controllers: [
     WorkoutsController,
     SessionSharesController,
@@ -44,6 +46,7 @@ import {
     WorkoutSessionComparisonService,
     WorkoutProgressTimelineService,
     WorkoutSessionShareService,
+    WorkoutPersonalGoalsService,
   ],
   exports: [WorkoutsService],
 })

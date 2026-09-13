@@ -29,6 +29,8 @@ import { TrainingLocationPreferencesService } from './training-location-preferen
 import { UserRelationshipsService } from './user-relationships.service';
 import { RelationshipListQueryDto } from './dto/relationship-list-query.dto';
 import { FollowSuggestionsQueryDto } from './dto/follow-suggestions-query.dto';
+import { MeasurableGoalsService } from '../goals/measurable-goals.service';
+import { ReplaceMeasurableGoalsDto } from './dto/replace-measurable-goals.dto';
 
 @UseGuards(SupabaseJwtGuard)
 @Controller('users')
@@ -38,6 +40,7 @@ export class UsersController {
     private readonly analytics: AnalyticsService,
     private readonly trainingLocations: TrainingLocationPreferencesService,
     private readonly relationships: UserRelationshipsService,
+    private readonly measurableGoals: MeasurableGoalsService,
   ) {}
 
   @Get('time-zone')
@@ -93,6 +96,19 @@ export class UsersController {
     @Body() dto: ReplaceTrainingLocationsDto,
   ) {
     return this.trainingLocations.replace(req.user.id, dto.locations);
+  }
+
+  @Get('preferences/goals')
+  getMeasurableGoals(@Request() req: RequestWithUser) {
+    return this.measurableGoals.list(req.user.id);
+  }
+
+  @Put('preferences/goals')
+  replaceMeasurableGoals(
+    @Request() req: RequestWithUser,
+    @Body() dto: ReplaceMeasurableGoalsDto,
+  ) {
+    return this.measurableGoals.replace(req.user.id, dto.goals);
   }
 
   @Get('search')

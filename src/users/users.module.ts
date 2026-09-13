@@ -7,9 +7,10 @@ import { TokenModule } from '../token/token.module';
 import { TrainingLocationPreferencesService } from './training-location-preferences.service';
 import { PublicProfilesController } from './public-profiles.controller';
 import { UserRelationshipsService } from './user-relationships.service';
+import { GoalsModule } from '../goals/goals.module';
 
 @Module({
-  imports: [TokenModule, AnalyticsModule],
+  imports: [TokenModule, AnalyticsModule, GoalsModule],
   providers: [
     UsersService,
     TrainingLocationPreferencesService,
