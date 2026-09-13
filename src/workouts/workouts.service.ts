@@ -32,6 +32,8 @@ import { VolumeTrendQueryDto } from "./dto/volume-trend.dto";
 import { WorkoutVolumeTrendService } from "./workout-volume-trend.service";
 import { WorkoutSessionComparisonService } from "./workout-session-comparison.service";
 import { SessionComparisonQueryDto } from "./dto/session-comparison.dto";
+import { WorkoutProgressTimelineService } from "./workout-progress-timeline.service";
+import { ProgressTimelineQueryDto } from "./dto/progress-timeline.dto";
 
 @Injectable()
 export class WorkoutsService {
@@ -47,6 +49,7 @@ export class WorkoutsService {
     private readonly workoutMuscleHeatmap: WorkoutMuscleHeatmapService,
     private readonly workoutVolumeTrend: WorkoutVolumeTrendService,
     private readonly workoutSessionComparison: WorkoutSessionComparisonService,
+    private readonly workoutProgressTimeline: WorkoutProgressTimelineService,
   ) {}
 
   async getActiveSession(userId: string): Promise<WorkoutSession | null> {
@@ -86,6 +89,10 @@ export class WorkoutsService {
 
   getSessionComparison(userId: string, query: SessionComparisonQueryDto) {
     return this.workoutSessionComparison.getSessionComparison(userId, query);
+  }
+
+  getProgressTimeline(userId: string, query: ProgressTimelineQueryDto) {
+    return this.workoutProgressTimeline.getProgressTimeline(userId, query);
   }
 
   async getSessionById(userId: string, id: string): Promise<WorkoutSession> {

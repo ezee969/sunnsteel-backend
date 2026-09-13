@@ -15,6 +15,7 @@ import { WorkoutExercisePerformanceService } from "./workout-exercise-performanc
 import { WorkoutMuscleHeatmapService } from "./workout-muscle-heatmap.service";
 import { WorkoutVolumeTrendService } from "./workout-volume-trend.service";
 import { WorkoutSessionComparisonService } from "./workout-session-comparison.service";
+import { WorkoutProgressTimelineService } from "./workout-progress-timeline.service";
 
 @Module({
   imports: [DatabaseModule],
@@ -32,6 +33,7 @@ import { WorkoutSessionComparisonService } from "./workout-session-comparison.se
     WorkoutMuscleHeatmapService,
     WorkoutVolumeTrendService,
     WorkoutSessionComparisonService,
+    WorkoutProgressTimelineService,
   ],
   exports: [WorkoutsService],
 })
