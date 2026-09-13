@@ -26,6 +26,9 @@ import { ReplaceTrainingLocationsDto } from './dto/replace-training-locations.dt
 import { UpdateProfileDiscoveryDto } from './dto/update-profile-discovery.dto';
 import { UpdateProfilePrivacyDto } from './dto/update-profile-privacy.dto';
 import { TrainingLocationPreferencesService } from './training-location-preferences.service';
+import { UserRelationshipsService } from './user-relationships.service';
+import { RelationshipListQueryDto } from './dto/relationship-list-query.dto';
+import { FollowSuggestionsQueryDto } from './dto/follow-suggestions-query.dto';
 
 @UseGuards(SupabaseJwtGuard)
 @Controller('users')
@@ -34,6 +37,7 @@ export class UsersController {
     private readonly usersService: UsersService,
     private readonly analytics: AnalyticsService,
     private readonly trainingLocations: TrainingLocationPreferencesService,
+    private readonly relationships: UserRelationshipsService,
   ) {}
 
   @Get('time-zone')
@@ -94,6 +98,42 @@ export class UsersController {
   @Get('search')
   searchUsers(@Request() req: RequestWithUser, @Query() query: SearchUsersDto) {
     return this.usersService.searchUsers(query.q, req.user.id, query.limit);
+  }
+
+  // `me` is a reserved username, so this cannot shadow a member's profile.
+  @Get('me/suggestions')
+  getFollowSuggestions(
+    @Request() req: RequestWithUser,
+    @Query() query: FollowSuggestionsQueryDto,
+  ) {
+    return this.relationships.suggestions(req.user.id, query.limit);
+  }
+
+  @Get(':identifier/followers')
+  getFollowers(
+    @Request() req: RequestWithUser,
+    @Param('identifier') identifier: string,
+    @Query() query: RelationshipListQueryDto,
+  ) {
+    return this.relationships.list(req.user.id, identifier, 'followers', query);
+  }
+
+  @Get(':identifier/following')
+  getFollowing(
+    @Request() req: RequestWithUser,
+    @Param('identifier') identifier: string,
+    @Query() query: RelationshipListQueryDto,
+  ) {
+    return this.relationships.list(req.user.id, identifier, 'following', query);
+  }
+
+  @Get(':identifier/mutuals')
+  getMutuals(
+    @Request() req: RequestWithUser,
+    @Param('identifier') identifier: string,
+    @Query() query: RelationshipListQueryDto,
+  ) {
+    return this.relationships.list(req.user.id, identifier, 'mutuals', query);
   }
 
   @Get(':identifier')
