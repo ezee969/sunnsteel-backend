@@ -182,18 +182,59 @@ enum MuscleGroup {
   ADDUCTOR
 }
 
+// EXER-09: how an exercise moves. Mirrors MOVEMENT_PATTERNS in @sunsteel/contracts.
+enum MovementPattern {
+  HORIZONTAL_PUSH
+  VERTICAL_PUSH
+  HORIZONTAL_PULL
+  VERTICAL_PULL
+  SQUAT
+  HINGE
+  LUNGE
+  CHEST_FLY
+  SHOULDER_ABDUCTION
+  SHOULDER_FLEXION
+  SHOULDER_HORIZONTAL_ABDUCTION
+  SHOULDER_EXTENSION
+  SCAPULAR_ELEVATION
+  ELBOW_FLEXION
+  ELBOW_EXTENSION
+  KNEE_EXTENSION
+  KNEE_FLEXION
+  HIP_EXTENSION
+  PLANTAR_FLEXION
+  CORE_FLEXION
+  CORE_ROTATION
+  CORE_STABILITY
+}
+
+enum ExerciseMechanic {
+  COMPOUND
+  ISOLATION
+}
+
 // Catalog of exercises selectable when building routines
 model Exercise {
-  id               String                 @id @default(uuid())
-  name             String                 @unique
-  primaryMuscles   MuscleGroup[] // Primary muscle movers (counts as 1.0 for volume)
-  secondaryMuscles MuscleGroup[] // Secondary muscle movers (counts as 0.5 for volume)
-  equipment        String // e.g., "barbell", "dumbbell", "bodyweight"
-  createdAt        DateTime               @default(now())
-  updatedAt        DateTime               @updatedAt
-  routineExercises RoutineExercise[]
-  setLogs          SetLog[]
-  favoritedBy      UserFavoriteExercise[]
+  id                String                 @id @default(uuid())
+  name              String                 @unique
+  primaryMuscles    MuscleGroup[] // Primary muscle movers (counts as 1.0 for volume)
+  secondaryMuscles  MuscleGroup[] // Secondary muscle movers (counts as 0.5 for volume)
+  equipment         String // e.g., "barbell", "dumbbell", "bodyweight"
+  // EXER-09 metadata; the catalog values live in prisma/exercise-catalog.ts.
+  movementPattern   MovementPattern?
+  mechanic          ExerciseMechanic?
+  equipmentRequired String[]               @default([]) // EXERCISE_EQUIPMENT values
+  substitutionGroup String?
+  instructions      String[]               @default([]) // EXER-03 content
+  mediaUrl          String? // EXER-04 licensed media
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  routineExercises  RoutineExercise[]
+  setLogs           SetLog[]
+  favoritedBy       UserFavoriteExercise[]
+
+  @@index([movementPattern])
+  @@index([substitutionGroup])
 }
 
 model UserFavoriteExercise {
