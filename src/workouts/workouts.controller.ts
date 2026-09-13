@@ -25,6 +25,7 @@ import { ExerciseStrengthTrendQueryDto } from "./dto/exercise-strength-trend.dto
 import { ExercisePerformanceHistoryQueryDto } from "./dto/exercise-performance-history.dto";
 import { MuscleGroupHeatmapQueryDto } from "./dto/muscle-group-heatmap.dto";
 import { VolumeTrendQueryDto } from "./dto/volume-trend.dto";
+import { SessionComparisonQueryDto } from "./dto/session-comparison.dto";
 import type { RequestWithUser } from "../common/types/request-with-user";
 
 @UseGuards(SupabaseJwtGuard)
@@ -123,6 +124,14 @@ export class WorkoutsController {
     @Query() query: VolumeTrendQueryDto,
   ) {
     return this.workoutsService.getVolumeTrend(req.user.id, query);
+  }
+
+  @Get("progress/session-comparison")
+  async sessionComparison(
+    @Req() req: RequestWithUser,
+    @Query() query: SessionComparisonQueryDto,
+  ) {
+    return this.workoutsService.getSessionComparison(req.user.id, query);
   }
 
   @Put("sessions/:id/set-logs")
