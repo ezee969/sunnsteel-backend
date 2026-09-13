@@ -16,10 +16,19 @@ import { WorkoutMuscleHeatmapService } from "./workout-muscle-heatmap.service";
 import { WorkoutVolumeTrendService } from "./workout-volume-trend.service";
 import { WorkoutSessionComparisonService } from "./workout-session-comparison.service";
 import { WorkoutProgressTimelineService } from "./workout-progress-timeline.service";
+import { WorkoutSessionShareService } from "./workout-session-share.service";
+import {
+  SessionSharesController,
+  SharedSessionsController,
+} from "./session-shares.controller";
 
 @Module({
   imports: [DatabaseModule],
-  controllers: [WorkoutsController],
+  controllers: [
+    WorkoutsController,
+    SessionSharesController,
+    SharedSessionsController,
+  ],
   providers: [
     WorkoutsService,
     WorkoutSessionStartService,
@@ -34,6 +43,7 @@ import { WorkoutProgressTimelineService } from "./workout-progress-timeline.serv
     WorkoutVolumeTrendService,
     WorkoutSessionComparisonService,
     WorkoutProgressTimelineService,
+    WorkoutSessionShareService,
   ],
   exports: [WorkoutsService],
 })
