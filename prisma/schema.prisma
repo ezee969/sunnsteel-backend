@@ -61,6 +61,7 @@ model User {
   following                  UserFollow[]                 @relation("UserFollowing")
   followers                  UserFollow[]                 @relation("UserFollowers")
   favoriteExercises          UserFavoriteExercise[]
+  starredExercises           StarredExercise[]
   sessionShares              SessionShare[]
   measurableGoals            MeasurableGoal[]
 }
@@ -233,6 +234,7 @@ model Exercise {
   routineExercises  RoutineExercise[]
   setLogs           SetLog[]
   favoritedBy       UserFavoriteExercise[]
+  starredBy         StarredExercise[]
   measurableGoals   MeasurableGoal[]
 
   @@index([movementPattern])
@@ -278,6 +280,20 @@ model UserFavoriteExercise {
 
   @@id([userId, exerciseId])
   @@index([userId, position])
+  @@index([exerciseId])
+}
+
+// EXER-07: private stars that order the owner's exercise pickers. Separate
+// from UserFavoriteExercise, the public training-identity favorites.
+model StarredExercise {
+  userId     String
+  exerciseId String
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exercise   Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+
+  @@id([userId, exerciseId])
+  @@index([userId, createdAt])
   @@index([exerciseId])
 }
 
@@ -368,29 +384,29 @@ enum WorkoutSessionStatus {
 }
 
 model WorkoutSession {
-  sourceRoutineId    String?
-  sourceRoutineDayId String?
-  totalVolumeKg      Float?
-  completedSets      Int?
-  snapshot           WorkoutSessionSnapshot?
-  id                 String                  @id @default(uuid())
-  userId             String
-  user               User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  routineId          String?
-  routine            Routine?                @relation(fields: [routineId], references: [id], onDelete: SetNull)
-  routineDayId       String?
-  routineDay         RoutineDay?             @relation(fields: [routineDayId], references: [id], onDelete: SetNull)
-  status             WorkoutSessionStatus    @default(IN_PROGRESS)
-  startedAt          DateTime                @default(now())
-  endedAt            DateTime?
-  durationSec        Int?
-  notes              String?
-  setLogs            SetLog[]
+  sourceRoutineId       String?
+  sourceRoutineDayId    String?
+  totalVolumeKg         Float?
+  completedSets         Int?
+  snapshot              WorkoutSessionSnapshot?
+  id                    String                  @id @default(uuid())
+  userId                String
+  user                  User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  routineId             String?
+  routine               Routine?                @relation(fields: [routineId], references: [id], onDelete: SetNull)
+  routineDayId          String?
+  routineDay            RoutineDay?             @relation(fields: [routineDayId], references: [id], onDelete: SetNull)
+  status                WorkoutSessionStatus    @default(IN_PROGRESS)
+  startedAt             DateTime                @default(now())
+  endedAt               DateTime?
+  durationSec           Int?
+  notes                 String?
+  setLogs               SetLog[]
   // Updated whenever a set log is created/updated/deleted (activity heartbeat)
-  lastActivityAt     DateTime?
+  lastActivityAt        DateTime?
   // LIVE-11: SessionExerciseSubstitution[] — exercises performed in place of
   // routine slots. The snapshot keeps the prescription; this keeps the swap.
-  exerciseSubstitutions Json                  @default("[]")
+  exerciseSubstitutions Json                    @default("[]")
 
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt

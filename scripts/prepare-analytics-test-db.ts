@@ -114,6 +114,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260914103000_milestone_achievements/migration.sql',
 					'utf8',
+				) +
+				'\n' +
+				// EXER-07: keeps the isolated schema aligned with the generated client.
+				readFileSync(
+					'prisma/migrations/20260914160000_starred_exercises/migration.sql',
+					'utf8',
 				),
     );
     prisma(
