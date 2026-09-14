@@ -19,7 +19,7 @@ NestJS + Prisma backend for Sunnsteel (workout/routine tracking). Runs on Window
 - Seed DB / load exercises: `npm run db:seed` (alias `npm run db:add-exercises`) — both run `prisma/add-exercises.ts`, the idempotent exercise-catalog loader. This is also the `prisma migrate reset`/`migrate dev` seed hook.
 - Get a Supabase token for manual API testing: `npm run token:supabase`
 
-`npm test` runs the Node test runner via the existing ts-node dependency. It currently covers 139 tests across twenty-six script files, including dashboard statistics, projected progress, strength trends, exercise-performance history, muscle-group heatmaps, volume trends, session comparison, progress timelines, measurable personal goals, milestone achievements, session recap/recovery, live records, progression, profile privacy/discovery, relationship lists/suggestions, session sharing, exercise substitutions, the exercise catalog and training locations; it is included in `npm run verify`.
+`npm test` runs the Node test runner via the existing ts-node dependency. It currently covers 141 tests across twenty-six script files, including dashboard statistics, projected progress, strength trends, exercise-performance history, muscle-group heatmaps, volume trends, session comparison, progress timelines, measurable personal goals, milestone achievements, session recap/recovery, live records, progression, profile privacy/discovery, relationship lists/suggestions, session sharing, exercise substitutions, the exercise catalog and training locations; it is included in `npm run verify`.
 
 ## Architecture
 
@@ -46,7 +46,7 @@ Feature modules under `src/` (auth, users, token, exercises, routines, workouts,
 - `workout-muscle-heatmap.service.ts` — bounded 4–12-week muscle distribution from the active timezone-matched analytics projection
 - `workout-volume-trend.service.ts` — bounded weekly volume and completed-set comparisons across the total, muscles, historical routines and exercises
 - `workout-progress-timeline.service.ts` — cursor-paginated `PERSONAL_RECORD`/`PROGRESSION_CHANGED` feed; the optional `exerciseId` (EXER-01) filters on the top-level payload id both event families carry, so it walks the same owner-scoped index, and a cursor from another exercise's feed is rejected
-- `workout-plateaus.service.ts` — PROG-09 plateau watch: one query over the owner's `PersonalRecord` rows and the completed loaded sets of terminal sessions in an 8-week window, evaluated by the pure `evaluatePlateaus` against the `PLATEAU_*` contract thresholds; a lift whose estimated 1RM rose is never flagged
+- `workout-plateaus.service.ts` — PROG-09 plateau watch: one query over the owner's `PersonalRecord` rows and the completed loaded sets of terminal sessions in an 8-week window, evaluated by the pure `evaluatePlateaus` against the `PLATEAU_*` contract thresholds and the account's `User.plateauMinSessions` (PREF-05: default 4, a 3–8 check constraint in migration `20260914210000_plateau_min_sessions`, also applied by `scripts/prepare-analytics-test-db.ts`, and saved through `PUT /users/preferences/plateaus` in `src/users/plateau-preferences.service.ts`); a lift whose estimated 1RM rose is never flagged
 
 Active workout sessions are recoverable user data. Do not restore a timer that
 silently marks stale sessions `ABORTED`: LIVE-10 deliberately leaves them active
