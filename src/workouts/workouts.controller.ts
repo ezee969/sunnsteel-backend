@@ -152,6 +152,11 @@ export class WorkoutsController {
     return this.workoutsService.getPersonalGoals(req.user.id, query);
   }
 
+  @Get("progress/plateaus")
+  async plateaus(@Req() req: RequestWithUser) {
+    return this.workoutsService.getPlateaus(req.user.id);
+  }
+
   @Put("sessions/:id/set-logs")
   async upsertSetLog(
     @Req() req: RequestWithUser,
