@@ -13,6 +13,7 @@ import { RoutinesModule } from './routines/routines.module';
 import { WorkoutsModule } from './workouts/workouts.module';
 import { MetricsModule } from './metrics/metrics.module';
 import { HealthModule } from './health/health.module';
+import { AchievementsModule } from './achievements/achievements.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { HealthModule } from './health/health.module';
     WorkoutsModule,
     MetricsModule,
     HealthModule,
+    AchievementsModule,
   ],
   providers: [
     {

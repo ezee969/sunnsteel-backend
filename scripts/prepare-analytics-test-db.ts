@@ -108,6 +108,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260914090000_session_exercise_substitutions/migration.sql',
 					'utf8',
+				) +
+				'\n' +
+				// ACH-01: analytics writes and reads the new event values.
+				readFileSync(
+					'prisma/migrations/20260914103000_milestone_achievements/migration.sql',
+					'utf8',
 				),
     );
     prisma(

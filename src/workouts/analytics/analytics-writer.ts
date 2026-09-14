@@ -1,4 +1,8 @@
 import { Prisma, WorkoutAnalyticsProjection } from '@prisma/client';
+import {
+  achievementTotals,
+  awardMilestoneAchievements,
+} from '../../achievements/achievement-events';
 import { readSubstitutions } from '../session-substitutions';
 import { ensureSessionSnapshot } from './session-snapshot';
 import {
@@ -157,7 +161,7 @@ export async function applyContribution(
       });
     }
   }
-  return tx.workoutAnalyticsProjection.update({
+  const updatedProjection = await tx.workoutAnalyticsProjection.update({
     where: { id: projection.id },
     data: {
       totalVolumeKg: { increment: contribution.volumeKg },
@@ -172,4 +176,19 @@ export async function applyContribution(
       ),
     },
   });
+  const recordCount = await tx.trainingEvent.count({
+    where: {
+      userId: session.userId,
+      type: 'PERSONAL_RECORD',
+      occurredAt: { lte: session.endedAt! },
+    },
+  });
+  await awardMilestoneAchievements(tx, {
+    userId: session.userId,
+    sourceSessionId: session.id,
+    occurredAt: session.endedAt!,
+    totals: achievementTotals(updatedProjection, recordCount),
+    backfilled: false,
+  });
+  return updatedProjection;
 }

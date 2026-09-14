@@ -460,7 +460,7 @@ model TrainingEvent {
   eventKey      String            @unique
   userId        String
   user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sessionId     String
+  sessionId     String?
   type          TrainingEventType
   occurredAt    DateTime
   schemaVersion Int               @default(1)
@@ -473,6 +473,8 @@ enum TrainingEventType {
   SESSION_COMPLETED
   PERSONAL_RECORD
   PROGRESSION_CHANGED
+  STREAK_MILESTONE
+  ACHIEVEMENT_UNLOCKED
 }
 
 model PersonalRecord {
