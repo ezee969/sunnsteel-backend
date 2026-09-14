@@ -1,4 +1,4 @@
-import { Prisma, WorkoutAnalyticsProjection } from "@prisma/client";
+import { Prisma, WorkoutAnalyticsProjection } from '@prisma/client';
 import {
   ACHIEVEMENT_CATEGORIES,
   ACHIEVEMENT_DEFINITIONS,
@@ -7,7 +7,7 @@ import {
   AchievementDefinition,
   AchievementUnlockedEventPayload,
   StreakMilestoneEventPayload,
-} from "@sunsteel/contracts";
+} from '@sunsteel/contracts';
 
 const json = (value: unknown) =>
   JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
@@ -23,7 +23,10 @@ export interface AchievementTotals {
 export function achievementTotals(
   projection: Pick<
     WorkoutAnalyticsProjection,
-    "completedSessions" | "completedSets" | "totalVolumeKg" | "bestRun"
+    | 'completedSessions'
+    | 'completedSets'
+    | 'totalVolumeKg'
+    | 'bestRun'
   >,
   records: number,
 ): AchievementTotals {
@@ -41,15 +44,15 @@ function valueFor(
   category: AchievementCategory,
 ): number {
   switch (category) {
-    case "SESSIONS":
+    case 'SESSIONS':
       return totals.sessions;
-    case "SETS":
+    case 'SETS':
       return totals.sets;
-    case "VOLUME_KG":
+    case 'VOLUME_KG':
       return totals.volumeKg;
-    case "RECORDS":
+    case 'RECORDS':
       return totals.records;
-    case "STREAK_DAYS":
+    case 'STREAK_DAYS':
       return totals.streakDays;
   }
 }
@@ -58,8 +61,7 @@ export function reachedAchievements(
   totals: AchievementTotals,
 ): AchievementDefinition[] {
   return ACHIEVEMENT_DEFINITIONS.filter(
-    (definition) =>
-      valueFor(totals, definition.category) >= definition.threshold,
+    definition => valueFor(totals, definition.category) >= definition.threshold,
   );
 }
 
@@ -67,11 +69,11 @@ export function reachedAchievements(
 export function achievementCategoryProgress(
   totals: AchievementTotals,
 ): AchievementCategoryProgress[] {
-  return ACHIEVEMENT_CATEGORIES.map((category) => {
+  return ACHIEVEMENT_CATEGORIES.map(category => {
     const currentValue = valueFor(totals, category);
     const nextMilestone =
       ACHIEVEMENT_DEFINITIONS.find(
-        (definition) =>
+        definition =>
           definition.category === category &&
           definition.threshold > currentValue,
       ) ?? null;
@@ -115,12 +117,12 @@ export async function awardMilestoneAchievements(
       eventKey: `achievement:${input.userId}:${definition.id}:v1`,
       userId: input.userId,
       sessionId: input.sourceSessionId,
-      type: "ACHIEVEMENT_UNLOCKED",
+      type: 'ACHIEVEMENT_UNLOCKED',
       occurredAt: input.occurredAt,
       payload: json(payload),
     });
 
-    if (definition.category !== "STREAK_DAYS") continue;
+    if (definition.category !== 'STREAK_DAYS') continue;
     const streakPayload: StreakMilestoneEventPayload = {
       schemaVersion: 1,
       achievementId: definition.id,
@@ -131,7 +133,7 @@ export async function awardMilestoneAchievements(
       eventKey: `streak:${input.userId}:${definition.threshold}:v1`,
       userId: input.userId,
       sessionId: input.sourceSessionId,
-      type: "STREAK_MILESTONE",
+      type: 'STREAK_MILESTONE',
       occurredAt: input.occurredAt,
       payload: json(streakPayload),
     });
