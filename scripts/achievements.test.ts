@@ -8,6 +8,7 @@ import {
   reachedAchievements,
 } from '../src/achievements/achievement-events';
 import { AchievementsService } from '../src/achievements/achievements.service';
+import { renaissanceRankProgress } from '../src/achievements/renaissance-ranks';
 
 const emptyTotals = (): AchievementTotals => ({
   sessions: 0,
@@ -53,6 +54,22 @@ test('reached achievements compare each verified total to its own threshold', ()
   );
 });
 
+test('Renaissance ranks require both participation and active weeks', () => {
+  assert.equal(renaissanceRankProgress(100, 2).currentRank.id, 'INITIATE');
+
+  const artisan = renaissanceRankProgress(18, 8);
+  assert.equal(artisan.currentRank.id, 'ARTISAN');
+  assert.equal(artisan.nextRank?.id, 'MAESTRO');
+  assert.equal(artisan.sessionsRemaining, 12);
+  assert.equal(artisan.activeWeeksRemaining, 8);
+
+  const laureate = renaissanceRankProgress(120, 60);
+  assert.equal(laureate.currentRank.id, 'LAUREATE');
+  assert.equal(laureate.nextRank, null);
+  assert.equal(laureate.sessionsRemaining, 0);
+  assert.equal(laureate.activeWeeksRemaining, 0);
+});
+
 test('award writer is idempotent and emits addressable streak events', async () => {
   const rows = new Map<string, any>();
   const tx = {
@@ -83,15 +100,23 @@ test('award writer is idempotent and emits addressable streak events', async () 
 test('achievement read reconciles existing verified history once and stays bounded', async () => {
   const rows = new Map<string, any>();
   let requestedTake = 0;
+  let activeWeekWhere: unknown;
   const tx = {
     $queryRaw: async () => [{ id: 'user-1' }],
     workoutAnalyticsProjection: {
       findFirst: async () => ({
+        id: 'projection-1',
         completedSessions: 10,
         completedSets: 99,
         totalVolumeKg: 10_000,
         bestRun: 3,
       }),
+    },
+    workoutRollup: {
+      count: async (query: any) => {
+        activeWeekWhere = query.where;
+        return 4;
+      },
     },
     personalRecord: { count: async () => 5 },
     trainingEvent: {
@@ -131,6 +156,15 @@ test('achievement read reconciles existing verified history once and stays bound
   assert.equal(first.analyticsReady, true);
   assert.equal(first.earnedCount, 9);
   assert.equal(first.availableCount, 25);
+  assert.equal(first.rank?.currentRank.id, 'APPRENTICE');
+  assert.equal(first.rank?.nextRank?.id, 'ARTISAN');
+  assert.equal(first.rank?.completedSessions, 10);
+  assert.equal(first.rank?.activeWeeks, 4);
+  assert.deepEqual(activeWeekWhere, {
+    projectionId: 'projection-1',
+    period: 'WEEK',
+    sessions: { gt: 0 },
+  });
   assert.ok(first.achievements.every(achievement => achievement.backfilled));
   assert.ok(first.achievements.every(achievement => achievement.sourceSessionId === null));
   assert.equal(requestedTake, 25);

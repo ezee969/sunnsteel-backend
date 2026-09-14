@@ -12,6 +12,7 @@ import {
   achievementTotals,
   awardMilestoneAchievements,
 } from './achievement-events';
+import { renaissanceRankProgress } from './renaissance-ranks';
 
 function parseAchievement(
   event: {
@@ -57,9 +58,19 @@ export class AchievementsService {
         const projection = await tx.workoutAnalyticsProjection.findFirst({
           where: { userId, active: true, state: 'READY' },
         });
+        let rank: AchievementsResponse['rank'] = null;
 
         if (projection) {
-          const records = await tx.personalRecord.count({ where: { userId } });
+          const [records, activeWeeks] = await Promise.all([
+            tx.personalRecord.count({ where: { userId } }),
+            tx.workoutRollup.count({
+              where: {
+                projectionId: projection.id,
+                period: 'WEEK',
+                sessions: { gt: 0 },
+              },
+            }),
+          ]);
           await awardMilestoneAchievements(tx, {
             userId,
             sourceSessionId: null,
@@ -67,6 +78,10 @@ export class AchievementsService {
             totals: achievementTotals(projection, records),
             backfilled: true,
           });
+          rank = renaissanceRankProgress(
+            projection.completedSessions,
+            activeWeeks,
+          );
         }
 
         const events = await tx.trainingEvent.findMany({
@@ -89,6 +104,7 @@ export class AchievementsService {
           earnedCount: achievements.length,
           availableCount: ACHIEVEMENT_DEFINITIONS.length,
           achievements,
+          rank,
         };
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
