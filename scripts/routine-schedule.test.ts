@@ -6,6 +6,7 @@ import { routineDayLabel } from '@sunsteel/contracts';
 import { DatabaseService } from '../src/database/database.service';
 import {
   nextRotationDayId,
+  normalizeRestDays,
   normalizeRoutineDays,
 } from '../src/routines/routine-schedule';
 import { RoutinesService } from '../src/routines/routines.service';
@@ -112,6 +113,7 @@ const entity = (
   isFavorite: false,
   isCompleted: false,
   scheduleMode,
+  restDays: [] as number[],
   createdAt: new Date('2026-09-01T10:00:00.000Z'),
   updatedAt: new Date('2026-09-01T10:00:00.000Z'),
   days: days.map((d) => ({ ...d, name: null, exercises: [] })),
@@ -209,4 +211,46 @@ test('changing the schedule mode without days is refused', async () => {
     }),
     /requires the routine days/,
   );
+});
+
+test('rest days belong to weekly routines and never repeat a training day', () => {
+  const days = [{ dayOfWeek: 1 }, { dayOfWeek: 3 }, { dayOfWeek: 5 }];
+  assert.deepEqual(normalizeRestDays('WEEKLY', days, [6, 0, 6]), [0, 6]);
+  assert.throws(
+    () => normalizeRestDays('WEEKLY', days, [3]),
+    /cannot also be a training day/,
+  );
+  // Kept rest days drop the ones an edit turned into training days.
+  assert.deepEqual(
+    normalizeRestDays('WEEKLY', [{ dayOfWeek: 0 }], undefined, [0, 3]),
+    [3],
+  );
+  assert.deepEqual(normalizeRestDays('ROTATION', [], undefined, [2]), []);
+  assert.throws(
+    () => normalizeRestDays('ROTATION', [{ dayOfWeek: null }], [2]),
+    /no rest days/,
+  );
+});
+
+test('creating a weekly routine stores its rest days', async () => {
+  let created: any;
+  const db = {
+    routine: {
+      create: async (query: any) => {
+        created = query.data;
+        return {
+          ...entity('split', 'WEEKLY', [{ id: 'mon', order: 0, dayOfWeek: 1 }]),
+          restDays: query.data.restDays,
+        };
+      },
+    },
+  } as unknown as DatabaseService;
+  const routine = await new RoutinesService(db).create('user-1', {
+    name: 'Split',
+    isPeriodized: false,
+    restDays: [3, 0],
+    days: [{ dayOfWeek: 1, exercises: [] }],
+  });
+  assert.deepEqual(created.restDays, [0, 3]);
+  assert.deepEqual(routine.restDays, [0, 3]);
 });

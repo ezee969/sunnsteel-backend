@@ -158,6 +158,16 @@ export class CreateRoutineDto implements CreateRoutineRequest {
   @IsIn(ROUTINE_SCHEDULE_MODES)
   scheduleMode?: RoutineScheduleMode;
 
+  // SCHED-07: weekly routines only; checked against the days by
+  // normalizeRestDays.
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(7)
+  @IsInt({ each: true })
+  @Min(0, { each: true })
+  @Max(6, { each: true })
+  restDays?: number[];
+
   @IsArray()
   @ArrayMaxSize(ROUTINE_DAYS_MAX)
   @ValidateNested({ each: true })

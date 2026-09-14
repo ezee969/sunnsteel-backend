@@ -312,6 +312,8 @@ model Routine {
   isCompleted     Boolean          @default(false)
   // ROUT-11: WEEKLY days carry a weekday; ROTATION days run in `order`.
   scheduleMode    RoutineScheduleMode @default(WEEKLY)
+  // SCHED-07: planned rest weekdays of a weekly routine (never training days).
+  restDays        Int[]            @default([])
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   days            RoutineDay[]

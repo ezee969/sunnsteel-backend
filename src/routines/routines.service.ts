@@ -15,7 +15,11 @@ import {
   ROUTINE_WITH_DAYS_SELECT,
 } from './routine.selects';
 import { RoutineWithDaysEntity, toRoutineResponse } from './routine.mapper';
-import { nextRotationDayId, normalizeRoutineDays } from './routine-schedule';
+import {
+  nextRotationDayId,
+  normalizeRestDays,
+  normalizeRoutineDays,
+} from './routine-schedule';
 
 type RoutineSetInput = {
   setNumber: number;
@@ -181,6 +185,7 @@ export class RoutinesService {
         description: dto.description,
         isPeriodized: false,
         scheduleMode,
+        restDays: normalizeRestDays(scheduleMode, days, dto.restDays),
         days: {
           create: days.map((day) => this.mapRoutineDayForCreate(day)),
         },
@@ -235,7 +240,12 @@ export class RoutinesService {
       // Verify ownership
       const existing = await tx.routine.findFirst({
         where: { id, userId },
-        select: { id: true, scheduleMode: true },
+        select: {
+          id: true,
+          scheduleMode: true,
+          restDays: true,
+          days: { select: { dayOfWeek: true } },
+        },
       });
 
       if (!existing) {
@@ -253,6 +263,13 @@ export class RoutinesService {
       const days = dto.days
         ? normalizeRoutineDays(scheduleMode, dto.days)
         : undefined;
+      // SCHED-07: omitted rest days are kept, minus new training weekdays.
+      const restDays = normalizeRestDays(
+        scheduleMode,
+        days ?? existing.days,
+        dto.restDays,
+        existing.restDays,
+      );
 
       // Remove current days (cascade removes exercises and sets)
       // Only delete and recreate days if days array is provided in the update
@@ -269,6 +286,7 @@ export class RoutinesService {
           }),
           isPeriodized: false,
           scheduleMode,
+          restDays,
           ...(days && {
             days: {
               create: days.map((day) => this.mapRoutineDayForCreate(day)),

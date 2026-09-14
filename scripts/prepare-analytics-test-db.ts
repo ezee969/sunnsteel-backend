@@ -132,6 +132,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260914230000_rotation_routines/migration.sql',
 					'utf8',
+				) +
+				'\n' +
+				// SCHED-07: planned rest weekdays on routines.
+				readFileSync(
+					'prisma/migrations/20260915090000_routine_rest_days/migration.sql',
+					'utf8',
 				),
     );
     prisma(

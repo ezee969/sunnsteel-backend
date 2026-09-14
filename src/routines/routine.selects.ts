@@ -43,6 +43,7 @@ export const ROUTINE_WITH_DAYS_SELECT = {
   isFavorite: true,
   isCompleted: true,
   scheduleMode: true,
+  restDays: true,
   createdAt: true,
   updatedAt: true,
   days: {

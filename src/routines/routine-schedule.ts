@@ -93,3 +93,29 @@ export function nextRotationDayId(
   }
   return sorted[0].id;
 }
+
+/**
+ * SCHED-07: a weekly routine's planned rest weekdays, sorted and unique.
+ * Explicit rest days may not repeat a training weekday; kept ones (omitted
+ * on update) silently drop any that became training weekdays. Rotations
+ * have none.
+ */
+export function normalizeRestDays(
+  mode: RoutineScheduleMode,
+  days: ReadonlyArray<{ dayOfWeek: number | null }>,
+  requested: readonly number[] | undefined,
+  kept: readonly number[] = [],
+): number[] {
+  if (mode === 'ROTATION') {
+    if (requested?.length) {
+      throw new BadRequestException('Rotation routines have no rest days');
+    }
+    return [];
+  }
+  const training = new Set(days.map((day) => day.dayOfWeek));
+  if (requested && requested.some((weekday) => training.has(weekday))) {
+    throw new BadRequestException('A rest day cannot also be a training day');
+  }
+  const source = requested ?? kept.filter((weekday) => !training.has(weekday));
+  return [...new Set(source)].sort((a, b) => a - b);
+}
