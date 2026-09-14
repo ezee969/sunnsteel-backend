@@ -19,7 +19,7 @@ NestJS + Prisma backend for Sunnsteel (workout/routine tracking). Runs on Window
 - Seed DB / load exercises: `npm run db:seed` (alias `npm run db:add-exercises`) — both run `prisma/add-exercises.ts`, the idempotent exercise-catalog loader. This is also the `prisma migrate reset`/`migrate dev` seed hook.
 - Get a Supabase token for manual API testing: `npm run token:supabase`
 
-`npm test` runs the Node test runner via the existing ts-node dependency. It currently covers 104 tests across twenty-one script files, including dashboard statistics, projected progress, strength trends, exercise-performance history, muscle-group heatmaps, volume trends, session comparison, progress timelines, session recap/recovery, live records, progression, profile privacy/discovery, relationship lists/suggestions, session sharing, the exercise catalog and training locations; it is included in `npm run verify`.
+`npm test` runs the Node test runner via the existing ts-node dependency. It currently covers 109 tests across twenty-two script files, including dashboard statistics, projected progress, strength trends, exercise-performance history, muscle-group heatmaps, volume trends, session comparison, progress timelines, measurable personal goals, session recap/recovery, live records, progression, profile privacy/discovery, relationship lists/suggestions, session sharing, the exercise catalog and training locations; it is included in `npm run verify`.
 
 ## Architecture
 
