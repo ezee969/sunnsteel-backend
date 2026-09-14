@@ -1,7 +1,9 @@
 import { Prisma, WorkoutAnalyticsProjection } from '@prisma/client';
 import {
+  ACHIEVEMENT_CATEGORIES,
   ACHIEVEMENT_DEFINITIONS,
   AchievementCategory,
+  AchievementCategoryProgress,
   AchievementDefinition,
   AchievementUnlockedEventPayload,
   StreakMilestoneEventPayload,
@@ -61,6 +63,30 @@ export function reachedAchievements(
   return ACHIEVEMENT_DEFINITIONS.filter(
     definition => valueFor(totals, definition.category) >= definition.threshold,
   );
+}
+
+/** Returns one stable next milestone for every category in catalog order. */
+export function achievementCategoryProgress(
+  totals: AchievementTotals,
+): AchievementCategoryProgress[] {
+  return ACHIEVEMENT_CATEGORIES.map(category => {
+    const currentValue = valueFor(totals, category);
+    const nextMilestone =
+      ACHIEVEMENT_DEFINITIONS.find(
+        definition =>
+          definition.category === category &&
+          definition.threshold > currentValue,
+      ) ?? null;
+
+    return {
+      category,
+      currentValue,
+      nextMilestone,
+      remaining: nextMilestone
+        ? Math.max(0, nextMilestone.threshold - currentValue)
+        : 0,
+    };
+  });
 }
 
 interface AwardMilestoneAchievementsInput {

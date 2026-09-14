@@ -4,6 +4,7 @@ import { ACHIEVEMENT_DEFINITIONS } from '@sunsteel/contracts';
 import { DatabaseService } from '../src/database/database.service';
 import {
   AchievementTotals,
+  achievementCategoryProgress,
   awardMilestoneAchievements,
   reachedAchievements,
 } from '../src/achievements/achievement-events';
@@ -51,6 +52,74 @@ test('reached achievements compare each verified total to its own threshold', ()
       'streak_days:2',
       'streak_days:3',
     ],
+  );
+});
+
+test('category progress returns only the next fixed milestone in catalog order', () => {
+  const progress = achievementCategoryProgress({
+    sessions: 10,
+    sets: 99,
+    volumeKg: 10_000,
+    records: 5,
+    streakDays: 3,
+  });
+
+  assert.deepEqual(
+    progress.map(item => ({
+      category: item.category,
+      currentValue: item.currentValue,
+      nextId: item.nextMilestone?.id ?? null,
+      remaining: item.remaining,
+    })),
+    [
+      {
+        category: 'SESSIONS',
+        currentValue: 10,
+        nextId: 'sessions:25',
+        remaining: 15,
+      },
+      {
+        category: 'SETS',
+        currentValue: 99,
+        nextId: 'sets:100',
+        remaining: 1,
+      },
+      {
+        category: 'VOLUME_KG',
+        currentValue: 10_000,
+        nextId: 'volume_kg:50000',
+        remaining: 40_000,
+      },
+      {
+        category: 'RECORDS',
+        currentValue: 5,
+        nextId: 'records:10',
+        remaining: 5,
+      },
+      {
+        category: 'STREAK_DAYS',
+        currentValue: 3,
+        nextId: 'streak_days:5',
+        remaining: 2,
+      },
+    ],
+  );
+});
+
+test('completed categories retain verified totals without inventing another milestone', () => {
+  const progress = achievementCategoryProgress({
+    sessions: 120,
+    sets: 1_200,
+    volumeKg: 300_000,
+    records: 55,
+    streakDays: 25,
+  });
+
+  assert.ok(progress.every(item => item.nextMilestone === null));
+  assert.ok(progress.every(item => item.remaining === 0));
+  assert.deepEqual(
+    progress.map(item => item.currentValue),
+    [120, 1_200, 300_000, 55, 25],
   );
 });
 
@@ -160,6 +229,16 @@ test('achievement read reconciles existing verified history once and stays bound
   assert.equal(first.rank?.nextRank?.id, 'ARTISAN');
   assert.equal(first.rank?.completedSessions, 10);
   assert.equal(first.rank?.activeWeeks, 4);
+  assert.deepEqual(
+    first.milestoneProgress.map(item => item.nextMilestone?.id ?? null),
+    [
+      'sessions:25',
+      'sets:100',
+      'volume_kg:50000',
+      'records:10',
+      'streak_days:5',
+    ],
+  );
   assert.deepEqual(activeWeekWhere, {
     projectionId: 'projection-1',
     period: 'WEEK',

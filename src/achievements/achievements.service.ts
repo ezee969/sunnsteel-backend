@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
+  AchievementCategoryProgress,
   ACHIEVEMENT_DEFINITIONS,
   AchievementsResponse,
   AchievementUnlockedEventPayload,
@@ -9,6 +10,7 @@ import {
 import { DatabaseService } from '../database/database.service';
 import { lockTrainingAccount } from '../workouts/analytics/analytics-lock';
 import {
+  achievementCategoryProgress,
   achievementTotals,
   awardMilestoneAchievements,
 } from './achievement-events';
@@ -59,6 +61,7 @@ export class AchievementsService {
           where: { userId, active: true, state: 'READY' },
         });
         let rank: AchievementsResponse['rank'] = null;
+        let milestoneProgress: AchievementCategoryProgress[] = [];
 
         if (projection) {
           const [records, activeWeeks] = await Promise.all([
@@ -71,17 +74,19 @@ export class AchievementsService {
               },
             }),
           ]);
+          const totals = achievementTotals(projection, records);
           await awardMilestoneAchievements(tx, {
             userId,
             sourceSessionId: null,
             occurredAt: new Date(),
-            totals: achievementTotals(projection, records),
+            totals,
             backfilled: true,
           });
           rank = renaissanceRankProgress(
             projection.completedSessions,
             activeWeeks,
           );
+          milestoneProgress = achievementCategoryProgress(totals);
         }
 
         const events = await tx.trainingEvent.findMany({
@@ -105,6 +110,7 @@ export class AchievementsService {
           availableCount: ACHIEVEMENT_DEFINITIONS.length,
           achievements,
           rank,
+          milestoneProgress,
         };
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
