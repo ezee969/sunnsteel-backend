@@ -13,6 +13,10 @@ export class ProgressTimelineQueryDto implements ProgressTimelineQuery {
 
   @IsOptional()
   @IsUUID()
+  exerciseId?: string;
+
+  @IsOptional()
+  @IsUUID()
   cursor?: string;
 
   @IsOptional()

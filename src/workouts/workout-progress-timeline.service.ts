@@ -171,6 +171,9 @@ export class WorkoutProgressTimelineService {
                 type: query.type
                   ? query.type
                   : { in: ["PERSONAL_RECORD", "PROGRESSION_CHANGED"] },
+                ...(query.exerciseId
+                  ? { payload: { path: ["exerciseId"], equals: query.exerciseId } }
+                  : {}),
               },
               select: { id: true, occurredAt: true },
             })
@@ -182,6 +185,12 @@ export class WorkoutProgressTimelineService {
         const typeFilter = query.type
           ? Prisma.sql`AND events."type" = ${query.type}::"TrainingEventType"`
           : Prisma.sql`AND events."type" IN ('PERSONAL_RECORD', 'PROGRESSION_CHANGED')`;
+        // Both event families carry the catalog exercise id at the top of
+        // their payload, so one exercise's history (EXER-01) walks the same
+        // owner-scoped index as the unfiltered feed.
+        const exerciseFilter = query.exerciseId
+          ? Prisma.sql`AND events."payload"->>'exerciseId' = ${query.exerciseId}`
+          : Prisma.empty;
         const cursorFilter = cursor
           ? Prisma.sql`AND (
               events."occurredAt" < ${cursor.occurredAt}
@@ -219,6 +228,7 @@ export class WorkoutProgressTimelineService {
           ) previous ON TRUE
           WHERE events."userId" = ${userId}
             ${typeFilter}
+            ${exerciseFilter}
             ${cursorFilter}
           ORDER BY events."occurredAt" DESC, events."id" DESC
           LIMIT ${take}`);

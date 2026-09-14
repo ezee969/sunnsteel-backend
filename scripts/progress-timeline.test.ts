@@ -195,3 +195,46 @@ test("progress timeline rejects a cursor outside the owner and filter", async ()
     /Invalid progress timeline cursor/,
   );
 });
+
+test("progress timeline narrows to one exercise", async () => {
+  const received: Record<string, any> = {};
+  const db = {
+    $transaction: async (read: any) =>
+      read({
+        trainingEvent: {
+          findFirst: async (query: any) => {
+            received.cursor = query;
+            return {
+              id: query.where.id,
+              occurredAt: new Date("2026-09-13T00:00:00.000Z"),
+            };
+          },
+        },
+        $queryRaw: async (sql: any) => {
+          received.sql = sql;
+          return [];
+        },
+        workoutSessionSnapshot: { findMany: async () => [] },
+      }),
+  } as unknown as DatabaseService;
+
+  const exerciseId = "00000000-0000-4000-8000-0000000000aa";
+  const result = await new WorkoutProgressTimelineService(
+    db,
+  ).getProgressTimeline("user-1", {
+    exerciseId,
+    cursor: "00000000-0000-4000-8000-000000000004",
+  });
+
+  assert.deepEqual(result, { items: [], nextCursor: undefined });
+  // A cursor from another exercise's feed is rejected like a foreign one.
+  assert.deepEqual(received.cursor.where.payload, {
+    path: ["exerciseId"],
+    equals: exerciseId,
+  });
+  assert.match(
+    received.sql.strings.join(" "),
+    /events\."payload"->>'exerciseId' =/,
+  );
+  assert.ok(received.sql.values.includes(exerciseId));
+});
