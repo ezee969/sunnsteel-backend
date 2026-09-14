@@ -31,6 +31,8 @@ import { RelationshipListQueryDto } from './dto/relationship-list-query.dto';
 import { FollowSuggestionsQueryDto } from './dto/follow-suggestions-query.dto';
 import { MeasurableGoalsService } from '../goals/measurable-goals.service';
 import { ReplaceMeasurableGoalsDto } from './dto/replace-measurable-goals.dto';
+import { UpdatePlateauPreferencesDto } from './dto/update-plateau-preferences.dto';
+import { PlateauPreferencesService } from './plateau-preferences.service';
 
 @UseGuards(SupabaseJwtGuard)
 @Controller('users')
@@ -41,6 +43,7 @@ export class UsersController {
     private readonly trainingLocations: TrainingLocationPreferencesService,
     private readonly relationships: UserRelationshipsService,
     private readonly measurableGoals: MeasurableGoalsService,
+    private readonly plateauPreferences: PlateauPreferencesService,
   ) {}
 
   @Get('time-zone')
@@ -109,6 +112,14 @@ export class UsersController {
     @Body() dto: ReplaceMeasurableGoalsDto,
   ) {
     return this.measurableGoals.replace(req.user.id, dto.goals);
+  }
+
+  @Put('preferences/plateaus')
+  updatePlateauPreferences(
+    @Request() req: RequestWithUser,
+    @Body() dto: UpdatePlateauPreferencesDto,
+  ) {
+    return this.plateauPreferences.update(req.user.id, dto.minSessions);
   }
 
   @Get('search')

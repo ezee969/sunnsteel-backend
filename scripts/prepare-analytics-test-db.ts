@@ -120,6 +120,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260914160000_starred_exercises/migration.sql',
 					'utf8',
+				) +
+				'\n' +
+				// PREF-05: the generated client selects every User column.
+				readFileSync(
+					'prisma/migrations/20260914210000_plateau_min_sessions/migration.sql',
+					'utf8',
 				),
     );
     prisma(

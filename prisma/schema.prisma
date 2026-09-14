@@ -55,6 +55,9 @@ model User {
   discoverableByName         Boolean                      @default(true)
   discoverableByUsername     Boolean                      @default(true)
   discoverableByContacts     Boolean                      @default(false)
+  // PREF-05: sessions without a new best before the plateau watch flags a
+  // lift; bounded by PLATEAU_MIN_SESSIONS_MIN/MAX (checked in the migration).
+  plateauMinSessions         Int                          @default(4)
   routines                   Routine[]
   workoutSessions            WorkoutSession[]
   trainingLocations          TrainingLocationPreference[]

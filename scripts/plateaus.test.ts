@@ -1,7 +1,17 @@
+import "reflect-metadata";
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
-import { PLATEAU_MIN_SESSIONS, PLATEAU_WINDOW_DAYS } from "@sunsteel/contracts";
+import { plainToInstance } from "class-transformer";
+import { validateSync } from "class-validator";
+import {
+  PLATEAU_MIN_SESSIONS,
+  PLATEAU_MIN_SESSIONS_MAX,
+  PLATEAU_MIN_SESSIONS_MIN,
+  PLATEAU_WINDOW_DAYS,
+} from "@sunsteel/contracts";
 import { DatabaseService } from "../src/database/database.service";
+import { UpdatePlateauPreferencesDto } from "../src/users/dto/update-plateau-preferences.dto";
+import { PlateauPreferencesService } from "../src/users/plateau-preferences.service";
 import {
   evaluatePlateaus,
   type PlateauSetRow,
@@ -144,12 +154,36 @@ test("orders by sessions without a new best, then the older best", () => {
   );
 });
 
+test("the account's minimum sessions decides which lifts are flagged", () => {
+  const rows = [
+    ...lift("row", { weight: 80, reps: 8, daysAgo: 30 }, repeated(3, 77.5, 8)),
+    ...lift("dip", { weight: 20, reps: 8, daysAgo: 40 }, repeated(6, 20, 8, 34)),
+  ];
+  const sensitive = evaluatePlateaus(rows, NOW, PLATEAU_MIN_SESSIONS_MIN);
+  assert.deepEqual(
+    sensitive.plateaus.map((plateau) => plateau.exerciseId),
+    ["dip", "row"],
+  );
+  assert.equal(sensitive.thresholds.minSessions, PLATEAU_MIN_SESSIONS_MIN);
+  const strict = evaluatePlateaus(rows, NOW, 7);
+  assert.deepEqual(strict.plateaus, []);
+  assert.equal(strict.checkedExercises, 2);
+  assert.equal(evaluatePlateaus(rows, NOW).thresholds.minSessions, 4);
+});
+
 test("the service reads the owner's bests and bounded window only", async () => {
   let sql: any;
+  let userQuery: any;
   const db = {
     $queryRaw: async (query: any) => {
       sql = query;
       return [];
+    },
+    user: {
+      findUnique: async (query: any) => {
+        userQuery = query;
+        return { plateauMinSessions: 6 };
+      },
     },
   } as unknown as DatabaseService;
   const result = await new WorkoutPlateausService(db).getPlateaus(
@@ -157,6 +191,11 @@ test("the service reads the owner's bests and bounded window only", async () => 
     NOW,
   );
   assert.deepEqual(result.plateaus, []);
+  assert.equal(result.thresholds.minSessions, 6);
+  assert.deepEqual(userQuery, {
+    where: { id: "user-1" },
+    select: { plateauMinSessions: true },
+  });
   const text = sql.strings.join(" ");
   assert.match(text, /FROM "PersonalRecord" records/);
   assert.match(text, /sessions\."endedAt" >= /);
@@ -168,4 +207,32 @@ test("the service reads the owner's bests and bounded window only", async () => 
         value.getTime() === daysAgo(PLATEAU_WINDOW_DAYS).getTime(),
     ),
   );
+});
+
+test("plateau preferences accept only whole sessions within the bounds", async () => {
+  const errors = (minSessions: unknown) =>
+    validateSync(plainToInstance(UpdatePlateauPreferencesDto, { minSessions }))
+      .length;
+  assert.equal(errors(PLATEAU_MIN_SESSIONS_MIN), 0);
+  assert.equal(errors(PLATEAU_MIN_SESSIONS_MAX), 0);
+  assert.ok(errors(PLATEAU_MIN_SESSIONS_MIN - 1) > 0);
+  assert.ok(errors(PLATEAU_MIN_SESSIONS_MAX + 1) > 0);
+  assert.ok(errors(4.5) > 0);
+
+  let update: any;
+  const db = {
+    user: {
+      update: async (query: any) => {
+        update = query;
+        return { plateauMinSessions: query.data.plateauMinSessions };
+      },
+    },
+  } as unknown as DatabaseService;
+  const saved = await new PlateauPreferencesService(db).update("user-1", 5);
+  assert.deepEqual(saved, { minSessions: 5 });
+  assert.deepEqual(update, {
+    where: { id: "user-1" },
+    data: { plateauMinSessions: 5 },
+    select: { plateauMinSessions: true },
+  });
 });

@@ -8,12 +8,14 @@ import { TrainingLocationPreferencesService } from './training-location-preferen
 import { PublicProfilesController } from './public-profiles.controller';
 import { UserRelationshipsService } from './user-relationships.service';
 import { GoalsModule } from '../goals/goals.module';
+import { PlateauPreferencesService } from './plateau-preferences.service';
 
 @Module({
   imports: [TokenModule, AnalyticsModule, GoalsModule],
   providers: [
     UsersService,
     TrainingLocationPreferencesService,
+    PlateauPreferencesService,
     UserRelationshipsService,
     DatabaseService,
   ],

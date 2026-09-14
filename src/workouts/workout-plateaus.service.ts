@@ -35,11 +35,13 @@ const estimated1rm = (weight: number, reps: number) =>
  * PROG-09: which recently trained lifts have gone the threshold number of
  * sessions without a new best. Pure, so the rule is tested without a
  * database. A lift whose estimated 1RM rose since its best is never flagged,
- * even when no new best-set record was persisted.
+ * even when no new best-set record was persisted. `minSessions` is the
+ * account's PREF-05 choice; every other threshold is fixed.
  */
 export function evaluatePlateaus(
   rows: readonly PlateauSetRow[],
   now: Date,
+  minSessions = PLATEAU_MIN_SESSIONS,
 ): PlateausResponse {
   const windowStart = now.getTime() - PLATEAU_WINDOW_DAYS * DAY_MS;
   const recentStart = now.getTime() - PLATEAU_RECENT_DAYS * DAY_MS;
@@ -69,7 +71,7 @@ export function evaluatePlateaus(
     );
     const sessions = new Set(since.map((set) => set.sessionId)).size;
     if (
-      sessions < PLATEAU_MIN_SESSIONS ||
+      sessions < minSessions ||
       now.getTime() - bestAt < PLATEAU_MIN_DAYS_SINCE_BEST * DAY_MS
     ) {
       continue;
@@ -122,7 +124,7 @@ export function evaluatePlateaus(
     asOf: now.toISOString(),
     thresholds: {
       windowDays: PLATEAU_WINDOW_DAYS,
-      minSessions: PLATEAU_MIN_SESSIONS,
+      minSessions,
       minDaysSinceBest: PLATEAU_MIN_DAYS_SINCE_BEST,
       recentDays: PLATEAU_RECENT_DAYS,
     },
@@ -134,7 +136,7 @@ export function evaluatePlateaus(
 /**
  * Reads only the owner's persisted best per exercise (one row each) and the
  * completed loaded sets of terminal sessions inside the look-back window —
- * never lifetime set logs.
+ * never lifetime set logs — plus the account's minimum sessions.
  */
 @Injectable()
 export class WorkoutPlateausService {
@@ -145,7 +147,11 @@ export class WorkoutPlateausService {
     now = new Date(),
   ): Promise<PlateausResponse> {
     const windowStart = new Date(now.getTime() - PLATEAU_WINDOW_DAYS * DAY_MS);
-    const rows = await this.db.$queryRaw<PlateauSetRow[]>(Prisma.sql`
+    const preferences = this.db.user.findUnique({
+      where: { id: userId },
+      select: { plateauMinSessions: true },
+    });
+    const rows = this.db.$queryRaw<PlateauSetRow[]>(Prisma.sql`
       SELECT
         records."exerciseId",
         records."exerciseName",
@@ -170,6 +176,11 @@ export class WorkoutPlateausService {
         AND logs."isCompleted"
         AND logs."reps" > 0
         AND logs."weight" > 0`);
-    return evaluatePlateaus(rows, now);
+    const [user, setRows] = await Promise.all([preferences, rows]);
+    return evaluatePlateaus(
+      setRows,
+      now,
+      user?.plateauMinSessions ?? PLATEAU_MIN_SESSIONS,
+    );
   }
 }
