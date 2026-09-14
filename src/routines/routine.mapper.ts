@@ -13,7 +13,7 @@ import { ROUTINE_WITH_DAYS_SELECT } from './routine.selects';
  * one place that converts Prisma `Date` values into ISO strings and asserts,
  * at compile time, that the backend response matches `@sunsteel/contracts`.
  */
-type RoutineWithDaysEntity = Prisma.RoutineGetPayload<{
+export type RoutineWithDaysEntity = Prisma.RoutineGetPayload<{
   select: typeof ROUTINE_WITH_DAYS_SELECT;
 }>;
 
@@ -50,12 +50,20 @@ function toRoutineDay(d: RoutineDayEntity): RoutineDay {
   return {
     id: d.id,
     dayOfWeek: d.dayOfWeek,
+    name: d.name,
     order: d.order,
     exercises: d.exercises.map(toRoutineExercise),
   };
 }
 
-export function toRoutineResponse(r: RoutineWithDaysEntity): Routine {
+/**
+ * `nextRotationDayId` is resolved by the caller for ROTATION routines (it needs
+ * the last completed session); WEEKLY routines always report null.
+ */
+export function toRoutineResponse(
+  r: RoutineWithDaysEntity,
+  nextRotationDayId: string | null = null,
+): Routine {
   return {
     id: r.id,
     userId: r.userId,
@@ -64,6 +72,8 @@ export function toRoutineResponse(r: RoutineWithDaysEntity): Routine {
     isPeriodized: r.isPeriodized,
     isFavorite: r.isFavorite,
     isCompleted: r.isCompleted,
+    scheduleMode: r.scheduleMode,
+    nextRotationDayId: r.scheduleMode === 'ROTATION' ? nextRotationDayId : null,
     days: r.days.map(toRoutineDay),
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),

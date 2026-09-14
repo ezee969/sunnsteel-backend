@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, ProgressionScheme } from '@prisma/client';
-import { Routine } from '@sunsteel/contracts';
+import { Routine, RoutineScheduleMode } from '@sunsteel/contracts';
 import { DatabaseService } from '../database/database.service';
 import { CreateRoutineDto } from './dto/create-routine.dto';
 import { UpdateRoutineDto } from './dto/update-routine.dto';
@@ -14,7 +14,8 @@ import {
   ROUTINE_TOGGLE_SELECT,
   ROUTINE_WITH_DAYS_SELECT,
 } from './routine.selects';
-import { toRoutineResponse } from './routine.mapper';
+import { RoutineWithDaysEntity, toRoutineResponse } from './routine.mapper';
+import { nextRotationDayId, normalizeRoutineDays } from './routine-schedule';
 
 type RoutineSetInput = {
   setNumber: number;
@@ -37,10 +38,18 @@ type RoutineExerciseInput = {
 };
 
 type RoutineDayInput = {
-  dayOfWeek: number;
-  order?: number;
+  dayOfWeek: number | null;
+  name: string | null;
+  order: number;
   exercises: RoutineExerciseInput[];
 };
+
+/** The day's order when a session ran, from its snapshot (ROUT-11). */
+function snapshotDayOrder(payload: unknown): number | null {
+  const order = (payload as { routineDay?: { order?: unknown } } | null)
+    ?.routineDay?.order;
+  return typeof order === 'number' ? order : null;
+}
 
 @Injectable()
 export class RoutinesService {
@@ -100,7 +109,8 @@ export class RoutinesService {
   private mapRoutineDayForCreate(day: RoutineDayInput) {
     return {
       dayOfWeek: day.dayOfWeek,
-      order: day.order ?? 0,
+      name: day.name,
+      order: day.order,
       exercises: {
         create: day.exercises.map((exercise) =>
           this.mapRoutineExerciseForCreate(exercise),
@@ -109,7 +119,57 @@ export class RoutinesService {
     };
   }
 
+  /**
+   * ROUT-11: a ROTATION routine reports the day after its last completed
+   * session (aborted ones do not advance it). One indexed lookup per rotation
+   * routine; weekly routines need none.
+   */
+  private async toResponses(
+    userId: string,
+    routines: RoutineWithDaysEntity[],
+    db: Prisma.TransactionClient = this.db,
+  ): Promise<Routine[]> {
+    return Promise.all(
+      routines.map(async (routine) => {
+        if (routine.scheduleMode !== 'ROTATION') {
+          return toRoutineResponse(routine);
+        }
+        const last = await db.workoutSession.findFirst({
+          where: { userId, routineId: routine.id, status: 'COMPLETED' },
+          orderBy: [{ endedAt: 'desc' }, { id: 'desc' }],
+          select: {
+            routineDayId: true,
+            snapshot: { select: { payload: true } },
+          },
+        });
+        return toRoutineResponse(
+          routine,
+          nextRotationDayId(
+            routine.days,
+            last
+              ? {
+                  routineDayId: last.routineDayId,
+                  order: snapshotDayOrder(last.snapshot?.payload),
+                }
+              : null,
+          ),
+        );
+      }),
+    );
+  }
+
+  private async toResponse(
+    userId: string,
+    routine: RoutineWithDaysEntity,
+    db: Prisma.TransactionClient = this.db,
+  ): Promise<Routine> {
+    const [response] = await this.toResponses(userId, [routine], db);
+    return response;
+  }
+
   async create(userId: string, dto: CreateRoutineDto): Promise<Routine> {
+    const scheduleMode: RoutineScheduleMode = dto.scheduleMode ?? 'WEEKLY';
+    const days = normalizeRoutineDays(scheduleMode, dto.days);
     const routine = await this.db.routine.create({
       data: {
         user: {
@@ -120,13 +180,14 @@ export class RoutinesService {
         name: dto.name,
         description: dto.description,
         isPeriodized: false,
+        scheduleMode,
         days: {
-          create: dto.days.map((day) => this.mapRoutineDayForCreate(day)),
+          create: days.map((day) => this.mapRoutineDayForCreate(day)),
         },
       },
       select: ROUTINE_WITH_DAYS_SELECT,
     });
-    return toRoutineResponse(routine);
+    return this.toResponse(userId, routine);
   }
 
   async findAll(
@@ -147,7 +208,7 @@ export class RoutinesService {
       orderBy: { createdAt: 'desc' },
     });
 
-    return routines.map(toRoutineResponse);
+    return this.toResponses(userId, routines);
   }
 
   async findOne(userId: string, id: string): Promise<Routine> {
@@ -160,7 +221,7 @@ export class RoutinesService {
       throw new NotFoundException('Routine not found');
     }
 
-    return toRoutineResponse(routine);
+    return this.toResponse(userId, routine);
   }
 
   async update(
@@ -174,7 +235,7 @@ export class RoutinesService {
       // Verify ownership
       const existing = await tx.routine.findFirst({
         where: { id, userId },
-        select: { id: true },
+        select: { id: true, scheduleMode: true },
       });
 
       if (!existing) {
@@ -182,6 +243,16 @@ export class RoutinesService {
           'Routine not found or you do not have permission to edit it.',
         );
       }
+
+      const scheduleMode = dto.scheduleMode ?? existing.scheduleMode;
+      if (scheduleMode !== existing.scheduleMode && !dto.days) {
+        throw new BadRequestException(
+          'Changing the schedule mode requires the routine days',
+        );
+      }
+      const days = dto.days
+        ? normalizeRoutineDays(scheduleMode, dto.days)
+        : undefined;
 
       // Remove current days (cascade removes exercises and sets)
       // Only delete and recreate days if days array is provided in the update
@@ -197,16 +268,17 @@ export class RoutinesService {
             description: dto.description,
           }),
           isPeriodized: false,
-          ...(dto.days && {
+          scheduleMode,
+          ...(days && {
             days: {
-              create: dto.days.map((day) => this.mapRoutineDayForCreate(day)),
+              create: days.map((day) => this.mapRoutineDayForCreate(day)),
             },
           }),
         },
         select: ROUTINE_WITH_DAYS_SELECT,
       });
 
-      return toRoutineResponse(updated);
+      return this.toResponse(userId, updated, tx);
     });
   }
 
@@ -290,7 +362,7 @@ export class RoutinesService {
       select: ROUTINE_WITH_DAYS_SELECT,
       orderBy: { createdAt: 'desc' },
     });
-    return routines.map(toRoutineResponse);
+    return this.toResponses(userId, routines);
   }
 
   async findFavorites(userId: string): Promise<Routine[]> {
@@ -299,7 +371,7 @@ export class RoutinesService {
       select: ROUTINE_WITH_DAYS_SELECT,
       orderBy: { createdAt: 'desc' },
     });
-    return routines.map(toRoutineResponse);
+    return this.toResponses(userId, routines);
   }
 
   async remove(userId: string, id: string) {

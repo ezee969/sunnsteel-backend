@@ -25,6 +25,7 @@ const ROUTINE_EXERCISE_SELECT = {
 const ROUTINE_DAY_SELECT = {
   id: true,
   dayOfWeek: true,
+  name: true,
   order: true,
   exercises: {
     select: ROUTINE_EXERCISE_SELECT,
@@ -41,6 +42,7 @@ export const ROUTINE_WITH_DAYS_SELECT = {
   isPeriodized: true,
   isFavorite: true,
   isCompleted: true,
+  scheduleMode: true,
   createdAt: true,
   updatedAt: true,
   days: {

@@ -42,6 +42,8 @@ function toRoutineDay(day: RoutineDayEntity): WorkoutSession['routineDay'] {
   return {
     id: day.id,
     dayOfWeek: day.dayOfWeek,
+    name: day.name,
+    order: day.order,
     exercises: day.exercises.map((e) => ({
       id: e.id,
       order: e.order,

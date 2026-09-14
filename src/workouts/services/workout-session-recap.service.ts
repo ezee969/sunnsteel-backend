@@ -12,7 +12,7 @@ import { DatabaseService } from '../../database/database.service';
 import { readProgressionEvents } from '../analytics/progression-events';
 import { readSnapshot } from '../analytics/session-snapshot';
 import { buildSessionRecapRecords, summarizeRecapSets } from '../session-recap';
-import { dayNameFrom } from '../workout-session.selects';
+import { routineDayName } from '../workout-session.selects';
 
 @Injectable()
 export class WorkoutSessionRecapService {
@@ -37,7 +37,7 @@ export class WorkoutSessionRecapService {
         routineDayId: true,
         snapshot: { select: { payload: true } },
         routine: { select: { name: true } },
-        routineDay: { select: { dayOfWeek: true } },
+        routineDay: { select: { dayOfWeek: true, name: true, order: true } },
         setLogs: {
           where: { isCompleted: true },
           select: {
@@ -168,12 +168,10 @@ export class WorkoutSessionRecapService {
       };
     }
 
-    const dayOfWeek =
-      snapshot?.routineDay.dayOfWeek ?? session.routineDay?.dayOfWeek;
     return {
       sessionId: session.id,
       routineName: snapshot?.routine.name ?? session.routine?.name ?? 'Workout',
-      dayName: typeof dayOfWeek === 'number' ? dayNameFrom(dayOfWeek) : null,
+      dayName: routineDayName(snapshot?.routineDay ?? session.routineDay),
       startedAt: session.startedAt.toISOString(),
       endedAt: session.endedAt.toISOString(),
       durationSec,

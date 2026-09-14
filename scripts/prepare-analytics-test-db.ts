@@ -126,6 +126,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260914210000_plateau_min_sessions/migration.sql',
 					'utf8',
+				) +
+				'\n' +
+				// ROUT-11: rotation routines and day names.
+				readFileSync(
+					'prisma/migrations/20260914230000_rotation_routines/migration.sql',
+					'utf8',
 				),
     );
     prisma(

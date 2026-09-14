@@ -10,7 +10,7 @@ import { readSnapshot } from "./analytics/session-snapshot";
 import { SessionComparisonQueryDto } from "./dto/session-comparison.dto";
 import { summarizeRecapSets } from "./session-recap";
 import { performedExercise, readSubstitutions } from "./session-substitutions";
-import { dayNameFrom } from "./workout-session.selects";
+import { routineDayName } from "./workout-session.selects";
 
 const ROUTINE_DAY_LIMIT = 100;
 
@@ -19,6 +19,8 @@ interface RoutineDayRow {
   routineId: string;
   routineName: string | null;
   dayOfWeek: number | null;
+  dayLabel: string | null;
+  dayOrder: number | null;
   lastCompletedAt: Date;
   completedSessionCount: number;
 }
@@ -28,8 +30,11 @@ function mapRoutineDay(row: RoutineDayRow): SessionComparisonRoutineDay {
     routineDayId: row.routineDayId,
     routineId: row.routineId,
     routineName: row.routineName ?? "Workout",
-    dayName:
-      typeof row.dayOfWeek === "number" ? dayNameFrom(row.dayOfWeek) : null,
+    dayName: routineDayName({
+      name: row.dayLabel,
+      dayOfWeek: row.dayOfWeek,
+      order: row.dayOrder,
+    }),
     lastCompletedAt: row.lastCompletedAt.toISOString(),
     completedSessionCount: row.completedSessionCount,
   };
@@ -92,6 +97,8 @@ export class WorkoutSessionComparisonService {
             "routineId",
             "payload"->'routine'->>'name' AS "routineName",
             ("payload"->'routineDay'->>'dayOfWeek')::int AS "dayOfWeek",
+            "payload"->'routineDay'->>'name' AS "dayLabel",
+            ("payload"->'routineDay'->>'order')::int AS "dayOrder",
             "lastCompletedAt",
             "completedSessionCount"
           FROM latest
@@ -190,14 +197,12 @@ export class WorkoutSessionComparisonService {
           }
           const fallback = summarizeRecapSets(session.setLogs);
           const endedAt = session.endedAt!;
-          const dayOfWeek = snapshot.routineDay.dayOfWeek;
 
           return {
             sessionId: session.id,
             routineDayId: snapshot.sourceRoutineDayId,
             routineName: snapshot.routine.name,
-            dayName:
-              typeof dayOfWeek === "number" ? dayNameFrom(dayOfWeek) : null,
+            dayName: routineDayName(snapshot.routineDay),
             startedAt: session.startedAt.toISOString(),
             endedAt: endedAt.toISOString(),
             durationSec:

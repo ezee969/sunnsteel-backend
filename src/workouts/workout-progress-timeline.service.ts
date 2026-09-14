@@ -12,7 +12,7 @@ import type {
 import { DatabaseService } from "../database/database.service";
 import { readSnapshot } from "./analytics/session-snapshot";
 import { ProgressTimelineQueryDto } from "./dto/progress-timeline.dto";
-import { dayNameFrom } from "./workout-session.selects";
+import { routineDayName } from "./workout-session.selects";
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -88,11 +88,10 @@ function progressionChange(value: unknown, eventId: string): ProgressionChange {
 }
 
 function sessionContext(snapshot: WorkoutSessionSnapshotV1) {
-  const dayOfWeek = snapshot.routineDay.dayOfWeek;
   return {
     sessionId: snapshot.sessionId,
     routineName: snapshot.routine.name,
-    dayName: typeof dayOfWeek === "number" ? dayNameFrom(dayOfWeek) : null,
+    dayName: routineDayName(snapshot.routineDay),
   };
 }
 

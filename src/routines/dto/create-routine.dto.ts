@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   IsArray,
   IsBoolean,
   IsIn,
@@ -9,6 +10,7 @@ import {
   IsOptional,
   IsString,
   Max,
+  MaxLength,
   Min,
   ValidateIf,
   ValidateNested,
@@ -20,6 +22,10 @@ import {
   ProgressionScheme,
   RepType,
   REP_TYPES,
+  ROUTINE_DAY_NAME_MAX,
+  ROUTINE_DAYS_MAX,
+  ROUTINE_SCHEDULE_MODES,
+  RoutineScheduleMode,
   RoutineSet,
 } from '@sunsteel/contracts';
 
@@ -114,10 +120,18 @@ export class CreateRoutineExerciseDto implements CreateRoutineExerciseInput {
 }
 
 export class CreateRoutineDayDto implements CreateRoutineDayInput {
+  // 0=Sun .. 6=Sat on a WEEKLY routine; omitted or null on a ROTATION one.
+  // The pairing with the routine's mode is checked by normalizeRoutineDays.
+  @IsOptional()
   @IsInt()
   @Min(0)
   @Max(6)
-  dayOfWeek: number; // 0=Sun .. 6=Sat
+  dayOfWeek?: number | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(ROUTINE_DAY_NAME_MAX + 20) // trimmed, then checked exactly
+  name?: string | null;
 
   @IsOptional()
   @IsInt()
@@ -140,7 +154,12 @@ export class CreateRoutineDto implements CreateRoutineRequest {
   @IsBoolean()
   isPeriodized: boolean; // must be false for now
 
+  @IsOptional()
+  @IsIn(ROUTINE_SCHEDULE_MODES)
+  scheduleMode?: RoutineScheduleMode;
+
   @IsArray()
+  @ArrayMaxSize(ROUTINE_DAYS_MAX)
   @ValidateNested({ each: true })
   @Type(() => CreateRoutineDayDto)
   days: CreateRoutineDayDto[];

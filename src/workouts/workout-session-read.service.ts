@@ -16,7 +16,7 @@ import { DatabaseService } from '../database/database.service';
 import { WorkoutStatsQueryDto } from './dto/workout-stats.dto';
 import {
   buildWorkoutSessionSelect,
-  dayNameFrom,
+  routineDayName,
   WORKOUT_SESSION_LIST_SELECT,
 } from './workout-session.selects';
 
@@ -172,9 +172,7 @@ export class WorkoutSessionReadService {
         routine: {
           id: snapshot?.sourceRoutineId ?? session.routine!.id,
           name: snapshot?.routine.name ?? session.routine!.name,
-          dayName: dayNameFrom(
-            snapshot?.routineDay.dayOfWeek ?? session.routineDay!.dayOfWeek,
-          ),
+          dayName: routineDayName(snapshot?.routineDay ?? session.routineDay),
         },
       };
     });

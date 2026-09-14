@@ -14,7 +14,7 @@ import type {
 import { DatabaseService } from "../database/database.service";
 import { readSnapshot } from "./analytics/session-snapshot";
 import { ExercisePerformanceHistoryQueryDto } from "./dto/exercise-performance-history.dto";
-import { dayNameFrom } from "./workout-session.selects";
+import { routineDayName } from "./workout-session.selects";
 
 interface ExerciseSummaryRow {
   exerciseId: string;
@@ -198,10 +198,7 @@ export class WorkoutExercisePerformanceService {
             sessionId: session.id,
             status: session.status as ExercisePerformanceSession["status"],
             routineName: snapshot.routine.name,
-            dayName:
-              typeof snapshot.routineDay.dayOfWeek === "number"
-                ? dayNameFrom(snapshot.routineDay.dayOfWeek)
-                : null,
+            dayName: routineDayName(snapshot.routineDay),
             startedAt: session.startedAt.toISOString(),
             endedAt: session.endedAt!.toISOString(),
             durationSec:

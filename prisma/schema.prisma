@@ -310,6 +310,8 @@ model Routine {
   isPeriodized    Boolean          @default(false)
   isFavorite      Boolean          @default(false)
   isCompleted     Boolean          @default(false)
+  // ROUT-11: WEEKLY days carry a weekday; ROTATION days run in `order`.
+  scheduleMode    RoutineScheduleMode @default(WEEKLY)
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   days            RoutineDay[]
@@ -319,12 +321,18 @@ model Routine {
   @@index([userId, isCompleted])
 }
 
+enum RoutineScheduleMode {
+  WEEKLY
+  ROTATION
+}
+
 // A training day configuration inside a routine
 model RoutineDay {
   id              String            @id @default(uuid())
   routineId       String
   routine         Routine           @relation(fields: [routineId], references: [id], onDelete: Cascade)
-  dayOfWeek       Int // 0=Sun .. 6=Sat
+  dayOfWeek       Int? // 0=Sun .. 6=Sat on WEEKLY routines; null on ROTATION
+  name            String?           @db.VarChar(40)
   order           Int               @default(0)
   exercises       RoutineExercise[]
   workoutSessions WorkoutSession[]

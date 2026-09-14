@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { routineDayLabel } from '@sunsteel/contracts';
 
 export function buildWorkoutSessionSelect(includeLogs = false) {
   return {
@@ -29,6 +30,7 @@ export function buildWorkoutSessionSelect(includeLogs = false) {
       select: {
         id: true,
         dayOfWeek: true,
+        name: true,
         order: true,
         exercises: {
           select: {
@@ -109,18 +111,19 @@ export const WORKOUT_SESSION_LIST_SELECT = {
   durationSec: true,
   notes: true,
   routine: { select: { id: true, name: true } },
-  routineDay: { select: { dayOfWeek: true } },
+  routineDay: { select: { dayOfWeek: true, name: true, order: true } },
 } as const;
 
-export function dayNameFrom(dayOfWeek: number): string {
-  const names = [
-    'Sunday',
-    'Monday',
-    'Tuesday',
-    'Wednesday',
-    'Thursday',
-    'Friday',
-    'Saturday',
-  ];
-  return names[dayOfWeek] ?? '';
+/**
+ * ROUT-11: a routine day's display name — its own name, else its weekday,
+ * else its rotation letter — for live days and snapshots alike (snapshots
+ * taken before day names existed fall back to the weekday).
+ */
+export function routineDayName(
+  day:
+    | { name?: string | null; dayOfWeek?: number | null; order?: number | null }
+    | null
+    | undefined,
+): string | null {
+  return day ? routineDayLabel(day) || null : null;
 }

@@ -3,7 +3,7 @@ import { Prisma, WorkoutAnalyticsProjection } from '@prisma/client';
 import { WorkoutProgressResponse } from '@sunsteel/contracts';
 import { DatabaseService } from '../database/database.service';
 import { WorkoutProgressQueryDto } from './dto/workout-progress.dto';
-import { dayNameFrom } from './workout-session.selects';
+import { routineDayName } from './workout-session.selects';
 import { dayDifference, localDate } from './analytics/analytics-contribution';
 import { readSnapshot } from './analytics/session-snapshot';
 
@@ -81,7 +81,7 @@ export class WorkoutProgressService {
               sessionId: session.id,
               routineId: snapshot.sourceRoutineId,
               routineName: snapshot.routine.name,
-              dayName: dayNameFrom(snapshot.routineDay.dayOfWeek!),
+              dayName: routineDayName(snapshot.routineDay) ?? '',
               startedAt: session.startedAt.toISOString(),
               endedAt: session.endedAt?.toISOString() ?? null,
               durationSec: session.durationSec,

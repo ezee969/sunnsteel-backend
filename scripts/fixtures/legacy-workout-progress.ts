@@ -9,7 +9,7 @@ import {
   RecentActivityEntry,
   WorkoutProgressResponse,
 } from '@sunsteel/contracts';
-import { dayNameFrom } from '../../src/workouts/workout-session.selects';
+import { routineDayName } from '../../src/workouts/workout-session.selects';
 
 /**
  * Largest gap, in calendar days, between two training days that still counts as
@@ -161,9 +161,8 @@ export class LegacyWorkoutProgressService {
           sessionId: session.id,
           routineId: snapshot?.sourceRoutineId ?? session.routine!.id,
           routineName: snapshot?.routine.name ?? session.routine!.name,
-          dayName: dayNameFrom(
-            snapshot?.routineDay.dayOfWeek ?? session.routineDay!.dayOfWeek,
-          ),
+          dayName:
+            routineDayName(snapshot?.routineDay ?? session.routineDay) ?? '',
           startedAt: session.startedAt.toISOString(),
           endedAt: session.endedAt?.toISOString() ?? null,
           durationSec: session.durationSec,
