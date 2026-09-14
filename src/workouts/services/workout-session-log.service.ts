@@ -13,6 +13,11 @@ import {
   recordFrontier,
   type RecordSet,
 } from '../live-personal-records';
+import {
+  expectedExerciseId,
+  readSubstitutions,
+  substitutionFor,
+} from '../session-substitutions';
 import { toSetLogResponse } from '../workout-session.mapper';
 
 // Narrow unknown error objects that include a Prisma error code
@@ -36,7 +41,12 @@ export class WorkoutSessionLogService {
       // Validate session ownership and status
       const session = await tx.workoutSession.findFirst({
         where: { id: sessionId, userId },
-        select: { id: true, status: true, routineDayId: true },
+        select: {
+          id: true,
+          status: true,
+          routineDayId: true,
+          exerciseSubstitutions: true,
+        },
       });
       if (!session) {
         throw new NotFoundException('Workout session not found');
@@ -65,10 +75,20 @@ export class WorkoutSessionLogService {
         );
       }
 
-      // Validate provided exerciseId matches routineExercise.exerciseId
-      if (dto.exerciseId !== routineExercise.exerciseId) {
+      // The set must name the slot's exercise, or its LIVE-11 substitute.
+      const substitution = substitutionFor(
+        readSubstitutions(session.exerciseSubstitutions),
+        routineExercise.id,
+      );
+      if (
+        dto.exerciseId !==
+        expectedExerciseId(
+          routineExercise,
+          substitution ? [substitution] : [],
+        )
+      ) {
         throw new BadRequestException(
-          'exerciseId does not match routine exercise',
+          'exerciseId does not match the exercise for this slot',
         );
       }
 
@@ -154,7 +174,8 @@ export class WorkoutSessionLogService {
         existing: existing as RecordSet | null,
         previous: recordFrontier(priorSets),
         exerciseId: dto.exerciseId,
-        exerciseName: routineExercise.exercise.name,
+        exerciseName:
+          substitution?.exercise.name ?? routineExercise.exercise.name,
       });
 
       return {

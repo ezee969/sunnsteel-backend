@@ -9,6 +9,7 @@ import { DatabaseService } from "../database/database.service";
 import { readSnapshot } from "./analytics/session-snapshot";
 import { SessionComparisonQueryDto } from "./dto/session-comparison.dto";
 import { summarizeRecapSets } from "./session-recap";
+import { performedExercise, readSubstitutions } from "./session-substitutions";
 import { dayNameFrom } from "./workout-session.selects";
 
 const ROUTINE_DAY_LIMIT = 100;
@@ -145,6 +146,7 @@ export class WorkoutSessionComparisonService {
             completedSets: true,
             notes: true,
             snapshot: { select: { payload: true } },
+            exerciseSubstitutions: true,
             setLogs: {
               where: { isCompleted: true, reps: { gt: 0 } },
               orderBy: [
@@ -209,13 +211,20 @@ export class WorkoutSessionComparisonService {
             totalVolumeKg: session.totalVolumeKg ?? fallback.totalVolumeKg,
             completedSets: session.completedSets ?? fallback.completedSets,
             notes: session.notes,
-            exercises: snapshot.routineDay.exercises.map((exercise) => ({
-              routineExerciseId: exercise.id,
-              exerciseId: exercise.exercise.id,
-              exerciseName: exercise.exercise.name,
-              order: exercise.order,
-              sets: setsByExercise.get(exercise.id) ?? [],
-            })),
+            exercises: snapshot.routineDay.exercises.map((exercise) => {
+              // LIVE-11: a swapped slot compares as the exercise performed.
+              const performed = performedExercise(
+                exercise,
+                readSubstitutions(session.exerciseSubstitutions),
+              );
+              return {
+                routineExerciseId: exercise.id,
+                exerciseId: performed.id,
+                exerciseName: performed.name,
+                order: exercise.order,
+                sets: setsByExercise.get(exercise.id) ?? [],
+              };
+            }),
           };
         });
 

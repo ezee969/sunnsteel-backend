@@ -102,6 +102,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260913200000_exercise_metadata/migration.sql',
 					'utf8',
+				) +
+				'\n' +
+				// LIVE-11: the generated client selects the substitutions column.
+				readFileSync(
+					'prisma/migrations/20260914090000_session_exercise_substitutions/migration.sql',
+					'utf8',
 				),
     );
     prisma(

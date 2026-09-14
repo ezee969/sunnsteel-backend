@@ -18,6 +18,7 @@ import { StartWorkoutDto } from "./dto/start-workout.dto";
 import { StartWorkoutResponseDto } from "./dto/start-workout-response.dto";
 import { FinishWorkoutDto } from "./dto/finish-workout.dto";
 import { UpsertSetLogDto } from "./dto/upsert-set-log.dto";
+import { SubstituteSessionExerciseDto } from "./dto/substitute-session-exercise.dto";
 import { ListSessionsDto } from "./dto/list-sessions.dto";
 import { WorkoutStatsQueryDto } from "./dto/workout-stats.dto";
 import { WorkoutProgressQueryDto } from "./dto/workout-progress.dto";
@@ -172,6 +173,35 @@ export class WorkoutsController {
       sessionId,
       routineExerciseId,
       setNumber,
+    );
+  }
+
+  // LIVE-11: perform a different exercise for one slot of an active session.
+  @Put("sessions/:id/exercises/:routineExerciseId/substitution")
+  async substituteExercise(
+    @Req() req: RequestWithUser,
+    @Param("id") sessionId: string,
+    @Param("routineExerciseId") routineExerciseId: string,
+    @Body() dto: SubstituteSessionExerciseDto,
+  ) {
+    return this.workoutsService.substituteExercise(
+      req.user.id,
+      sessionId,
+      routineExerciseId,
+      dto,
+    );
+  }
+
+  @Delete("sessions/:id/exercises/:routineExerciseId/substitution")
+  async revertExerciseSubstitution(
+    @Req() req: RequestWithUser,
+    @Param("id") sessionId: string,
+    @Param("routineExerciseId") routineExerciseId: string,
+  ) {
+    return this.workoutsService.revertExerciseSubstitution(
+      req.user.id,
+      sessionId,
+      routineExerciseId,
     );
   }
 }

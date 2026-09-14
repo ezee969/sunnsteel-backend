@@ -1,5 +1,9 @@
 import { createHash } from 'node:crypto';
-import { WorkoutSessionSnapshotV1 } from '@sunsteel/contracts';
+import {
+  SessionExerciseSubstitution,
+  WorkoutSessionSnapshotV1,
+} from '@sunsteel/contracts';
+import { performedExercise } from '../session-substitutions';
 
 export const dayDifference = (later: string, earlier: string) =>
   Math.round(
@@ -39,6 +43,7 @@ export function sessionContribution(
   logs: AnalyticsLog[],
   snapshot: WorkoutSessionSnapshotV1,
   endedAt: Date,
+  substitutions: SessionExerciseSubstitution[] = [],
 ) {
   let volumeKg = 0;
   let completedSets = 0;
@@ -69,9 +74,11 @@ export function sessionContribution(
     completedSets++;
     const volume = (log.weight ?? 0) * (log.reps ?? 0);
     volumeKg += volume;
-    const exercise = snapshot.routineDay.exercises.find(
+    const slot = snapshot.routineDay.exercises.find(
       (e) => e.id === (log.sourceRoutineExerciseId ?? log.routineExerciseId),
-    )?.exercise;
+    );
+    // LIVE-11: a swapped slot credits the substitute's muscles and name.
+    const exercise = slot ? performedExercise(slot, substitutions) : undefined;
     if (!exercise)
       throw new Error(`Missing snapshot exercise for set ${log.id}`);
     for (const [groups, factor] of [

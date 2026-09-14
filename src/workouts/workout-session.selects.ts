@@ -15,6 +15,7 @@ export function buildWorkoutSessionSelect(includeLogs = false) {
     durationSec: true,
     notes: true,
     lastActivityAt: true,
+    exerciseSubstitutions: true,
     createdAt: true,
     updatedAt: true,
     routine: {

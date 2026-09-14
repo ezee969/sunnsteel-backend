@@ -7,6 +7,7 @@ import {
   WorkoutSessionLogService,
   WorkoutSessionRecapService,
   WorkoutSessionStartService,
+  WorkoutSessionSubstitutionService,
 } from "./services";
 import { WorkoutSessionReadService } from "./workout-session-read.service";
 import { WorkoutProgressService } from "./workout-progress.service";
@@ -37,6 +38,7 @@ import { WorkoutPersonalGoalsService } from "./workout-personal-goals.service";
     WorkoutSessionFinishService,
     WorkoutSessionLogService,
     WorkoutSessionRecapService,
+    WorkoutSessionSubstitutionService,
     WorkoutSessionReadService,
     WorkoutProgressService,
     WorkoutStrengthTrendService,

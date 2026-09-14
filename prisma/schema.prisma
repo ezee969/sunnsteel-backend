@@ -388,6 +388,9 @@ model WorkoutSession {
   setLogs            SetLog[]
   // Updated whenever a set log is created/updated/deleted (activity heartbeat)
   lastActivityAt     DateTime?
+  // LIVE-11: SessionExerciseSubstitution[] — exercises performed in place of
+  // routine slots. The snapshot keeps the prescription; this keeps the swap.
+  exerciseSubstitutions Json                  @default("[]")
 
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt

@@ -1,4 +1,5 @@
 import { Prisma, WorkoutAnalyticsProjection } from '@prisma/client';
+import { readSubstitutions } from '../session-substitutions';
 import { ensureSessionSnapshot } from './session-snapshot';
 import {
   contributionChecksum,
@@ -26,7 +27,12 @@ export async function summarizeSession(
     where: { sessionId },
     orderBy: { id: 'asc' },
   });
-  const contribution = sessionContribution(logs, snapshot, session.endedAt);
+  const contribution = sessionContribution(
+    logs,
+    snapshot,
+    session.endedAt,
+    readSubstitutions(session.exerciseSubstitutions),
+  );
   await tx.workoutSession.update({
     where: { id: sessionId },
     data: {

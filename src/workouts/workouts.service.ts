@@ -4,6 +4,7 @@ import type {
   FinishWorkoutResponse,
   ListSessionsParams,
   PreviousPerformanceResponse,
+  SubstituteSessionExerciseResponse,
   UpsertSetLogResponse,
   WorkoutSession,
   WorkoutSessionListResponse,
@@ -12,11 +13,13 @@ import { StartWorkoutDto } from "./dto/start-workout.dto";
 import { StartWorkoutResponseDto } from "./dto/start-workout-response.dto";
 import { FinishWorkoutDto } from "./dto/finish-workout.dto";
 import { UpsertSetLogDto } from "./dto/upsert-set-log.dto";
+import { SubstituteSessionExerciseDto } from "./dto/substitute-session-exercise.dto";
 import {
   WorkoutSessionFinishService,
   WorkoutSessionLogService,
   WorkoutSessionRecapService,
   WorkoutSessionStartService,
+  WorkoutSessionSubstitutionService,
 } from "./services";
 import { WorkoutSessionReadService } from "./workout-session-read.service";
 import { WorkoutProgressService } from "./workout-progress.service";
@@ -52,6 +55,7 @@ export class WorkoutsService {
     private readonly workoutSessionComparison: WorkoutSessionComparisonService,
     private readonly workoutProgressTimeline: WorkoutProgressTimelineService,
     private readonly workoutPersonalGoals: WorkoutPersonalGoalsService,
+    private readonly workoutSessionSubstitution: WorkoutSessionSubstitutionService,
   ) {}
 
   async getActiveSession(userId: string): Promise<WorkoutSession | null> {
@@ -163,6 +167,32 @@ export class WorkoutsService {
       sessionId,
       routineExerciseId,
       setNumber,
+    );
+  }
+
+  substituteExercise(
+    userId: string,
+    sessionId: string,
+    routineExerciseId: string,
+    dto: SubstituteSessionExerciseDto,
+  ): Promise<SubstituteSessionExerciseResponse> {
+    return this.workoutSessionSubstitution.substitute(
+      userId,
+      sessionId,
+      routineExerciseId,
+      dto,
+    );
+  }
+
+  revertExerciseSubstitution(
+    userId: string,
+    sessionId: string,
+    routineExerciseId: string,
+  ): Promise<SubstituteSessionExerciseResponse> {
+    return this.workoutSessionSubstitution.revert(
+      userId,
+      sessionId,
+      routineExerciseId,
     );
   }
 

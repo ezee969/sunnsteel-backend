@@ -20,6 +20,10 @@ import {
   buildProgressionOutcome,
   type ProgressionLog,
 } from '../progression-changes';
+import {
+  excludeSubstitutedSlots,
+  readSubstitutions,
+} from '../session-substitutions';
 import { buildWorkoutSessionSelect } from '../workout-session.selects';
 
 @Injectable()
@@ -97,7 +101,11 @@ export class WorkoutSessionFinishService {
           });
           const outcome = buildProgressionOutcome(
             snapshot.routineDay.exercises ?? [],
-            progressionLogs,
+            // LIVE-11: a swapped slot was not done with the prescribed exercise.
+            excludeSubstitutedSlots(
+              progressionLogs,
+              readSubstitutions(session.exerciseSubstitutions),
+            ),
           );
           progressionChanges = outcome.changes;
 
