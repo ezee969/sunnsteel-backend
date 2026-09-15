@@ -67,6 +67,7 @@ model User {
   starredExercises           StarredExercise[]
   sessionShares              SessionShare[]
   measurableGoals            MeasurableGoal[]
+  scheduleOverrides          ScheduleOverride[]
 }
 
 model TrainingLocationPreference {
@@ -323,6 +324,7 @@ model Routine {
   days              RoutineDay[]
   workoutSessions   WorkoutSession[]
   versions          RoutineVersion[]
+  scheduleOverrides ScheduleOverride[]
 
   @@index([userId, isFavorite])
   @@index([userId, isCompleted])
@@ -354,6 +356,30 @@ model RoutineVersion {
 enum RoutineVersionKind {
   SAVED
   BEFORE_RESTORE
+}
+
+// SCHED-04: the schedule-instance model — per-date overrides of a routine's
+// plan, kept by calendar date (YYYY-MM-DD) because routine edits replace the
+// days. MOVE puts one weekly occurrence on `toDate`.
+model ScheduleOverride {
+  id        String               @id @default(uuid())
+  userId    String
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  routineId String
+  routine   Routine              @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  date      String               @db.VarChar(10)
+  kind      ScheduleOverrideKind @default(MOVE)
+  toDate    String?              @db.VarChar(10)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  @@unique([routineId, date])
+  @@index([userId, date])
+  @@index([userId, toDate])
+}
+
+enum ScheduleOverrideKind {
+  MOVE
 }
 
 // A training day configuration inside a routine

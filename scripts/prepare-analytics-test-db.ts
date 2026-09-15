@@ -150,6 +150,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260915170000_rotation_weekdays/migration.sql',
 					'utf8',
+				) +
+				'\n' +
+				// SCHED-04: schedule overrides.
+				readFileSync(
+					'prisma/migrations/20260915190000_schedule_overrides/migration.sql',
+					'utf8',
 				),
     );
     prisma(

@@ -10,6 +10,7 @@ import { TokenModule } from './token/token.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ExercisesModule } from './exercises/exercises.module';
 import { RoutinesModule } from './routines/routines.module';
+import { ScheduleOverridesModule } from './schedule/schedule-overrides.module';
 import { WorkoutsModule } from './workouts/workouts.module';
 import { MetricsModule } from './metrics/metrics.module';
 import { HealthModule } from './health/health.module';
@@ -35,6 +36,7 @@ import { AchievementsModule } from './achievements/achievements.module';
     ScheduleModule.forRoot(),
     ExercisesModule,
     RoutinesModule,
+    ScheduleOverridesModule,
     WorkoutsModule,
     MetricsModule,
     HealthModule,
