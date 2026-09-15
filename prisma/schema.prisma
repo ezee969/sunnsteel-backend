@@ -302,22 +302,25 @@ model StarredExercise {
 
 // A training routine owned by a single user (non-shareable for now)
 model Routine {
-  id              String           @id @default(uuid())
-  userId          String
-  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name            String
-  description     String?
-  isPeriodized    Boolean          @default(false)
-  isFavorite      Boolean          @default(false)
-  isCompleted     Boolean          @default(false)
+  id                String              @id @default(uuid())
+  userId            String
+  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name              String
+  description       String?
+  isPeriodized      Boolean             @default(false)
+  isFavorite        Boolean             @default(false)
+  isCompleted       Boolean             @default(false)
   // ROUT-11: WEEKLY days carry a weekday; ROTATION days run in `order`.
-  scheduleMode    RoutineScheduleMode @default(WEEKLY)
+  scheduleMode      RoutineScheduleMode @default(WEEKLY)
   // SCHED-07: planned rest weekdays of a weekly routine (never training days).
-  restDays        Int[]            @default([])
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  days            RoutineDay[]
-  workoutSessions WorkoutSession[]
+  restDays          Int[]               @default([])
+  // ROUT-08: the last version number handed out, so deleted numbers are never reused.
+  lastVersionNumber Int                 @default(0)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  days              RoutineDay[]
+  workoutSessions   WorkoutSession[]
+  versions          RoutineVersion[]
 
   @@index([userId, isFavorite])
   @@index([userId, isCompleted])
@@ -326,6 +329,29 @@ model Routine {
 enum RoutineScheduleMode {
   WEEKLY
   ROTATION
+}
+
+// ROUT-08: an immutable copy of a routine's whole setup (contracts
+// `RoutineVersionSetup`), saved on purpose or just before a restore.
+model RoutineVersion {
+  id                    String             @id @default(uuid())
+  routineId             String
+  routine               Routine            @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  // 1, 2, 3… per routine, never reused after a deletion.
+  number                Int
+  name                  String?            @db.VarChar(60)
+  kind                  RoutineVersionKind @default(SAVED)
+  // BEFORE_RESTORE only: the number of the version that was restored.
+  restoredVersionNumber Int?
+  setup                 Json
+  createdAt             DateTime           @default(now())
+
+  @@unique([routineId, number])
+}
+
+enum RoutineVersionKind {
+  SAVED
+  BEFORE_RESTORE
 }
 
 // A training day configuration inside a routine

@@ -229,75 +229,81 @@ export class RoutinesService {
     return this.toResponse(userId, routine);
   }
 
-  async update(
+  update(userId: string, id: string, dto: UpdateRoutineDto): Promise<Routine> {
+    return this.db.$transaction((tx) =>
+      this.updateInTransaction(tx, userId, id, dto),
+    );
+  }
+
+  /** A routine edit inside the caller's transaction (ROUT-08 restores). */
+  async updateInTransaction(
+    tx: Prisma.TransactionClient,
     userId: string,
     id: string,
     dto: UpdateRoutineDto,
   ): Promise<Routine> {
-    return this.db.$transaction(async (tx) => {
-      await lockTrainingAccount(tx, userId);
-      await this.assertHistorySafe(tx, userId, id, !!dto.days);
-      // Verify ownership
-      const existing = await tx.routine.findFirst({
-        where: { id, userId },
-        select: {
-          id: true,
-          scheduleMode: true,
-          restDays: true,
-          days: { select: { dayOfWeek: true } },
-        },
-      });
-
-      if (!existing) {
-        throw new NotFoundException(
-          'Routine not found or you do not have permission to edit it.',
-        );
-      }
-
-      const scheduleMode = dto.scheduleMode ?? existing.scheduleMode;
-      if (scheduleMode !== existing.scheduleMode && !dto.days) {
-        throw new BadRequestException(
-          'Changing the schedule mode requires the routine days',
-        );
-      }
-      const days = dto.days
-        ? normalizeRoutineDays(scheduleMode, dto.days)
-        : undefined;
-      // SCHED-07: omitted rest days are kept, minus new training weekdays.
-      const restDays = normalizeRestDays(
-        scheduleMode,
-        days ?? existing.days,
-        dto.restDays,
-        existing.restDays,
-      );
-
-      // Remove current days (cascade removes exercises and sets)
-      // Only delete and recreate days if days array is provided in the update
-      if (dto.days) {
-        await tx.routineDay.deleteMany({ where: { routineId: id } });
-      }
-
-      const updated = await tx.routine.update({
-        where: { id },
-        data: {
-          ...(dto.name && { name: dto.name }),
-          ...(dto.description !== undefined && {
-            description: dto.description,
-          }),
-          isPeriodized: false,
-          scheduleMode,
-          restDays,
-          ...(days && {
-            days: {
-              create: days.map((day) => this.mapRoutineDayForCreate(day)),
-            },
-          }),
-        },
-        select: ROUTINE_WITH_DAYS_SELECT,
-      });
-
-      return this.toResponse(userId, updated, tx);
+    await lockTrainingAccount(tx, userId);
+    await this.assertHistorySafe(tx, userId, id, !!dto.days);
+    // Verify ownership
+    const existing = await tx.routine.findFirst({
+      where: { id, userId },
+      select: {
+        id: true,
+        scheduleMode: true,
+        restDays: true,
+        days: { select: { dayOfWeek: true } },
+      },
     });
+
+    if (!existing) {
+      throw new NotFoundException(
+        'Routine not found or you do not have permission to edit it.',
+      );
+    }
+
+    const scheduleMode = dto.scheduleMode ?? existing.scheduleMode;
+    if (scheduleMode !== existing.scheduleMode && !dto.days) {
+      throw new BadRequestException(
+        'Changing the schedule mode requires the routine days',
+      );
+    }
+    const days = dto.days
+      ? normalizeRoutineDays(scheduleMode, dto.days)
+      : undefined;
+    // SCHED-07: omitted rest days are kept, minus new training weekdays.
+    const restDays = normalizeRestDays(
+      scheduleMode,
+      days ?? existing.days,
+      dto.restDays,
+      existing.restDays,
+    );
+
+    // Remove current days (cascade removes exercises and sets)
+    // Only delete and recreate days if days array is provided in the update
+    if (dto.days) {
+      await tx.routineDay.deleteMany({ where: { routineId: id } });
+    }
+
+    const updated = await tx.routine.update({
+      where: { id },
+      data: {
+        ...(dto.name && { name: dto.name }),
+        ...(dto.description !== undefined && {
+          description: dto.description,
+        }),
+        isPeriodized: false,
+        scheduleMode,
+        restDays,
+        ...(days && {
+          days: {
+            create: days.map((day) => this.mapRoutineDayForCreate(day)),
+          },
+        }),
+      },
+      select: ROUTINE_WITH_DAYS_SELECT,
+    });
+
+    return this.toResponse(userId, updated, tx);
   }
 
   async updateExerciseNote(

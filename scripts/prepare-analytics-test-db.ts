@@ -138,6 +138,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260915090000_routine_rest_days/migration.sql',
 					'utf8',
+				) +
+				'\n' +
+				// ROUT-08: routine versions.
+				readFileSync(
+					'prisma/migrations/20260915150000_routine_versions/migration.sql',
+					'utf8',
 				),
     );
     prisma(
