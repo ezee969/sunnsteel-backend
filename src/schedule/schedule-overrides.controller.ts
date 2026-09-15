@@ -15,10 +15,11 @@ import type { RequestWithUser } from '../common/types/request-with-user';
 import {
   MoveOccurrenceDto,
   ScheduleOverridesQueryDto,
+  SkipOccurrenceDto,
 } from './dto/move-occurrence.dto';
 import { ScheduleOverridesService } from './schedule-overrides.service';
 
-/** SCHED-04: read, move and undo per-date overrides of the owner's plan. */
+/** SCHED-04/05: read, move, skip and undo per-date overrides of the plan. */
 @UseGuards(SupabaseJwtGuard)
 @Controller('schedule/overrides')
 export class ScheduleOverridesController {
@@ -32,6 +33,11 @@ export class ScheduleOverridesController {
   @Put('move')
   move(@Req() req: RequestWithUser, @Body() dto: MoveOccurrenceDto) {
     return this.overrides.move(req.user.id, dto);
+  }
+
+  @Put('skip')
+  skip(@Req() req: RequestWithUser, @Body() dto: SkipOccurrenceDto) {
+    return this.overrides.skip(req.user.id, dto);
   }
 
   @Delete(':id')

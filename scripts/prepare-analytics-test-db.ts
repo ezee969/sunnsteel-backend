@@ -156,6 +156,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260915190000_schedule_overrides/migration.sql',
 					'utf8',
+				) +
+				'\n' +
+				// SCHED-05: skipped occurrences.
+				readFileSync(
+					'prisma/migrations/20260915210000_schedule_skip/migration.sql',
+					'utf8',
 				),
     );
     prisma(

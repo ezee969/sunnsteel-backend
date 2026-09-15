@@ -11,6 +11,7 @@ import {
   addCalendarDays,
   assertMovable,
   assertOverrideRange,
+  assertSkippable,
   daysBetween,
   weekdayOf,
 } from '../src/schedule/schedule-overrides';
@@ -19,6 +20,7 @@ import { ScheduleOverridesService } from '../src/schedule/schedule-overrides.ser
 // Tuesday 15 Sep 2026. The routine trains Monday, Wednesday and Friday.
 const NOW = new Date('2026-09-15T12:00:00.000Z');
 const weekly = { scheduleMode: 'WEEKLY' as const, trainingWeekdays: [1, 3, 5] };
+const rotation = { scheduleMode: 'ROTATION' as const, trainingWeekdays: [] };
 
 test('calendar dates are checked and counted in whole days', () => {
   assert.equal(weekdayOf('2026-09-16'), 3);
@@ -50,18 +52,23 @@ test('a planned weekly workout moves up to six days onto a free date', () => {
   // The server allows one day of slack for time zones, not more.
   assert.doesNotThrow(() => move('2026-09-14', '2026-09-15'));
   assert.throws(() => move('2026-09-11', '2026-09-15'), /Past workouts/);
-  // Friday is already planned, unless its own workout moved away.
+  // Friday is already planned, unless its own workout moved away or was skipped.
   assert.throws(() => move('2026-09-16', '2026-09-18'), ConflictException);
   assert.doesNotThrow(() =>
     move('2026-09-16', '2026-09-18', [
-      { date: '2026-09-18', toDate: '2026-09-19' },
+      { date: '2026-09-18', kind: 'MOVE', toDate: '2026-09-19' },
+    ]),
+  );
+  assert.doesNotThrow(() =>
+    move('2026-09-16', '2026-09-18', [
+      { date: '2026-09-18', kind: 'SKIP', toDate: null },
     ]),
   );
   // Another workout of the routine already moved onto Thursday.
   assert.throws(
     () =>
       move('2026-09-16', '2026-09-17', [
-        { date: '2026-09-18', toDate: '2026-09-17' },
+        { date: '2026-09-18', kind: 'MOVE', toDate: '2026-09-17' },
       ]),
     /already moved to that date/,
   );
@@ -71,11 +78,23 @@ test('a planned weekly workout moves up to six days onto a free date', () => {
         date: '2026-09-16',
         toDate: '2026-09-17',
         now: NOW,
-        routine: { scheduleMode: 'ROTATION', trainingWeekdays: [] },
+        routine: rotation,
         others: [],
       }),
     /Only weekly routines/,
   );
+});
+
+test('a planned weekly workout is skipped ahead or up to six days back', () => {
+  const skip = (date: string, routine: any = weekly) =>
+    assertSkippable({ date, now: NOW, routine });
+  assert.doesNotThrow(() => skip('2026-09-16'));
+  assert.doesNotThrow(() => skip('2026-10-30'));
+  // Monday 9 Sep is six days back (plus a day of slack); 7 Sep is not.
+  assert.doesNotThrow(() => skip('2026-09-09'));
+  assert.throws(() => skip('2026-09-07'), /up to 6 days back/);
+  assert.throws(() => skip('2026-09-15'), /not planned/);
+  assert.throws(() => skip('2026-09-16', rotation), /Only weekly routines/);
 });
 
 type Row = {
@@ -83,7 +102,7 @@ type Row = {
   userId: string;
   routineId: string;
   date: string;
-  kind: 'MOVE';
+  kind: 'MOVE' | 'SKIP';
   toDate: string | null;
   createdAt: Date;
 };
@@ -133,7 +152,8 @@ function fakeDb(rows: Row[]) {
       deleteMany: async (query: any) => {
         const before = rows.length;
         const kept = rows.filter(
-          (row) => !(row.id === query.where.id && row.userId === query.where.userId),
+          (row) =>
+            !(row.id === query.where.id && row.userId === query.where.userId),
         );
         rows.splice(0, rows.length, ...kept);
         return { count: before - kept.length };
@@ -189,5 +209,33 @@ test('moving again changes the target, and undoing removes the override', async 
       NOW,
     ),
     NotFoundException,
+  );
+});
+
+test('skipping a moved workout skips the occurrence and frees its day', async () => {
+  const rows: Row[] = [];
+  const { service } = fakeDb(rows);
+  await service.move(
+    'u1',
+    { routineId: 'split', date: '2026-09-16', toDate: '2026-09-17' },
+    NOW,
+  );
+  const skipped = await service.skip(
+    'u1',
+    { routineId: 'split', date: '2026-09-16' },
+    NOW,
+  );
+  assert.deepEqual([skipped.kind, skipped.toDate], ['SKIP', null]);
+  assert.equal(rows.length, 1);
+  // Friday's workout may now move onto the skipped Wednesday.
+  const moved = await service.move(
+    'u1',
+    { routineId: 'split', date: '2026-09-18', toDate: '2026-09-16' },
+    NOW,
+  );
+  assert.equal(moved.toDate, '2026-09-16');
+  await assert.rejects(
+    service.skip('u1', { routineId: 'split', date: '2026-09-15' }, NOW),
+    /not planned/,
   );
 });

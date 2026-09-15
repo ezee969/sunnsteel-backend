@@ -380,6 +380,8 @@ model ScheduleOverride {
 
 enum ScheduleOverrideKind {
   MOVE
+  // SCHED-05: the occurrence is skipped on purpose; `toDate` is null.
+  SKIP
 }
 
 // A training day configuration inside a routine
