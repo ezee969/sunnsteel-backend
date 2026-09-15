@@ -162,6 +162,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260915210000_schedule_skip/migration.sql',
 					'utf8',
+				) +
+				'\n' +
+				// NOTIF-01: notifications.
+				readFileSync(
+					'prisma/migrations/20260915230000_notifications/migration.sql',
+					'utf8',
 				),
     );
     prisma(

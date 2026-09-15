@@ -68,6 +68,8 @@ model User {
   sessionShares              SessionShare[]
   measurableGoals            MeasurableGoal[]
   scheduleOverrides          ScheduleOverride[]
+  notifications              Notification[]               @relation("NotificationRecipient")
+  notificationsAsActor       Notification[]               @relation("NotificationActor")
 }
 
 model TrainingLocationPreference {
@@ -477,9 +479,10 @@ model WorkoutSession {
   // routine slots. The snapshot keeps the prescription; this keeps the swap.
   exerciseSubstitutions Json                    @default("[]")
 
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
-  shares    SessionShare[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  shares        SessionShare[]
+  notifications Notification[]
 
   @@index([userId, status, startedAt])
   @@index([userId, id])
@@ -654,4 +657,32 @@ model AnalyticsBackfillJob {
   updatedAt               DateTime                   @updatedAt
 
   @@index([state, updatedAt])
+}
+
+// NOTIF-01: the in-app notification center. Rows are gathered on read from
+// records that already exist (training events and follows), keyed by their
+// source, so gathering again never duplicates one.
+enum NotificationKind {
+  ACHIEVEMENT
+  SESSION_PROGRESS
+  NEW_FOLLOWER
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  user      User             @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  kind      NotificationKind
+  sourceKey String
+  actorId   String?
+  actor     User?            @relation("NotificationActor", fields: [actorId], references: [id], onDelete: Cascade)
+  sessionId String?
+  session   WorkoutSession?  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  payload   Json
+  /// When the announced thing happened, not when it was gathered.
+  createdAt DateTime
+  readAt    DateTime?
+
+  @@unique([userId, sourceKey])
+  @@index([userId, createdAt])
 }

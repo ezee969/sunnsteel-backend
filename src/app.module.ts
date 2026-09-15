@@ -15,6 +15,7 @@ import { WorkoutsModule } from './workouts/workouts.module';
 import { MetricsModule } from './metrics/metrics.module';
 import { HealthModule } from './health/health.module';
 import { AchievementsModule } from './achievements/achievements.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { AchievementsModule } from './achievements/achievements.module';
     MetricsModule,
     HealthModule,
     AchievementsModule,
+    NotificationsModule,
   ],
   providers: [
     {
