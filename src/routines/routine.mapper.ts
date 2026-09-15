@@ -75,6 +75,7 @@ export function toRoutineResponse(
     scheduleMode: r.scheduleMode,
     nextRotationDayId: r.scheduleMode === 'ROTATION' ? nextRotationDayId : null,
     restDays: r.restDays,
+    rotationWeekdays: r.rotationWeekdays,
     days: r.days.map(toRoutineDay),
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),

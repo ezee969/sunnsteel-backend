@@ -18,6 +18,7 @@ import { RoutineWithDaysEntity, toRoutineResponse } from './routine.mapper';
 import {
   nextRotationDayId,
   normalizeRestDays,
+  normalizeRotationWeekdays,
   normalizeRoutineDays,
 } from './routine-schedule';
 
@@ -186,6 +187,10 @@ export class RoutinesService {
         isPeriodized: false,
         scheduleMode,
         restDays: normalizeRestDays(scheduleMode, days, dto.restDays),
+        rotationWeekdays: normalizeRotationWeekdays(
+          scheduleMode,
+          dto.rotationWeekdays,
+        ),
         days: {
           create: days.map((day) => this.mapRoutineDayForCreate(day)),
         },
@@ -251,6 +256,7 @@ export class RoutinesService {
         id: true,
         scheduleMode: true,
         restDays: true,
+        rotationWeekdays: true,
         days: { select: { dayOfWeek: true } },
       },
     });
@@ -277,6 +283,12 @@ export class RoutinesService {
       dto.restDays,
       existing.restDays,
     );
+    // SCHED-06: omitted training weekdays are kept; a weekly routine has none.
+    const rotationWeekdays = normalizeRotationWeekdays(
+      scheduleMode,
+      dto.rotationWeekdays,
+      existing.rotationWeekdays,
+    );
 
     // Remove current days (cascade removes exercises and sets)
     // Only delete and recreate days if days array is provided in the update
@@ -294,6 +306,7 @@ export class RoutinesService {
         isPeriodized: false,
         scheduleMode,
         restDays,
+        rotationWeekdays,
         ...(days && {
           days: {
             create: days.map((day) => this.mapRoutineDayForCreate(day)),

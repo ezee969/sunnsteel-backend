@@ -119,3 +119,25 @@ export function normalizeRestDays(
   const source = requested ?? kept.filter((weekday) => !training.has(weekday));
   return [...new Set(source)].sort((a, b) => a - b);
 }
+
+/**
+ * SCHED-06: the weekdays a rotation trains on, sorted and unique; the
+ * schedule places its days on them in order. None means any day, undated.
+ * Kept ones (omitted on update) stay; a weekly routine has none, since its
+ * days carry their own weekdays.
+ */
+export function normalizeRotationWeekdays(
+  mode: RoutineScheduleMode,
+  requested: readonly number[] | undefined,
+  kept: readonly number[] = [],
+): number[] {
+  if (mode === 'WEEKLY') {
+    if (requested?.length) {
+      throw new BadRequestException(
+        'Weekly routines train on the weekdays of their days',
+      );
+    }
+    return [];
+  }
+  return [...new Set(requested ?? kept)].sort((a, b) => a - b);
+}

@@ -314,6 +314,8 @@ model Routine {
   scheduleMode      RoutineScheduleMode @default(WEEKLY)
   // SCHED-07: planned rest weekdays of a weekly routine (never training days).
   restDays          Int[]               @default([])
+  // SCHED-06: weekdays a ROTATION routine trains on; empty means any day, undated.
+  rotationWeekdays  Int[]               @default([])
   // ROUT-08: the last version number handed out, so deleted numbers are never reused.
   lastVersionNumber Int                 @default(0)
   createdAt         DateTime            @default(now())

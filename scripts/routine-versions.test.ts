@@ -36,6 +36,7 @@ function routineEntity(
     isCompleted: false,
     scheduleMode: 'WEEKLY',
     restDays: [0, 6],
+    rotationWeekdays: [],
     createdAt: created,
     updatedAt: created,
     days: [
@@ -79,6 +80,7 @@ test('a captured setup keeps the whole prescription and no ids', () => {
     description: null,
     scheduleMode: 'WEEKLY',
     restDays: [0, 6],
+    rotationWeekdays: [],
     days: [
       {
         dayOfWeek: 1,
@@ -122,12 +124,25 @@ test('restoring a setup becomes an ordinary routine update', () => {
   assert.equal(update.days[0].exercises[0].sets[0].weight, 80);
   assert.deepEqual(setupExerciseIds(setup), ['bench']);
 
+  assert.deepEqual(update.rotationWeekdays, []);
+
   const rotation = setupToRoutineUpdate({
     ...setup,
     scheduleMode: 'ROTATION',
     restDays: [3],
+    rotationWeekdays: [1, 3, 5],
   });
   assert.deepEqual(rotation.restDays, []);
+  assert.deepEqual(rotation.rotationWeekdays, [1, 3, 5]);
+  // A version saved before SCHED-06 has no weekdays: the rotation is undated.
+  const { rotationWeekdays: _omitted, ...older } = setup;
+  void _omitted;
+  assert.deepEqual(
+    setupToRoutineUpdate({ ...older, scheduleMode: 'ROTATION' })
+      .rotationWeekdays,
+    [],
+  );
+  assert.deepEqual(readRoutineSetup(older), older);
 });
 
 test('corrupt setups and bad names are refused', () => {

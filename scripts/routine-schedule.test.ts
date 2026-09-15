@@ -7,6 +7,7 @@ import { DatabaseService } from '../src/database/database.service';
 import {
   nextRotationDayId,
   normalizeRestDays,
+  normalizeRotationWeekdays,
   normalizeRoutineDays,
 } from '../src/routines/routine-schedule';
 import { RoutinesService } from '../src/routines/routines.service';
@@ -114,6 +115,7 @@ const entity = (
   isCompleted: false,
   scheduleMode,
   restDays: [] as number[],
+  rotationWeekdays: [] as number[],
   createdAt: new Date('2026-09-01T10:00:00.000Z'),
   updatedAt: new Date('2026-09-01T10:00:00.000Z'),
   days: days.map((d) => ({ ...d, name: null, exercises: [] })),
@@ -253,4 +255,80 @@ test('creating a weekly routine stores its rest days', async () => {
   });
   assert.deepEqual(created.restDays, [0, 3]);
   assert.deepEqual(routine.restDays, [0, 3]);
+  assert.deepEqual(created.rotationWeekdays, []);
+});
+
+test('training weekdays belong to rotation routines', () => {
+  assert.deepEqual(
+    normalizeRotationWeekdays('ROTATION', [5, 1, 3, 1]),
+    [1, 3, 5],
+  );
+  // Omitted on update keeps the stored weekdays; none is an undated rotation.
+  assert.deepEqual(
+    normalizeRotationWeekdays('ROTATION', undefined, [2, 4]),
+    [2, 4],
+  );
+  assert.deepEqual(normalizeRotationWeekdays('ROTATION', []), []);
+  // A weekly routine has none, and switching to weekly clears them.
+  assert.deepEqual(normalizeRotationWeekdays('WEEKLY', undefined, [2]), []);
+  assert.throws(
+    () => normalizeRotationWeekdays('WEEKLY', [1]),
+    /weekdays of their days/,
+  );
+});
+
+test('creating and editing a rotation store its training weekdays', async () => {
+  let created: any;
+  let updated: any;
+  const db = {
+    routine: {
+      create: async (query: any) => {
+        created = query.data;
+        return {
+          ...entity('ppl', 'ROTATION', [
+            { id: 'push', order: 0, dayOfWeek: null },
+          ]),
+          rotationWeekdays: query.data.rotationWeekdays,
+        };
+      },
+    },
+    workoutSession: { findFirst: async () => null },
+  } as unknown as DatabaseService;
+  const routine = await new RoutinesService(db).create('user-1', {
+    name: 'PPL',
+    isPeriodized: false,
+    scheduleMode: 'ROTATION',
+    rotationWeekdays: [5, 1, 3],
+    days: [{ name: 'Push', exercises: [] }],
+  });
+  assert.deepEqual(created.rotationWeekdays, [1, 3, 5]);
+  assert.deepEqual(routine.rotationWeekdays, [1, 3, 5]);
+
+  const tx = {
+    $queryRaw: async () => [],
+    workoutSession: { findFirst: async () => null },
+    routine: {
+      findFirst: async () => ({
+        id: 'ppl',
+        scheduleMode: 'ROTATION',
+        restDays: [],
+        rotationWeekdays: [1, 3, 5],
+        days: [{ dayOfWeek: null }],
+      }),
+      update: async (query: any) => {
+        updated = query.data;
+        return {
+          ...entity('ppl', 'ROTATION', [
+            { id: 'push', order: 0, dayOfWeek: null },
+          ]),
+          rotationWeekdays: query.data.rotationWeekdays,
+        };
+      },
+    },
+  };
+  const txDb = {
+    $transaction: async (fn: (client: unknown) => unknown) => fn(tx),
+  } as unknown as DatabaseService;
+  await new RoutinesService(txDb).update('user-1', 'ppl', { name: 'PPL 2' });
+  assert.deepEqual(updated.rotationWeekdays, [1, 3, 5]);
 });

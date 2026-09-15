@@ -144,6 +144,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260915150000_routine_versions/migration.sql',
 					'utf8',
+				) +
+				'\n' +
+				// SCHED-06: rotation training weekdays.
+				readFileSync(
+					'prisma/migrations/20260915170000_rotation_weekdays/migration.sql',
+					'utf8',
 				),
     );
     prisma(

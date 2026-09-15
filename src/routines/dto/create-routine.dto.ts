@@ -168,6 +168,15 @@ export class CreateRoutineDto implements CreateRoutineRequest {
   @Max(6, { each: true })
   restDays?: number[];
 
+  // SCHED-06: rotation routines only; checked by normalizeRotationWeekdays.
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(7)
+  @IsInt({ each: true })
+  @Min(0, { each: true })
+  @Max(6, { each: true })
+  rotationWeekdays?: number[];
+
   @IsArray()
   @ArrayMaxSize(ROUTINE_DAYS_MAX)
   @ValidateNested({ each: true })

@@ -23,6 +23,7 @@ export function captureRoutineSetup(
     description: routine.description ?? null,
     scheduleMode: routine.scheduleMode,
     restDays: [...routine.restDays],
+    rotationWeekdays: [...routine.rotationWeekdays],
     days: routine.days.map(
       (day): RoutineVersionDay => ({
         dayOfWeek: day.dayOfWeek,
@@ -70,6 +71,9 @@ export function readRoutineSetup(payload: unknown): RoutineVersionSetup {
       setup.scheduleMode,
     ) &&
     Array.isArray(setup.restDays) &&
+    // SCHED-06: absent in versions saved before it.
+    (setup.rotationWeekdays === undefined ||
+      Array.isArray(setup.rotationWeekdays)) &&
     Array.isArray(setup.days) &&
     setup.days.every(
       (day) =>
@@ -99,6 +103,10 @@ export function setupToRoutineUpdate(setup: RoutineVersionSetup) {
     description: setup.description ?? undefined,
     scheduleMode: setup.scheduleMode,
     restDays: setup.scheduleMode === 'WEEKLY' ? [...setup.restDays] : [],
+    rotationWeekdays:
+      setup.scheduleMode === 'ROTATION'
+        ? [...(setup.rotationWeekdays ?? [])]
+        : [],
     days: setup.days.map((day) => ({
       dayOfWeek: day.dayOfWeek,
       name: day.name,
