@@ -1,6 +1,9 @@
 import * as assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ACHIEVEMENT_DEFINITIONS } from '@sunsteel/contracts';
+import {
+  ACHIEVEMENT_DEFINITIONS,
+  COMEBACK_SESSION_LOOKBACK,
+} from '@sunsteel/contracts';
 import { DatabaseService } from '../src/database/database.service';
 import {
   AchievementTotals,
@@ -9,6 +12,7 @@ import {
   reachedAchievements,
 } from '../src/achievements/achievement-events';
 import { AchievementsService } from '../src/achievements/achievements.service';
+import { comebackRecognitionSummary } from '../src/achievements/comeback-recognition';
 import { renaissanceRankProgress } from '../src/achievements/renaissance-ranks';
 
 const emptyTotals = (): AchievementTotals => ({
@@ -139,6 +143,65 @@ test('Renaissance ranks require both participation and active weeks', () => {
   assert.equal(laureate.activeWeeksRemaining, 0);
 });
 
+test('comeback recognition requires a full break and three distinct active days', () => {
+  const event = (id: string, occurredAt: string) => ({
+    id,
+    sessionId: `session-${id}`,
+    occurredAt: new Date(occurredAt),
+  });
+  const summary = comebackRecognitionSummary(
+    [
+      event('before', '2026-01-01T12:00:00.000Z'),
+      event('return', '2026-01-16T08:00:00.000Z'),
+      event('same-day', '2026-01-16T18:00:00.000Z'),
+      event('second-day', '2026-01-22T12:00:00.000Z'),
+      event('recognized', '2026-01-29T12:00:00.000Z'),
+    ],
+    'UTC',
+    false,
+  );
+
+  assert.equal(summary.minimumInactiveDays, 14);
+  assert.equal(summary.requiredActiveDays, 3);
+  assert.equal(summary.windowDays, 14);
+  assert.deepEqual(summary.recognitions, [
+    {
+      id: 'comeback:return:recognized:v1',
+      inactiveDays: 14,
+      returnedAt: '2026-01-16T08:00:00.000Z',
+      recognizedAt: '2026-01-29T12:00:00.000Z',
+      sourceSessionId: 'session-recognized',
+      activeDays: 3,
+      windowDays: 14,
+    },
+  ]);
+});
+
+test('comeback recognition rejects short breaks, same-day volume and late returns', () => {
+  const event = (id: string, date: string) => ({
+    id,
+    sessionId: `session-${id}`,
+    occurredAt: new Date(`${date}T12:00:00.000Z`),
+  });
+
+  assert.deepEqual(
+    comebackRecognitionSummary(
+      [
+        event('before', '2026-01-01'),
+        event('short-return', '2026-01-15'),
+        event('same-one', '2026-01-15'),
+        event('same-two', '2026-01-15'),
+        event('break-return', '2026-02-01'),
+        event('second-day', '2026-02-08'),
+        event('too-late', '2026-02-15'),
+      ],
+      'UTC',
+      true,
+    ).recognitions,
+    [],
+  );
+});
+
 test('award writer is idempotent and emits addressable streak events', async () => {
   const rows = new Map<string, any>();
   let createManyCalls = 0;
@@ -174,6 +237,7 @@ test('award writer is idempotent and emits addressable streak events', async () 
 test('achievement read reconciles existing verified history once and stays bounded', async () => {
   const rows = new Map<string, any>();
   let requestedTake = 0;
+  let requestedComebackTake = 0;
   let activeWeekWhere: unknown;
   const tx = {
     $queryRaw: async () => [{ id: 'user-1' }],
@@ -206,6 +270,10 @@ test('achievement read reconciles existing verified history once and stays bound
         return { count: query.data.length };
       },
       findMany: async (query: any) => {
+        if (query.where.type === 'SESSION_COMPLETED') {
+          requestedComebackTake = query.take;
+          return [];
+        }
         requestedTake = query.take;
         return [...rows.values()]
           .filter(row => row.type === 'ACHIEVEMENT_UNLOCKED')
@@ -235,6 +303,13 @@ test('achievement read reconciles existing verified history once and stays bound
   assert.equal(first.rank?.nextRank?.id, 'ARTISAN');
   assert.equal(first.rank?.completedSessions, 10);
   assert.equal(first.rank?.activeWeeks, 4);
+  assert.deepEqual(first.comeback, {
+    minimumInactiveDays: 14,
+    requiredActiveDays: 3,
+    windowDays: 14,
+    recognitions: [],
+    historyTruncated: false,
+  });
   assert.deepEqual(
     first.milestoneProgress.map(item => item.nextMilestone?.id ?? null),
     [
@@ -253,6 +328,7 @@ test('achievement read reconciles existing verified history once and stays bound
   assert.ok(first.achievements.every(achievement => achievement.backfilled));
   assert.ok(first.achievements.every(achievement => achievement.sourceSessionId === null));
   assert.equal(requestedTake, 25);
+  assert.equal(requestedComebackTake, COMEBACK_SESSION_LOOKBACK + 1);
   assert.equal(second.earnedCount, first.earnedCount);
   assert.equal(rows.size, 11);
 });

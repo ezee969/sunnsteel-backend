@@ -5,6 +5,7 @@ import {
   ACHIEVEMENT_DEFINITIONS,
   AchievementsResponse,
   AchievementUnlockedEventPayload,
+  COMEBACK_SESSION_LOOKBACK,
   EarnedAchievement,
 } from '@sunsteel/contracts';
 import { DatabaseService } from '../database/database.service';
@@ -14,6 +15,7 @@ import {
   achievementTotals,
   awardMilestoneAchievements,
 } from './achievement-events';
+import { comebackRecognitionSummary } from './comeback-recognition';
 import { renaissanceRankProgress } from './renaissance-ranks';
 
 function parseAchievement(
@@ -62,18 +64,30 @@ export class AchievementsService {
         });
         let rank: AchievementsResponse['rank'] = null;
         let milestoneProgress: AchievementCategoryProgress[] = [];
+        let comeback: AchievementsResponse['comeback'] = null;
 
         if (projection) {
-          const [records, activeWeeks] = await Promise.all([
-            tx.personalRecord.count({ where: { userId } }),
-            tx.workoutRollup.count({
-              where: {
-                projectionId: projection.id,
-                period: 'WEEK',
-                sessions: { gt: 0 },
-              },
-            }),
-          ]);
+          const [records, activeWeeks, completedSessionEvents] =
+            await Promise.all([
+              tx.personalRecord.count({ where: { userId } }),
+              tx.workoutRollup.count({
+                where: {
+                  projectionId: projection.id,
+                  period: 'WEEK',
+                  sessions: { gt: 0 },
+                },
+              }),
+              tx.trainingEvent.findMany({
+                where: { userId, type: 'SESSION_COMPLETED' },
+                orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
+                take: COMEBACK_SESSION_LOOKBACK + 1,
+                select: {
+                  id: true,
+                  sessionId: true,
+                  occurredAt: true,
+                },
+              }),
+            ]);
           const totals = achievementTotals(projection, records);
           await awardMilestoneAchievements(tx, {
             userId,
@@ -87,6 +101,11 @@ export class AchievementsService {
             activeWeeks,
           );
           milestoneProgress = achievementCategoryProgress(totals);
+          comeback = comebackRecognitionSummary(
+            completedSessionEvents.slice(0, COMEBACK_SESSION_LOOKBACK),
+            projection.timeZone,
+            completedSessionEvents.length > COMEBACK_SESSION_LOOKBACK,
+          );
         }
 
         const events = await tx.trainingEvent.findMany({
@@ -111,6 +130,7 @@ export class AchievementsService {
           achievements,
           rank,
           milestoneProgress,
+          comeback,
         };
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
