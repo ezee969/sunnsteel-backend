@@ -40,9 +40,26 @@ export interface SeedSession {
 	logs: SeedSetLog[]
 }
 
-/** Remote databases pay a round trip per statement; keep batches modest. */
-const REPLAY_BATCH = 4
-const TX_OPTIONS = { timeout: 60_000, maxWait: 10_000 }
+/**
+ * Batch size and transaction budget for the analytics replay.
+ *
+ * Remote databases pay a round trip per statement, and how much that costs
+ * depends entirely on which database DATABASE_URL points at. Four sessions per
+ * transaction finishes in seconds against a local Postgres; against the hosted
+ * one it overran the 60s interactive-transaction limit part-way through a run
+ * on 2026-09-16, after the reset had already cleared 993 rows — so the account
+ * was left with no portfolio data at all and the failure was only visible in
+ * the seed's own output.
+ *
+ * Halving the batch and doubling the budget gives roughly four times the
+ * headroom. Both are overridable so a slower link does not need a code change:
+ * SEED_REPLAY_BATCH, SEED_TX_TIMEOUT_MS, SEED_TX_MAX_WAIT_MS.
+ */
+const REPLAY_BATCH = Number(process.env.SEED_REPLAY_BATCH ?? 2)
+const TX_OPTIONS = {
+	timeout: Number(process.env.SEED_TX_TIMEOUT_MS ?? 120_000),
+	maxWait: Number(process.env.SEED_TX_MAX_WAIT_MS ?? 15_000),
+}
 
 /** Writes a routine day's prescription in one statement. */
 export async function writePrescription(
