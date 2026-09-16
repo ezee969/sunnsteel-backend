@@ -93,6 +93,67 @@ describe('FeaturedProfileItemsService', () => {
     );
   });
 
+  it('accepts earned achievements and reached rank titles but rejects future ranks', async () => {
+    const achievement = ACHIEVEMENT_DEFINITIONS[0];
+    const created: Array<{ kind: string; referenceId: string }> = [];
+    const tx = {
+      $queryRaw: async () => [],
+      featuredProfileItem: {
+        deleteMany: async () => ({ count: 0 }),
+        createMany: async (args: {
+          data: Array<{ kind: string; referenceId: string }>;
+        }) => {
+          created.push(...args.data);
+          return { count: 2 };
+        },
+      },
+    };
+    const db = {
+      personalRecord: { findMany: async () => [] },
+      trainingEvent: {
+        findMany: async () => [
+          {
+            id: 'event-1',
+            sessionId: 'session-1',
+            occurredAt: new Date('2026-09-15T10:00:00.000Z'),
+            payload: {
+              ...achievement,
+              schemaVersion: 1,
+              backfilled: false,
+            },
+          },
+        ],
+      },
+      workoutAnalyticsProjection: {
+        findFirst: async () => ({ id: 'projection-1', completedSessions: 15 }),
+      },
+      workoutRollup: { count: async () => 8 },
+      $transaction: async (callback: (client: typeof tx) => unknown) =>
+        callback(tx),
+    } as unknown as DatabaseService;
+    const service = new FeaturedProfileItemsService(db);
+
+    await service.replace('user-1', [
+      { kind: 'ACHIEVEMENT', referenceId: achievement.id },
+      { kind: 'RANK', referenceId: 'APPRENTICE' },
+    ]);
+    assert.deepEqual(
+      created.map(item => [item.kind, item.referenceId]),
+      [
+        ['ACHIEVEMENT', achievement.id],
+        ['RANK', 'APPRENTICE'],
+      ],
+    );
+
+    await assert.rejects(
+      () =>
+        service.replace('user-1', [
+          { kind: 'RANK', referenceId: 'MAESTRO' },
+        ]),
+      BadRequestException,
+    );
+  });
+
   it('omits private record references and resolves earned achievement and rank items', async () => {
     const achievement = ACHIEVEMENT_DEFINITIONS[0];
     const db = {
