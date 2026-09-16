@@ -285,12 +285,23 @@ function initialState(
 /**
  * Training days for the 4-day split, guaranteeing today is one of them so the
  * dashboard's "Today's Workouts" has real scheduled work to show.
+ *
+ * The offsets reach **backwards** from today, not forwards. Today's own
+ * session is deliberately never written — a completed one would make the
+ * dashboard hide today's scheduled work — so a forward-looking set leaves the
+ * part of the week that has already happened with nothing in it. That is how
+ * the dashboard came to read 0/4 weekly workouts, 0/7 active days and a 0-day
+ * streak on a Wednesday: the days were Wed, Thu, Sat, Sun, and the only one
+ * at or before today was today.
+ *
+ * Two prior days plus tomorrow keeps the current week populated on every day
+ * except Monday, where the week genuinely has nothing behind it yet.
  */
 function activeTrainingDows(todayDow: number): number[] {
 	const canonical = [1, 2, 4, 5] // Mon, Tue, Thu, Fri
 	if (canonical.includes(todayDow)) return canonical
-	return [0, 1, 3, 4]
-		.map((offset) => (todayDow + offset) % 7)
+	return [-2, -1, 0, 1]
+		.map((offset) => (todayDow + offset + 7) % 7)
 		.sort((a, b) => a - b)
 }
 
