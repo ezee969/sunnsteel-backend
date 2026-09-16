@@ -18,7 +18,7 @@ import {
 import { comebackRecognitionSummary } from './comeback-recognition';
 import { renaissanceRankProgress } from './renaissance-ranks';
 
-function parseAchievement(
+export function parseAchievementEvent(
   event: {
     id: string;
     sessionId: string | null;
@@ -120,7 +120,7 @@ export class AchievementsService {
           },
         });
         const achievements = events.flatMap(event => {
-          const mapped = parseAchievement(event);
+          const mapped = parseAchievementEvent(event);
           return mapped ? [mapped] : [];
         });
         return {

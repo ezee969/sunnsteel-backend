@@ -70,6 +70,27 @@ model User {
   scheduleOverrides          ScheduleOverride[]
   notifications              Notification[]               @relation("NotificationRecipient")
   notificationsAsActor       Notification[]               @relation("NotificationActor")
+  featuredProfileItems       FeaturedProfileItem[]
+}
+
+enum FeaturedProfileItemKind {
+  RECORD
+  ACHIEVEMENT
+  RANK
+}
+
+model FeaturedProfileItem {
+  id          String                  @id @default(uuid())
+  userId      String
+  user        User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind        FeaturedProfileItemKind
+  referenceId String                  @db.VarChar(100)
+  position    Int
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+
+  @@unique([userId, position])
+  @@unique([userId, kind, referenceId])
 }
 
 model TrainingLocationPreference {

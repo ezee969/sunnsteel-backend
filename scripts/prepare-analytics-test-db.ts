@@ -168,6 +168,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260915230000_notifications/migration.sql',
 					'utf8',
+				) +
+				'\n' +
+				// PROF-07: ordered featured profile selections.
+				readFileSync(
+					'prisma/migrations/20260916090000_featured_profile_items/migration.sql',
+					'utf8',
 				),
     );
     prisma(

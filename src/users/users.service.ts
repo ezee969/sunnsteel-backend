@@ -37,6 +37,7 @@ import {
   mapProfilePrivacy,
   resolveProfileViewerAccess,
 } from './profile-privacy';
+import { FeaturedProfileItemsService } from './featured-profile-items.service';
 
 // Local input type replacing legacy RegisterDto
 interface CreateUserInput {
@@ -99,7 +100,10 @@ type UserProfileRecord = Prisma.UserGetPayload<{
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(
+    private readonly db: DatabaseService,
+    private readonly featuredProfileItems?: FeaturedProfileItemsService,
+  ) {}
 
   // Serialization boundary: Prisma record -> `UserProfile` contract
   // (folds follow counts, converts Date -> ISO string).
@@ -444,6 +448,7 @@ export class UsersService {
       biography,
       location,
       trainingIdentity,
+      featuredItems,
     ] = await Promise.all([
         viewerAccess.workoutHistory
           ? this.db.workoutAnalyticsProjection.findFirst({
@@ -505,6 +510,7 @@ export class UsersService {
               },
             })
           : null,
+        this.featuredProfileItems?.resolveForProfile(user.id, viewerAccess) ?? [],
       ]);
 
     return {
@@ -519,6 +525,7 @@ export class UsersService {
       followingCount: user._count.following,
       isFollowedByMe: isFollower,
       viewerAccess,
+      featuredItems,
       ...(viewerAccess.biography ? { bio: biography?.bio ?? null } : {}),
       ...(viewerAccess.location ? { location: location?.location ?? null } : {}),
       ...(viewerAccess.trainingIdentity
