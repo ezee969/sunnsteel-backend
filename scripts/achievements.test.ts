@@ -295,6 +295,7 @@ test('achievement read reconciles existing verified history once and stays bound
   const service = new AchievementsService(db);
   const first = await service.list('user-1');
   const second = await service.list('user-1');
+  const profile = await service.forProfile('user-1');
 
   assert.equal(first.analyticsReady, true);
   assert.equal(first.earnedCount, 9);
@@ -330,5 +331,11 @@ test('achievement read reconciles existing verified history once and stays bound
   assert.equal(requestedTake, 25);
   assert.equal(requestedComebackTake, COMEBACK_SESSION_LOOKBACK + 1);
   assert.equal(second.earnedCount, first.earnedCount);
+  assert.deepEqual(profile, {
+    rank: first.rank?.currentRank,
+    achievements: first.achievements,
+    comeback: first.comeback,
+  });
+  assert.equal('nextRank' in (profile.rank ?? {}), false);
   assert.equal(rows.size, 11);
 });

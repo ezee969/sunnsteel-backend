@@ -7,6 +7,7 @@ import {
   AchievementUnlockedEventPayload,
   COMEBACK_SESSION_LOOKBACK,
   EarnedAchievement,
+  PublicProfileAchievements,
 } from '@sunsteel/contracts';
 import { DatabaseService } from '../database/database.service';
 import { lockTrainingAccount } from '../workouts/analytics/analytics-lock';
@@ -54,6 +55,15 @@ export function parseAchievementEvent(
 @Injectable()
 export class AchievementsService {
   constructor(private readonly db: DatabaseService) {}
+
+  async forProfile(userId: string): Promise<PublicProfileAchievements> {
+    const response = await this.list(userId);
+    return {
+      rank: response.rank?.currentRank ?? null,
+      achievements: response.achievements,
+      comeback: response.comeback,
+    };
+  }
 
   async list(userId: string): Promise<AchievementsResponse> {
     return this.db.$transaction(

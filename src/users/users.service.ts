@@ -38,6 +38,7 @@ import {
   resolveProfileViewerAccess,
 } from './profile-privacy';
 import { FeaturedProfileItemsService } from './featured-profile-items.service';
+import { AchievementsService } from '../achievements/achievements.service';
 
 // Local input type replacing legacy RegisterDto
 interface CreateUserInput {
@@ -103,6 +104,7 @@ export class UsersService {
   constructor(
     private readonly db: DatabaseService,
     private readonly featuredProfileItems?: FeaturedProfileItemsService,
+    private readonly achievementsService?: AchievementsService,
   ) {}
 
   // Serialization boundary: Prisma record -> `UserProfile` contract
@@ -449,6 +451,7 @@ export class UsersService {
       location,
       trainingIdentity,
       featuredItems,
+      achievements,
     ] = await Promise.all([
         viewerAccess.workoutHistory
           ? this.db.workoutAnalyticsProjection.findFirst({
@@ -511,6 +514,9 @@ export class UsersService {
             })
           : null,
         this.featuredProfileItems?.resolveForProfile(user.id, viewerAccess) ?? [],
+        viewerAccess.achievements && this.achievementsService
+          ? this.achievementsService.forProfile(user.id)
+          : null,
       ]);
 
     return {
@@ -562,6 +568,7 @@ export class UsersService {
             })),
           }
         : {}),
+      ...(viewerAccess.achievements && achievements ? { achievements } : {}),
       ...(viewerAccess.bodyMetrics
         ? {
             bodyMetrics: {

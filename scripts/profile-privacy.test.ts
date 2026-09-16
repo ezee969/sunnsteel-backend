@@ -2,6 +2,7 @@ import * as assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { DatabaseService } from '../src/database/database.service';
+import { AchievementsService } from '../src/achievements/achievements.service';
 import {
   canViewProfileSection,
   resolveProfileViewerAccess,
@@ -53,6 +54,30 @@ const storedProfile = {
   updatedAt: new Date('2026-01-02T00:00:00.000Z'),
   _count: { followers: 2, following: 3 },
   favoriteExercises: [],
+};
+
+const publicAchievementLedger = {
+  rank: {
+    id: 'APPRENTICE' as const,
+    title: 'Apprentice',
+    description: 'Learning the craft through regular practice.',
+    minimumSessions: 5,
+    minimumActiveWeeks: 3,
+  },
+  achievements: [
+    {
+      eventId: 'achievement-event-1',
+      id: 'sessions:1',
+      category: 'SESSIONS' as const,
+      threshold: 1,
+      title: 'First Session',
+      description: 'Complete 1 training session.',
+      unlockedAt: '2026-01-01T12:00:00.000Z',
+      sourceSessionId: 'session-1',
+      backfilled: false,
+    },
+  ],
+  comeback: null,
 };
 
 describe('profile privacy rules', () => {
@@ -228,7 +253,16 @@ describe('UsersService privacy boundary', () => {
         },
       },
     } as unknown as DatabaseService;
-    const service = new UsersService(db);
+    const service = new UsersService(
+      db,
+      undefined,
+      {
+        forProfile: async () => {
+          sensitiveReads += 1;
+          return { rank: null, achievements: [], comeback: null };
+        },
+      } as unknown as AchievementsService,
+    );
 
     const result = await service.getPublicProfile('viewer-1', 'owner_handle');
 
@@ -248,6 +282,7 @@ describe('UsersService privacy boundary', () => {
     assert.equal('location' in result, false);
     assert.equal('trainingIdentity' in result, false);
     assert.equal('personalRecords' in result, false);
+    assert.equal('achievements' in result, false);
     assert.equal('bodyMetrics' in result, false);
     assert.equal('email' in result, false);
   });
@@ -256,12 +291,14 @@ describe('UsersService privacy boundary', () => {
     let followReads = 0;
     let biographyReads = 0;
     let locationReads = 0;
+    let achievementReads = 0;
     const db = {
       user: {
         findFirst: async () => ({
           ...storedProfile,
           bioVisibility: 'PUBLIC',
           locationVisibility: 'FOLLOWERS',
+          achievementsVisibility: 'PUBLIC',
         }),
         findUnique: async (args: { select: Record<string, boolean> }) => {
           if (args.select.bio) {
@@ -284,14 +321,25 @@ describe('UsersService privacy boundary', () => {
       workoutAnalyticsProjection: { findFirst: async () => null },
       personalRecord: { findMany: async () => [] },
     } as unknown as DatabaseService;
-    const service = new UsersService(db);
+    const service = new UsersService(
+      db,
+      undefined,
+      {
+        forProfile: async () => {
+          achievementReads += 1;
+          return publicAchievementLedger;
+        },
+      } as unknown as AchievementsService,
+    );
 
     const result = await service.getPublicProfile(null, 'owner_handle');
 
     assert.equal(followReads, 0);
     assert.equal(biographyReads, 1);
     assert.equal(locationReads, 0);
+    assert.equal(achievementReads, 1);
     assert.equal(result.bio, 'Visible to everyone.');
+    assert.deepEqual(result.achievements, publicAchievementLedger);
     assert.equal('location' in result, false);
     assert.equal(result.isFollowedByMe, false);
     assert.equal(result.viewerAccess.biography, true);
@@ -362,7 +410,13 @@ describe('UsersService privacy boundary', () => {
         ],
       },
     } as unknown as DatabaseService;
-    const service = new UsersService(db);
+    const service = new UsersService(
+      db,
+      undefined,
+      {
+        forProfile: async () => publicAchievementLedger,
+      } as unknown as AchievementsService,
+    );
 
     const result = await service.getPublicProfile('viewer-1', 'owner_handle');
 
@@ -395,6 +449,7 @@ describe('UsersService privacy boundary', () => {
       result.personalRecords?.[0].achievedAt,
       '2026-02-01T12:00:00.000Z',
     );
+    assert.deepEqual(result.achievements, publicAchievementLedger);
     assert.deepEqual(result.bodyMetrics, {
       age: 30,
       sex: 'MALE',

@@ -10,9 +10,10 @@ import { UserRelationshipsService } from './user-relationships.service';
 import { GoalsModule } from '../goals/goals.module';
 import { PlateauPreferencesService } from './plateau-preferences.service';
 import { FeaturedProfileItemsService } from './featured-profile-items.service';
+import { AchievementsModule } from '../achievements/achievements.module';
 
 @Module({
-  imports: [TokenModule, AnalyticsModule, GoalsModule],
+  imports: [TokenModule, AnalyticsModule, GoalsModule, AchievementsModule],
   providers: [
     UsersService,
     TrainingLocationPreferencesService,
