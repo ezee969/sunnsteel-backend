@@ -1,19 +1,28 @@
+import 'reflect-metadata'
+
 import { execFileSync } from 'node:child_process'
-import { writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 
+import { ProgressionScheme, RepType } from '@prisma/client'
+
+import { DatabaseService } from '../src/database/database.service'
+import { UserRelationshipsService } from '../src/users/user-relationships.service'
+import { FeaturedProfileItemsService } from '../src/users/featured-profile-items.service'
+import { UsersService } from '../src/users/users.service'
 import {
-	PrismaClient,
-	ProgressionScheme,
-	RepType,
-	WorkoutSessionStatus,
-} from '@prisma/client'
-
+	SeedSession,
+	rebuildAnalytics,
+	recordCompletedSession,
+	writePrescription,
+} from './portfolio-seed.analytics'
 import {
 	MANIFEST_PATH,
+	OWNER_EMAIL,
 	ROUTINE_IDS,
 	SEED_EMAIL_DOMAIN,
 	SEED_VERSION,
 	SeedManifest,
+	projectionIdFor,
 	seedId,
 } from './portfolio-seed.constants'
 import {
@@ -22,13 +31,14 @@ import {
 	ExerciseSpec,
 	LEGACY_DAYS,
 	PEERS,
+	PeerProfileSpec,
 	SESSION_NOTES,
 } from './portfolio-seed.program'
 import { resetPortfolioSeed } from './portfolio-seed.reset'
 
-const prisma = new PrismaClient()
-
-const OWNER_EMAIL = process.env.SEED_OWNER_EMAIL ?? 'eze.olivero96@gmail.com'
+// DatabaseService is the app's PrismaClient, so the verification step can run
+// the real search, suggestion and profile services against the seeded rows.
+const prisma = new DatabaseService()
 
 /** 12 weeks of history, ending yesterday. */
 const HISTORY_DAYS = 84
@@ -136,6 +146,8 @@ function rpeFor(setIndex: number, atCeiling: boolean): number {
 
 interface ExerciseState {
 	routineExerciseId: string
+	/** Deterministic `RoutineExerciseSet` ids, one per set. */
+	setIds: string[]
 	exerciseId: string
 	spec: ExerciseSpec
 	/** Current prescription weight per set. */
@@ -253,6 +265,9 @@ function initialState(
 ): ExerciseState {
 	return {
 		routineExerciseId,
+		setIds: Array.from({ length: spec.setCount }, (_unused, i) =>
+			seedId(routineExerciseId, 'set', i),
+		),
 		exerciseId,
 		spec,
 		weights: Array.from({ length: spec.setCount }, () => spec.startWeight),
@@ -274,7 +289,9 @@ function initialState(
 function activeTrainingDows(todayDow: number): number[] {
 	const canonical = [1, 2, 4, 5] // Mon, Tue, Thu, Fri
 	if (canonical.includes(todayDow)) return canonical
-	return [0, 1, 3, 4].map((offset) => (todayDow + offset) % 7).sort((a, b) => a - b)
+	return [0, 1, 3, 4]
+		.map((offset) => (todayDow + offset) % 7)
+		.sort((a, b) => a - b)
 }
 
 /** Three days for the archived block that deliberately avoid today. */
@@ -332,7 +349,7 @@ async function ensureExerciseCatalogue(): Promise<number> {
 async function requireOwner() {
 	const owner = await prisma.user.findUnique({
 		where: { email: OWNER_EMAIL },
-		select: { id: true, email: true, name: true },
+		select: { id: true, email: true, name: true, timeZone: true },
 	})
 
 	if (!owner) {
@@ -350,6 +367,19 @@ async function requireOwner() {
 	return owner
 }
 
+function readManifest(): SeedManifest | null {
+	if (!existsSync(MANIFEST_PATH)) return null
+	try {
+		return JSON.parse(readFileSync(MANIFEST_PATH, 'utf8')) as SeedManifest
+	} catch {
+		return null
+	}
+}
+
+/** The weekdays a weekly routine does not train on are its planned rest days. */
+const restDaysFor = (dows: number[]) =>
+	[0, 1, 2, 3, 4, 5, 6].filter((dow) => !dows.includes(dow))
+
 interface BuiltRoutine {
 	id: string
 	days: {
@@ -360,7 +390,7 @@ interface BuiltRoutine {
 }
 
 async function buildRoutine(
-	ownerId: string,
+	userId: string,
 	routineId: string,
 	name: string,
 	description: string,
@@ -369,60 +399,7 @@ async function buildRoutine(
 	options: { isCompleted: boolean; isFavorite: boolean; createdAt: Date },
 	exerciseIdByName: Map<string, string>,
 ): Promise<BuiltRoutine> {
-	await prisma.routine.create({
-		data: {
-			id: routineId,
-			userId: ownerId,
-			name,
-			description,
-			isCompleted: options.isCompleted,
-			isFavorite: options.isFavorite,
-			createdAt: options.createdAt,
-			days: {
-				create: daySpecs.map((day, dayIndex) => ({
-					id: seedId(routineId, 'day', dayIndex),
-					dayOfWeek: dows[dayIndex],
-					order: dayIndex,
-					exercises: {
-						create: day.exercises.map((spec, exerciseIndex) => ({
-							id: seedId(routineId, 'day', dayIndex, 'ex', exerciseIndex),
-							exerciseId: exerciseIdByName.get(spec.name)!,
-							order: exerciseIndex,
-							restSeconds: spec.restSeconds,
-							note: spec.note,
-							progressionScheme: spec.scheme,
-							minWeightIncrement: spec.increment || 2.5,
-							sets: {
-								create: Array.from(
-									{ length: spec.setCount },
-									(_unused, setIndex) => ({
-										id: seedId(
-											routineId,
-											'day',
-											dayIndex,
-											'ex',
-											exerciseIndex,
-											'set',
-											setIndex,
-										),
-										setNumber: setIndex + 1,
-										repType: spec.set.repType,
-										reps: spec.set.reps ?? null,
-										minReps: spec.set.minReps ?? null,
-										maxReps: spec.set.maxReps ?? null,
-										weight: spec.startWeight,
-										rir: spec.set.rir ?? null,
-									}),
-								),
-							},
-						})),
-					},
-				})),
-			},
-		},
-	})
-
-	return {
+	const built: BuiltRoutine = {
 		id: routineId,
 		days: daySpecs.map((day, dayIndex) => ({
 			routineDayId: seedId(routineId, 'day', dayIndex),
@@ -436,6 +413,327 @@ async function buildRoutine(
 			),
 		})),
 	}
+
+	await prisma.routine.create({
+		data: {
+			id: routineId,
+			userId,
+			name,
+			description,
+			isCompleted: options.isCompleted,
+			isFavorite: options.isFavorite,
+			scheduleMode: 'WEEKLY',
+			restDays: restDaysFor(dows),
+			createdAt: options.createdAt,
+			days: {
+				create: daySpecs.map((day, dayIndex) => ({
+					id: built.days[dayIndex].routineDayId,
+					dayOfWeek: dows[dayIndex],
+					name: day.label.slice(0, 40),
+					order: dayIndex,
+					exercises: {
+						create: built.days[dayIndex].states.map((state, exerciseIndex) => ({
+							id: state.routineExerciseId,
+							exerciseId: state.exerciseId,
+							order: exerciseIndex,
+							restSeconds: state.spec.restSeconds,
+							note: state.spec.note,
+							progressionScheme: state.spec.scheme,
+							minWeightIncrement: state.spec.increment || 2.5,
+							sets: {
+								create: state.setIds.map((setId, setIndex) => ({
+									id: setId,
+									setNumber: setIndex + 1,
+									repType: state.spec.set.repType,
+									reps: state.spec.set.reps ?? null,
+									minReps: state.spec.set.minReps ?? null,
+									maxReps: state.spec.set.maxReps ?? null,
+									weight: state.spec.startWeight,
+									rir: state.spec.set.rir ?? null,
+								})),
+							},
+						})),
+					},
+				})),
+			},
+		},
+	})
+
+	return built
+}
+
+/**
+ * Performs one routine day and returns the session as the analytics writers
+ * need it: the prescription it was performed against (captured before the
+ * simulation advances) and the completed set logs.
+ */
+function planSession(
+	routine: BuiltRoutine,
+	day: BuiltRoutine['days'][number],
+	sessionId: string,
+	startedAt: Date,
+	notes: string | null,
+): SeedSession {
+	const prescription = day.states.flatMap((state) =>
+		state.setIds.map((setId, i) => ({ setId, weight: state.weights[i] })),
+	)
+	const planned = day.states.flatMap((state) => performExercise(state))
+
+	const totalSets = planned.length
+	const durationSec =
+		clamp(Math.round(12 + totalSets * 3.2 + randInt(-4, 6)), 45, 75) * 60
+	const endedAt = new Date(startedAt.getTime() + durationSec * 1000)
+
+	return {
+		id: sessionId,
+		routineId: routine.id,
+		routineDayId: day.routineDayId,
+		startedAt,
+		endedAt,
+		durationSec,
+		notes,
+		prescription,
+		logs: planned.map((log, index) => ({
+			id: seedId('setlog', sessionId, log.routineExerciseId, log.setNumber),
+			routineExerciseId: log.routineExerciseId,
+			exerciseId: log.exerciseId,
+			setNumber: log.setNumber,
+			reps: log.reps,
+			weight: log.weight,
+			rpe: log.rpe,
+			completedAt: new Date(
+				startedAt.getTime() +
+					Math.round(((index + 1) / (totalSets + 1)) * durationSec * 1000),
+			),
+		})),
+	}
+}
+
+/** Persists the prescriptions the simulated progression arrived at. */
+async function persistFinalPrescriptions(routine: BuiltRoutine): Promise<void> {
+	await writePrescription(
+		prisma,
+		routine.days.flatMap((day) =>
+			day.states.flatMap((state) =>
+				state.setIds.map((setId, i) => ({ setId, weight: state.weights[i] })),
+			),
+		),
+	)
+}
+
+/** A peer's program: the owner's days, scaled to their strength. */
+function scaleDay(day: DaySpec, strength: number): DaySpec {
+	return {
+		label: day.label,
+		exercises: day.exercises.map((exercise) => ({
+			...exercise,
+			startWeight: roundToIncrement(
+				exercise.startWeight * strength,
+				exercise.increment,
+			),
+			deloads: false,
+		})),
+	}
+}
+
+const PEER_HISTORY_DAYS = 42
+
+async function seedPeerProfile(
+	peerId: string,
+	handle: string,
+	profile: PeerProfileSpec,
+	today: Date,
+	timeZone: string,
+	exerciseIdByName: Map<string, string>,
+): Promise<{ sessions: number; setLogs: number }> {
+	await prisma.user.update({
+		where: { id: peerId },
+		data: {
+			bio: profile.bio,
+			location: profile.location,
+			trainingGoals: profile.goals,
+			trainingExperienceLevel: profile.experience,
+			trainingDisciplines: profile.disciplines,
+			preferredTrainingStyle: profile.style,
+			age: profile.body.age,
+			sex: profile.body.sex,
+			weight: profile.body.weight,
+			height: profile.body.height,
+			bioVisibility: profile.visibility.bio,
+			locationVisibility: profile.visibility.location,
+			trainingIdentityVisibility: profile.visibility.trainingIdentity,
+			historyVisibility: profile.visibility.history,
+			recordsVisibility: profile.visibility.records,
+			achievementsVisibility: profile.visibility.achievements,
+			bodyMetricsVisibility: profile.visibility.bodyMetrics,
+			favoriteExercises: {
+				create: profile.favorites.map((name, position) => ({
+					exerciseId: exerciseIdByName.get(name)!,
+					position,
+				})),
+			},
+		},
+	})
+
+	const routine = await buildRoutine(
+		peerId,
+		seedId('routine', 'peer', handle),
+		profile.routineName,
+		'',
+		profile.days.map((index) => scaleDay(ACTIVE_DAYS[index], profile.strength)),
+		profile.dows,
+		{
+			isCompleted: false,
+			isFavorite: true,
+			createdAt: addDays(today, -(PEER_HISTORY_DAYS + 3)),
+		},
+		exerciseIdByName,
+	)
+
+	let sessions = 0
+	let setLogs = 0
+	for (let daysAgo = PEER_HISTORY_DAYS; daysAgo >= 1; daysAgo -= 1) {
+		const date = addDays(today, -daysAgo)
+		const day = routine.days.find(
+			(candidate) => candidate.dayOfWeek === date.getDay(),
+		)
+		if (!day || chance(0.15)) continue
+		const session = planSession(
+			routine,
+			day,
+			seedId('session', routine.id, daysAgo),
+			sessionStart(date),
+			null,
+		)
+		await recordCompletedSession(prisma, peerId, session)
+		sessions += 1
+		setLogs += session.logs.length
+	}
+	await persistFinalPrescriptions(routine)
+	await rebuildAnalytics(prisma, peerId, timeZone, projectionIdFor(peerId))
+
+	// Featured through the real service, which refuses records that do not exist.
+	await new FeaturedProfileItemsService(prisma).replace(
+		peerId,
+		profile.featuredRecords.map((name) => ({
+			kind: 'RECORD' as const,
+			referenceId: exerciseIdByName.get(name)!,
+		})),
+	)
+
+	return { sessions, setLogs }
+}
+
+/**
+ * Reads the seeded data back through the real services the capture targets
+ * call, and fails the run when a surface would render empty.
+ */
+async function verify(ownerId: string): Promise<void> {
+	const problems: string[] = []
+	const ownerRoutineIds = [ROUTINE_IDS.active, ROUTINE_IDS.legacy]
+	const expectedDays = ACTIVE_DAYS.length + LEGACY_DAYS.length
+
+	const days = await prisma.routineDay.findMany({
+		where: { routineId: { in: ownerRoutineIds } },
+		select: { name: true, _count: { select: { exercises: true } } },
+	})
+	if (days.length !== expectedDays)
+		problems.push(`expected ${expectedDays} routine days, found ${days.length}`)
+	const emptyDays = days.filter((day) => day._count.exercises === 0)
+	if (emptyDays.length)
+		problems.push(
+			`routine days without exercises: ${emptyDays.map((day) => day.name).join(', ')}`,
+		)
+
+	const unsummarized = await prisma.workoutSession.count({
+		where: {
+			userId: ownerId,
+			routineId: { in: ownerRoutineIds },
+			OR: [
+				{ totalVolumeKg: null },
+				{ completedSets: null },
+				{ snapshot: null },
+			],
+		},
+	})
+	if (unsummarized)
+		problems.push(
+			`${unsummarized} seeded sessions lack volume, sets or a snapshot`,
+		)
+
+	const projection = await prisma.workoutAnalyticsProjection.findFirst({
+		where: { userId: ownerId, active: true, state: 'READY' },
+	})
+	if (!projection)
+		problems.push('owner has no active READY analytics projection')
+
+	const [records, achievements, progression] = await Promise.all([
+		prisma.personalRecord.count({ where: { userId: ownerId } }),
+		prisma.trainingEvent.count({
+			where: { userId: ownerId, type: 'ACHIEVEMENT_UNLOCKED' },
+		}),
+		prisma.trainingEvent.count({
+			where: { userId: ownerId, type: 'PROGRESSION_CHANGED' },
+		}),
+	])
+	if (!records) problems.push('owner has no personal records')
+	if (!achievements) problems.push('owner has no achievements')
+
+	console.log('\nOwner analytics')
+	console.log(`  sessions           ${projection?.completedSessions ?? 0}`)
+	console.log(`  sets               ${projection?.completedSets ?? 0}`)
+	console.log(
+		`  volume             ${Math.round(projection?.totalVolumeKg ?? 0).toLocaleString()} kg`,
+	)
+	console.log(`  best streak        ${projection?.bestRun ?? 0} days`)
+	console.log(`  personal records   ${records}`)
+	console.log(`  achievements       ${achievements}`)
+	console.log(`  progression events ${progression}`)
+
+	const users = new UsersService(
+		prisma,
+		new FeaturedProfileItemsService(prisma),
+	)
+	const relationships = new UserRelationshipsService(prisma)
+
+	console.log('\nSearch (as the owner)')
+	for (const query of ['Marta', '@tomas', 'Haddad', 'ken']) {
+		const results = await users.searchUsers(query, ownerId, 10)
+		console.log(
+			`  ${query.padEnd(18)} ${results.map((user) => user.username).join(', ') || '(none)'}`,
+		)
+		if (!results.length) problems.push(`search "${query}" returned no members`)
+	}
+	const suggestions = await relationships.suggestions(ownerId)
+	console.log(
+		`  /search suggestions ${suggestions.items.map((item) => item.username).join(', ') || '(none)'}`,
+	)
+	if (!suggestions.items.length) problems.push('follow suggestions are empty')
+
+	console.log('\nPeer profiles (owner view | signed-out view)')
+	const sections = [
+		'bio',
+		'location',
+		'trainingIdentity',
+		'trainingSummary',
+		'personalRecords',
+		'bodyMetrics',
+		'featuredItems',
+	]
+	const describe = (profile: object) =>
+		sections.filter((key) => key in profile).join(', ') || '(nothing)'
+	for (const peer of PEERS.filter((candidate) => candidate.profile)) {
+		const member = await users.getPublicProfile(ownerId, peer.handle)
+		const anonymous = await users.getPublicProfile(null, peer.handle)
+		console.log(`  ${peer.handle.padEnd(18)} ${describe(member)}`)
+		console.log(`  ${''.padEnd(18)} ${describe(anonymous)}`)
+		if (!member.personalRecords?.length)
+			problems.push(`${peer.handle} shows no personal records to the owner`)
+	}
+
+	if (problems.length) {
+		throw new Error(`Verification failed:\n  - ${problems.join('\n  - ')}`)
+	}
 }
 
 async function main() {
@@ -447,7 +745,21 @@ async function main() {
 	const catalogueSize = await ensureExerciseCatalogue()
 	console.log(`Exercises     : ${catalogueSize} in catalogue`)
 
-	const removed = await resetPortfolioSeed(prisma)
+	// Remember the account's analytics state before the first run only; later
+	// runs would otherwise record what the seed itself set.
+	const ownerBefore = readManifest()?.ownerBefore ?? {
+		timeZone: owner.timeZone,
+		hadProjection:
+			(await prisma.workoutAnalyticsProjection.count({
+				where: { userId: owner.id, id: { not: projectionIdFor(owner.id) } },
+			})) > 0,
+	}
+	const timeZone =
+		process.env.SEED_TIME_ZONE ??
+		owner.timeZone ??
+		Intl.DateTimeFormat().resolvedOptions().timeZone
+
+	const removed = await resetPortfolioSeed(prisma, owner.id)
 	const removedTotal = Object.values(removed).reduce((a, b) => a + b, 0)
 	if (removedTotal > 0) {
 		console.log(`Reset         : cleared ${removedTotal} rows from a prior run`)
@@ -458,9 +770,15 @@ async function main() {
 	const activeDows = activeTrainingDows(todayDow)
 	const legacyDows = legacyTrainingDows(todayDow)
 
-	const names = [...ACTIVE_DAYS, ...LEGACY_DAYS].flatMap((day) =>
-		day.exercises.map((exercise) => exercise.name),
-	)
+	const names = [
+		...[...ACTIVE_DAYS, ...LEGACY_DAYS].flatMap((day) =>
+			day.exercises.map((exercise) => exercise.name),
+		),
+		...PEERS.flatMap((peer) => [
+			...(peer.profile?.favorites ?? []),
+			...(peer.profile?.featuredRecords ?? []),
+		]),
+	]
 	const catalogue = await prisma.exercise.findMany({
 		where: { name: { in: [...new Set(names)] } },
 		select: { id: true, name: true },
@@ -504,36 +822,17 @@ async function main() {
 		exerciseIdByName,
 	)
 
-	const sessions: {
-		id: string
-		routineId: string
-		routineDayId: string
-		startedAt: Date
-		endedAt: Date
-		durationSec: number
-		notes: string | null
-	}[] = []
-	const setLogRows: {
-		id: string
-		sessionId: string
-		routineExerciseId: string
-		exerciseId: string
-		setNumber: number
-		reps: number
-		weight: number
-		rpe: number
-		isCompleted: boolean
-		completedAt: Date
-	}[] = []
-
 	let deloadApplied = false
 	let noteCursor = 0
 	let sessionIndex = 0
+	let setLogCount = 0
+	let totalVolume = 0
 	const noteSessions = new Set([2, 9, 17, 24, 31])
 
-	// Walk forwards through history so progression accumulates in order. Day 0
-	// (today) is deliberately left empty: a completed session today would make
-	// the dashboard hide today's scheduled work.
+	// Walk forwards through history so progression accumulates in order, and
+	// record each session as it happens so its snapshot captures that day's
+	// prescription. Day 0 (today) is deliberately left empty: a completed
+	// session today would make the dashboard hide today's scheduled work.
 	for (let daysAgo = HISTORY_DAYS; daysAgo >= 1; daysAgo -= 1) {
 		const date = addDays(today, -daysAgo)
 		const dow = date.getDay()
@@ -555,7 +854,7 @@ async function main() {
 		const day = routine.days.find((candidate) => candidate.dayOfWeek === dow)
 		if (!day) continue
 
-		// Coming back from the week off: pull the barbell lifts back ~10% and
+		// Coming back from the week off: pull the barbell lifts back ~5% and
 		// rebuild. One small deload, exactly where a real one would land.
 		let note: string | null = null
 		if (!isLegacy && !deloadApplied && daysAgo < MISSED_WEEK.from) {
@@ -581,84 +880,24 @@ async function main() {
 		}
 
 		sessionIndex += 1
-		const sessionId = seedId('session', routine.id, daysAgo)
-		const startedAt = sessionStart(date)
-
-		const logs = day.states.flatMap((state) => performExercise(state))
-
-		const totalSets = logs.length
-		const durationSec =
-			clamp(Math.round(12 + totalSets * 3.2 + randInt(-4, 6)), 45, 75) * 60
-		const endedAt = new Date(startedAt.getTime() + durationSec * 1000)
-
-		sessions.push({
-			id: sessionId,
-			routineId: routine.id,
-			routineDayId: day.routineDayId,
-			startedAt,
-			endedAt,
-			durationSec,
-			notes: note,
-		})
-
-		logs.forEach((log, index) => {
-			setLogRows.push({
-				id: seedId('setlog', sessionId, log.routineExerciseId, log.setNumber),
-				sessionId,
-				routineExerciseId: log.routineExerciseId,
-				exerciseId: log.exerciseId,
-				setNumber: log.setNumber,
-				reps: log.reps,
-				weight: log.weight,
-				rpe: log.rpe,
-				isCompleted: true,
-				completedAt: new Date(
-					startedAt.getTime() +
-						Math.round(((index + 1) / (totalSets + 1)) * durationSec * 1000),
-				),
-			})
-		})
+		const session = planSession(
+			routine,
+			day,
+			seedId('session', routine.id, daysAgo),
+			sessionStart(date),
+			note,
+		)
+		await recordCompletedSession(prisma, owner.id, session)
+		setLogCount += session.logs.length
+		totalVolume += session.logs.reduce(
+			(sum, log) => sum + log.weight * log.reps,
+			0,
+		)
 	}
 
-	await prisma.workoutSession.createMany({
-		data: sessions.map((session) => ({
-			...session,
-			userId: owner.id,
-			status: WorkoutSessionStatus.COMPLETED,
-			lastActivityAt: session.endedAt,
-			createdAt: session.startedAt,
-		})),
-		skipDuplicates: true,
-	})
-
-	// Chunked: a single createMany with a few thousand rows blows past the
-	// pooled connection's parameter limit.
-	for (let i = 0; i < setLogRows.length; i += 500) {
-		await prisma.setLog.createMany({
-			data: setLogRows.slice(i, i + 500),
-			skipDuplicates: true,
-		})
-	}
-
-	// Persist the prescriptions the simulated progression arrived at, so the
-	// routine screens show the weights this history actually earned.
-	for (const routine of [legacyRoutine, activeRoutine]) {
-		for (const day of routine.days) {
-			for (const state of day.states) {
-				for (let i = 0; i < state.weights.length; i += 1) {
-					await prisma.routineExerciseSet.update({
-						where: {
-							routineExerciseId_setNumber: {
-								routineExerciseId: state.routineExerciseId,
-								setNumber: i + 1,
-							},
-						},
-						data: { weight: state.weights[i] },
-					})
-				}
-			}
-		}
-	}
+	// The routine screens show the weights this history actually earned.
+	await persistFinalPrescriptions(legacyRoutine)
+	await persistFinalPrescriptions(activeRoutine)
 
 	// --- peers and follow graph ------------------------------------------------
 	const peerIds = PEERS.map((peer) => seedId('user', peer.handle))
@@ -670,35 +909,68 @@ async function main() {
 			name: peer.name,
 			lastName: peer.lastName,
 			avatarUrl: `https://api.dicebear.com/9.x/avataaars/svg?seed=${peer.handle}`,
-			createdAt: addDays(today, -randInt(30, 200)),
+			createdAt: addDays(today, -randInt(60, 200)),
 		})),
 		skipDuplicates: true,
 	})
 
-	// Asymmetric on purpose: some mutual, some one-way in each direction.
+	let peerSessions = 0
+	let peerSetLogs = 0
+	for (const [index, peer] of PEERS.entries()) {
+		if (!peer.profile) continue
+		const seeded = await seedPeerProfile(
+			peerIds[index],
+			peer.handle,
+			peer.profile,
+			today,
+			timeZone,
+			exerciseIdByName,
+		)
+		peerSessions += seeded.sessions
+		peerSetLogs += seeded.setLogs
+	}
+
+	// Asymmetric on purpose: some mutual, some one-way in each direction. The
+	// owner follows every profiled peer, so followers-only sections open up.
 	const iFollow = [0, 1, 2, 4]
 	const followMe = [1, 2, 3, 5]
 	const follows = [
 		...iFollow.map((i) => ({ followerId: owner.id, followingId: peerIds[i] })),
 		...followMe.map((i) => ({ followerId: peerIds[i], followingId: owner.id })),
-		// A little peer-to-peer texture so follower counts are not all 1.
+		// Peer-to-peer texture so follower counts are not all 1, and so the
+		// suggestions have accounts followed by the people the owner follows.
 		{ followerId: peerIds[0], followingId: peerIds[1] },
 		{ followerId: peerIds[3], followingId: peerIds[1] },
 		{ followerId: peerIds[4], followingId: peerIds[0] },
 		{ followerId: peerIds[5], followingId: peerIds[2] },
+		{ followerId: peerIds[0], followingId: peerIds[5] },
+		{ followerId: peerIds[2], followingId: peerIds[3] },
 	]
 	await prisma.userFollow.createMany({ data: follows, skipDuplicates: true })
 
+	// --- owner analytics -------------------------------------------------------
+	// Replays every completed session of the account, real ones included, into
+	// a fresh generation, exactly as the backfill job would.
+	const analytics = await rebuildAnalytics(
+		prisma,
+		owner.id,
+		timeZone,
+		projectionIdFor(owner.id),
+	)
+
 	// --- manifest and summary --------------------------------------------------
+	const profiledPeers = PEERS.filter((peer) => peer.profile).length
 	const counts = {
-		routines: 2,
+		routines: 2 + profiledPeers,
 		routineDays: ACTIVE_DAYS.length + LEGACY_DAYS.length,
 		routineExercises:
 			ACTIVE_DAYS.reduce((n, d) => n + d.exercises.length, 0) +
 			LEGACY_DAYS.reduce((n, d) => n + d.exercises.length, 0),
-		workoutSessions: sessions.length,
-		setLogs: setLogRows.length,
+		workoutSessions: sessionIndex,
+		setLogs: setLogCount,
 		peerUsers: PEERS.length,
+		peerSessions,
+		peerSetLogs,
 		follows: follows.length,
 	}
 
@@ -709,25 +981,29 @@ async function main() {
 		ownerEmail: owner.email,
 		routineIds: [ROUTINE_IDS.active, ROUTINE_IDS.legacy],
 		peerUserIds: peerIds,
+		ownerBefore,
 		counts,
 	}
 	writeFileSync(MANIFEST_PATH, `${JSON.stringify(manifest, null, 2)}\n`)
-
-	const totalVolume = setLogRows.reduce(
-		(sum, log) => sum + log.weight * log.reps,
-		0,
-	)
 
 	console.log('\nCreated')
 	for (const [table, value] of Object.entries(counts)) {
 		console.log(`  ${table.padEnd(18)} ${value}`)
 	}
-	console.log(`\n  total volume       ${Math.round(totalVolume).toLocaleString()} kg`)
+	console.log(
+		`\n  total volume       ${Math.round(totalVolume).toLocaleString()} kg`,
+	)
 	console.log(`  history window     ${HISTORY_DAYS} days`)
+	console.log(
+		`  analytics replay   ${analytics.sessions} sessions in ${timeZone} (${analytics.skipped} unrecoverable skipped)`,
+	)
 	console.log(
 		`  active routine     days ${activeDows.join(', ')} (today = ${todayDow})`,
 	)
 	console.log(`  manifest           ${MANIFEST_PATH}`)
+
+	await verify(owner.id)
+	console.log('\nVerification passed.')
 }
 
 main()

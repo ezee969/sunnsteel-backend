@@ -1,4 +1,13 @@
-import { ProgressionScheme, RepType } from '@prisma/client'
+import {
+	PreferredTrainingStyle,
+	ProfileVisibility,
+	ProgressionScheme,
+	RepType,
+	Sex,
+	TrainingDiscipline,
+	TrainingExperienceLevel,
+	TrainingGoal,
+} from '@prisma/client'
 
 /**
  * The training program the seed replays.
@@ -390,15 +399,144 @@ export const LEGACY_DAYS: DaySpec[] = [
 	},
 ]
 
+/**
+ * A peer whose profile has something to show: identity sections, a short
+ * training history of their own (so records and the training summary are
+ * real), and privacy settings that open some sections to everyone and keep
+ * others for followers.
+ */
+export interface PeerProfileSpec {
+	bio: string
+	location: string
+	goals: TrainingGoal[]
+	experience: TrainingExperienceLevel
+	disciplines: TrainingDiscipline[]
+	style: PreferredTrainingStyle
+	/** Catalogue exercise names, in display order. */
+	favorites: string[]
+	body: { age: number; sex: Sex; weight: number; height: number }
+	visibility: {
+		bio: ProfileVisibility
+		location: ProfileVisibility
+		trainingIdentity: ProfileVisibility
+		history: ProfileVisibility
+		records: ProfileVisibility
+		achievements: ProfileVisibility
+		bodyMetrics: ProfileVisibility
+	}
+	routineName: string
+	/** Indexes into ACTIVE_DAYS; each becomes one day of the peer's routine. */
+	days: number[]
+	/** Weekdays the peer trains on, one per day above. */
+	dows: number[]
+	/** Scales the owner's starting weights. */
+	strength: number
+	/** Exercise names whose records the peer features on their profile. */
+	featuredRecords: string[]
+}
+
+export interface PeerSpec {
+	handle: string
+	name: string
+	lastName: string
+	profile?: PeerProfileSpec
+}
+
+const { PUBLIC, FOLLOWERS, PRIVATE } = ProfileVisibility
+
 /** Peer accounts so search and the public profiles are not empty. */
-export const PEERS = [
-	{ handle: 'marta-ibanez', name: 'Marta', lastName: 'Ibanez' },
-	{ handle: 'tomas-ferreira', name: 'Tomas', lastName: 'Ferreira' },
-	{ handle: 'nadia-haddad', name: 'Nadia', lastName: 'Haddad' },
+export const PEERS: PeerSpec[] = [
+	{
+		handle: 'marta-ibanez',
+		name: 'Marta',
+		lastName: 'Ibanez',
+		profile: {
+			bio: 'Powerlifter chasing a 140 kg deadlift. Coffee first, then pulls.',
+			location: 'Valencia, Spain',
+			goals: [TrainingGoal.STRENGTH],
+			experience: TrainingExperienceLevel.ADVANCED,
+			disciplines: [TrainingDiscipline.POWERLIFTING],
+			style: PreferredTrainingStyle.UPPER_LOWER,
+			favorites: ['Deadlift', 'Squat', 'Bench Press'],
+			body: { age: 29, sex: Sex.FEMALE, weight: 63, height: 166 },
+			visibility: {
+				bio: PUBLIC,
+				location: PUBLIC,
+				trainingIdentity: PUBLIC,
+				history: PUBLIC,
+				records: PUBLIC,
+				achievements: PUBLIC,
+				bodyMetrics: FOLLOWERS,
+			},
+			routineName: 'Meet Prep - Block 2',
+			days: [1, 3],
+			dows: [2, 5],
+			strength: 0.8,
+			featuredRecords: ['Deadlift', 'Squat'],
+		},
+	},
+	{
+		handle: 'tomas-ferreira',
+		name: 'Tomas',
+		lastName: 'Ferreira',
+		profile: {
+			bio: 'Hypertrophy nerd. Upper/lower four days a week, long rests, no ego.',
+			location: 'Porto, Portugal',
+			goals: [TrainingGoal.MUSCLE_GROWTH, TrainingGoal.STRENGTH],
+			experience: TrainingExperienceLevel.INTERMEDIATE,
+			disciplines: [TrainingDiscipline.BODYBUILDING],
+			style: PreferredTrainingStyle.UPPER_LOWER,
+			favorites: ['Incline Dumbbell Press', 'Pull-ups'],
+			body: { age: 33, sex: Sex.MALE, weight: 84, height: 181 },
+			visibility: {
+				bio: PUBLIC,
+				location: PUBLIC,
+				trainingIdentity: PUBLIC,
+				history: FOLLOWERS,
+				records: FOLLOWERS,
+				achievements: FOLLOWERS,
+				bodyMetrics: PRIVATE,
+			},
+			routineName: 'Upper / Lower Hypertrophy',
+			days: [0, 2],
+			dows: [1, 4],
+			strength: 1.05,
+			featuredRecords: ['Bench Press'],
+		},
+	},
+	{
+		handle: 'nadia-haddad',
+		name: 'Nadia',
+		lastName: 'Haddad',
+		profile: {
+			bio: 'Hybrid athlete: lifting three days, running the rest.',
+			location: 'Montreal, Canada',
+			goals: [TrainingGoal.GENERAL_FITNESS, TrainingGoal.ENDURANCE],
+			experience: TrainingExperienceLevel.INTERMEDIATE,
+			disciplines: [TrainingDiscipline.HYBRID_TRAINING],
+			style: PreferredTrainingStyle.FULL_BODY,
+			favorites: ['Front Squat', 'Overhead Press'],
+			body: { age: 27, sex: Sex.FEMALE, weight: 58, height: 170 },
+			visibility: {
+				bio: PUBLIC,
+				location: PRIVATE,
+				trainingIdentity: PUBLIC,
+				history: FOLLOWERS,
+				records: PUBLIC,
+				achievements: PUBLIC,
+				bodyMetrics: PRIVATE,
+			},
+			routineName: 'Strength for Runners',
+			days: [0, 3],
+			dows: [3, 6],
+			strength: 0.65,
+			featuredRecords: ['Front Squat'],
+		},
+	},
 	{ handle: 'ken-watanabe', name: 'Ken', lastName: 'Watanabe' },
 	{ handle: 'lucia-moreno', name: 'Lucia', lastName: 'Moreno' },
 	{ handle: 'darius-okonkwo', name: 'Darius', lastName: 'Okonkwo' },
-] as const
+]
 
 /** Session notes -- deliberately sparse, only a handful across 12 weeks. */
 export const SESSION_NOTES = [

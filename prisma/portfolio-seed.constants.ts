@@ -34,6 +34,12 @@ export const ROUTINE_IDS = {
 	legacy: seedId('routine', 'full-body'),
 } as const
 
+/** The seed's analytics generation on an account, deleted on teardown. */
+export const projectionIdFor = (userId: string) => seedId('projection', userId)
+
+export const OWNER_EMAIL =
+	process.env.SEED_OWNER_EMAIL ?? 'eze.olivero96@gmail.com'
+
 export const MANIFEST_PATH = 'prisma/.portfolio-seed-manifest.json'
 
 export interface SeedManifest {
@@ -43,5 +49,10 @@ export interface SeedManifest {
 	ownerEmail: string
 	routineIds: string[]
 	peerUserIds: string[]
+	/**
+	 * The owner's analytics settings before the first seed run, so teardown can
+	 * put an account that never had analytics back the way it was.
+	 */
+	ownerBefore?: { timeZone: string | null; hadProjection: boolean }
 	counts: Record<string, number>
 }
