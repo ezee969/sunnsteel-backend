@@ -33,6 +33,8 @@ import { MeasurableGoalsService } from '../goals/measurable-goals.service';
 import { ReplaceMeasurableGoalsDto } from './dto/replace-measurable-goals.dto';
 import { UpdatePlateauPreferencesDto } from './dto/update-plateau-preferences.dto';
 import { PlateauPreferencesService } from './plateau-preferences.service';
+import { FeaturedProfileItemsService } from './featured-profile-items.service';
+import { ReplaceFeaturedProfileItemsDto } from './dto/replace-featured-profile-items.dto';
 
 @UseGuards(SupabaseJwtGuard)
 @Controller('users')
@@ -44,6 +46,7 @@ export class UsersController {
     private readonly relationships: UserRelationshipsService,
     private readonly measurableGoals: MeasurableGoalsService,
     private readonly plateauPreferences: PlateauPreferencesService,
+    private readonly featuredProfileItems: FeaturedProfileItemsService,
   ) {}
 
   @Get('time-zone')
@@ -86,6 +89,19 @@ export class UsersController {
     @Body() data: UpdateProfileDiscoveryDto,
   ) {
     return this.usersService.updateProfileDiscovery(req.user.email, data);
+  }
+
+  @Get('profile/featured')
+  getFeaturedProfileItems(@Request() req: RequestWithUser) {
+    return this.featuredProfileItems.list(req.user.id);
+  }
+
+  @Put('profile/featured')
+  replaceFeaturedProfileItems(
+    @Request() req: RequestWithUser,
+    @Body() dto: ReplaceFeaturedProfileItemsDto,
+  ) {
+    return this.featuredProfileItems.replace(req.user.id, dto.items);
   }
 
   @Get('training-locations')

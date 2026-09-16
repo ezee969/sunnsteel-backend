@@ -9,6 +9,7 @@ import { PublicProfilesController } from './public-profiles.controller';
 import { UserRelationshipsService } from './user-relationships.service';
 import { GoalsModule } from '../goals/goals.module';
 import { PlateauPreferencesService } from './plateau-preferences.service';
+import { FeaturedProfileItemsService } from './featured-profile-items.service';
 
 @Module({
   imports: [TokenModule, AnalyticsModule, GoalsModule],
@@ -17,6 +18,7 @@ import { PlateauPreferencesService } from './plateau-preferences.service';
     TrainingLocationPreferencesService,
     PlateauPreferencesService,
     UserRelationshipsService,
+    FeaturedProfileItemsService,
     DatabaseService,
   ],
   exports: [UsersService],
