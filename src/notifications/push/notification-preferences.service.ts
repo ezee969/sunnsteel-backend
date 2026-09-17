@@ -15,6 +15,7 @@ import { PushConfigService } from './push-config.service';
 const PREFERENCE_SELECT = {
   notifyRestAlert: true,
   notifyTrainingReminder: true,
+  notifyStreakAtRisk: true,
   quietHoursStartMinute: true,
   quietHoursEndMinute: true,
   reminderMinuteOfDay: true,
@@ -24,6 +25,7 @@ const PREFERENCE_SELECT = {
 type PreferenceRow = {
   notifyRestAlert: boolean;
   notifyTrainingReminder: boolean;
+  notifyStreakAtRisk: boolean;
   quietHoursStartMinute: number | null;
   quietHoursEndMinute: number | null;
   reminderMinuteOfDay: number | null;
@@ -43,6 +45,7 @@ export function mapPreferences(row: PreferenceRow): NotificationPreferences {
     categories: {
       REST_ALERT: row.notifyRestAlert,
       TRAINING_REMINDER: row.notifyTrainingReminder,
+      STREAK_AT_RISK: row.notifyStreakAtRisk,
     },
     quietHours,
     reminder: { minuteOfDay: row.reminderMinuteOfDay },
@@ -94,6 +97,9 @@ export class NotificationPreferencesService {
     if (input.categories?.TRAINING_REMINDER !== undefined) {
       data.notifyTrainingReminder = input.categories.TRAINING_REMINDER;
     }
+    if (input.categories?.STREAK_AT_RISK !== undefined) {
+      data.notifyStreakAtRisk = input.categories.STREAK_AT_RISK;
+    }
     // Omitting quiet hours leaves the stored window alone; sending null clears
     // it. The two are different intents and must not collapse into one.
     if (input.quietHours !== undefined) {
@@ -124,8 +130,11 @@ export class NotificationPreferencesService {
     if (input.categories?.REST_ALERT === false) prefixes.push('rest:');
     if (
       input.categories?.TRAINING_REMINDER === false ||
+      input.categories?.STREAK_AT_RISK === false ||
       input.reminder?.minuteOfDay === null
     ) {
+      // Both categories share the one pending row per local date, so either
+      // being switched off must drop whichever is waiting.
       prefixes.push('reminder:');
     }
     if (prefixes.length === 0) return;

@@ -8,6 +8,10 @@ import {
 } from '../src/notifications/push/local-time';
 import { suppressionFor } from '../src/notifications/push/notification-preferences.service';
 import {
+  describeStreakRisk,
+  streakAtRisk,
+} from '../src/notifications/push/streak-risk';
+import {
   describePlannedRoutines,
   routinesPlannedOn,
   type ReminderRoutine,
@@ -223,4 +227,47 @@ test('a zone already past midnight reports the next local date', () => {
 test('local midnight is minute zero, not 1440', () => {
   const at = new Date('2026-09-17T22:00:00.000Z');
   assert.equal(localClock(at, 'Europe/Berlin').minuteOfDay, 0);
+});
+
+// NOTIF-06 -------------------------------------------------------------------
+
+const risk = (overrides: Partial<Parameters<typeof streakAtRisk>[0]> = {}) =>
+  streakAtRisk({
+    today: '2026-09-17',
+    lastTrainingDate: '2026-09-14',
+    currentRun: 6,
+    trainedToday: false,
+    ...overrides,
+  });
+
+test('a streak is at risk only on the last day that can still save it', () => {
+  // The run survives a three-day gap and dies on the fourth.
+  assert.equal(risk()?.runDays, 6);
+  assert.equal(risk({ lastTrainingDate: '2026-09-16' }), null, 'one day is not at stake');
+  assert.equal(risk({ lastTrainingDate: '2026-09-15' }), null, 'two days is not at stake');
+});
+
+test('a run that has already ended is never announced as at risk', () => {
+  assert.equal(risk({ lastTrainingDate: '2026-09-13' }), null);
+});
+
+test('training today removes the risk entirely', () => {
+  assert.equal(risk({ trainedToday: true }), null);
+});
+
+test('an account with no history and no run has nothing at stake', () => {
+  assert.equal(risk({ lastTrainingDate: null }), null);
+  assert.equal(risk({ currentRun: 0 }), null);
+});
+
+test('the nudge states evidence and never instructs anyone to train', () => {
+  const copy = describeStreakRisk(risk()!);
+  assert.match(copy, /6 days/);
+  assert.match(copy, /3 days since your last session/);
+  // No imperative: a rest day ending a streak is the plan working.
+  assert.doesNotMatch(copy, /don't|do not|keep it alive|you must|get to the gym/i);
+});
+
+test('a one-day run is described in the singular', () => {
+  assert.match(describeStreakRisk(risk({ currentRun: 1 })!), /1 day run/);
 });

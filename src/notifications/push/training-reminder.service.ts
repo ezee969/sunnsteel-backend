@@ -1,10 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import type { TrainingReminderPushPayload } from '@sunsteel/contracts';
+import type {
+  PushPayload,
+  StreakAtRiskPushPayload,
+  TrainingReminderPushPayload,
+} from '@sunsteel/contracts';
 import { DatabaseService } from '../../database/database.service';
 import { PushConfigService } from './push-config.service';
 import { isWithinReminderWindow, localClock } from './local-time';
 import { ScheduledPushService } from './scheduled-push.service';
+import { describeStreakRisk, streakAtRisk } from './streak-risk';
 import { describePlannedRoutines, routinesPlannedOn } from './training-days';
 
 /**
@@ -43,21 +48,24 @@ export class TrainingReminderService {
       const candidates = await this.db.user.findMany({
         where: {
           reminderMinuteOfDay: { not: null },
-          notifyTrainingReminder: true,
+          // Either category is reason enough to look; which one fires is
+          // decided per account once the day is known.
+          OR: [{ notifyTrainingReminder: true }, { notifyStreakAtRisk: true }],
           timeZone: { not: null },
           pushSubscriptions: { some: {} },
         },
-        select: { id: true, timeZone: true, reminderMinuteOfDay: true },
+        select: {
+          id: true,
+          timeZone: true,
+          reminderMinuteOfDay: true,
+          notifyTrainingReminder: true,
+          notifyStreakAtRisk: true,
+        },
       });
 
       const now = new Date();
       for (const candidate of candidates) {
-        await this.planFor(
-          candidate.id,
-          candidate.timeZone!,
-          candidate.reminderMinuteOfDay!,
-          now,
-        ).catch((error: unknown) => {
+        await this.planFor(candidate, now).catch((error: unknown) => {
           // One account's bad time zone must not stop everyone else's reminder.
           this.logger.warn(
             `Reminder planning failed for one account: ${String(error)}`,
@@ -72,11 +80,18 @@ export class TrainingReminderService {
   }
 
   private async planFor(
-    userId: string,
-    timeZone: string,
-    reminderMinuteOfDay: number,
+    candidate: {
+      id: string;
+      timeZone: string | null;
+      reminderMinuteOfDay: number | null;
+      notifyTrainingReminder: boolean;
+      notifyStreakAtRisk: boolean;
+    },
     now: Date,
   ): Promise<void> {
+    const userId = candidate.id;
+    const timeZone = candidate.timeZone!;
+    const reminderMinuteOfDay = candidate.reminderMinuteOfDay!;
     const clock = localClock(now, timeZone);
     if (
       !isWithinReminderWindow(
@@ -96,22 +111,80 @@ export class TrainingReminderService {
     // Already planned this local date, inside this window or an earlier tick.
     if (existing) return;
 
-    const planned = await this.plannedRoutineNames(userId, clock.date);
-    if (planned.length === 0) return;
-
-    const payload: TrainingReminderPushPayload = {
-      kind: 'TRAINING_REMINDER',
-      title: 'Training day',
-      body: `${describePlannedRoutines(planned)} is planned for today.`,
-      url: '/schedule',
-      tag: `reminder-${clock.date}`,
-    };
+    const payload = await this.payloadFor(userId, clock.date, candidate);
+    if (!payload) return;
 
     // `sendAt` is now: the window already decided this is the moment, and the
     // existing sweep is the single path every push leaves by.
     // The payload's kind is the category, so suppression at send needs no
     // second field to carry it.
     await this.scheduled.schedule({ userId, dedupeKey, sendAt: now, payload });
+  }
+
+  /**
+   * NOTIF-06 takes precedence over NOTIF-04 and replaces it: one push a day,
+   * carrying whichever fact matters more. A streak on its last day is worth
+   * saying on a planned day and on an unplanned one, which is exactly what
+   * makes it worth having beside the reminder.
+   */
+  private async payloadFor(
+    userId: string,
+    date: string,
+    categories: { notifyTrainingReminder: boolean; notifyStreakAtRisk: boolean },
+  ): Promise<PushPayload | null> {
+    const trainedToday = await this.hasSessionOn(userId, date);
+
+    if (categories.notifyStreakAtRisk) {
+      const projection = await this.db.workoutAnalyticsProjection.findFirst({
+        where: { userId },
+        select: { lastTrainingDate: true, currentRun: true },
+      });
+      const risk = streakAtRisk({
+        today: date,
+        lastTrainingDate: projection?.lastTrainingDate ?? null,
+        currentRun: projection?.currentRun ?? 0,
+        trainedToday,
+      });
+      if (risk) {
+        const payload: StreakAtRiskPushPayload = {
+          kind: 'STREAK_AT_RISK',
+          title: 'Your streak ends after today',
+          body: describeStreakRisk(risk),
+          url: '/progress',
+          tag: `reminder-${date}`,
+        };
+        return payload;
+      }
+    }
+
+    if (!categories.notifyTrainingReminder) return null;
+    if (trainedToday) return null;
+
+    const planned = await this.plannedRoutineNames(userId, date);
+    if (planned.length === 0) return null;
+
+    const payload: TrainingReminderPushPayload = {
+      kind: 'TRAINING_REMINDER',
+      title: 'Training day',
+      body: `${describePlannedRoutines(planned)} is planned for today.`,
+      url: '/schedule',
+      tag: `reminder-${date}`,
+    };
+    return payload;
+  }
+
+  private async hasSessionOn(userId: string, date: string): Promise<boolean> {
+    const session = await this.db.workoutSession.findFirst({
+      where: {
+        userId,
+        startedAt: {
+          gte: new Date(`${date}T00:00:00.000Z`),
+          lte: new Date(`${date}T23:59:59.999Z`),
+        },
+      },
+      select: { id: true },
+    });
+    return session !== null;
   }
 
   private async plannedRoutineNames(

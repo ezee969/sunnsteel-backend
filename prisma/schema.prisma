@@ -76,6 +76,7 @@ model User {
   // minute means reminders are off; choosing a time is what opts in.
   notifyRestAlert            Boolean                      @default(true)
   notifyTrainingReminder     Boolean                      @default(true)
+  notifyStreakAtRisk         Boolean                      @default(true)
   quietHoursStartMinute      Int?
   quietHoursEndMinute        Int?
   reminderMinuteOfDay        Int?

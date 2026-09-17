@@ -24,6 +24,10 @@ class NotificationCategoriesDto
   @IsOptional()
   @IsBoolean()
   TRAINING_REMINDER?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  STREAK_AT_RISK?: boolean;
 }
 
 class QuietHoursDto implements QuietHours {

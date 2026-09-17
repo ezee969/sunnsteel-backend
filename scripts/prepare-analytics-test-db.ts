@@ -10,6 +10,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PrismaClient } from '@prisma/client';
 
+// Joining SQL files; named so a later patch cannot mangle an escape.
+const NEWLINE = String.fromCharCode(10);
+
 /** Prepare only an explicitly opted-in, empty, isolated local test database. */
 async function main() {
   const url = new URL(process.env.DATABASE_URL ?? '');
@@ -185,6 +188,12 @@ async function main() {
 				// NOTIF-05/NOTIF-04: notification controls and the reminder time.
 				readFileSync(
 					'prisma/migrations/20260917140000_notification_preferences/migration.sql',
+					'utf8',
+				) +
+				NEWLINE +
+				// NOTIF-06: the streak-at-risk category.
+				readFileSync(
+					'prisma/migrations/20260917170000_streak_at_risk_category/migration.sql',
 					'utf8',
 				),
     );
