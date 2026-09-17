@@ -180,6 +180,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260917074329_push_delivery/migration.sql',
 					'utf8',
+				) +
+				'\n' +
+				// NOTIF-05/NOTIF-04: notification controls and the reminder time.
+				readFileSync(
+					'prisma/migrations/20260917140000_notification_preferences/migration.sql',
+					'utf8',
 				),
     );
     prisma(

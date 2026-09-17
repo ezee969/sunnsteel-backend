@@ -7,10 +7,18 @@ import {
   type ScheduleRestAlertResponse,
 } from '@sunsteel/contracts';
 import { DatabaseService } from '../../database/database.service';
+import { localMinuteOfDay } from './local-time';
+import {
+  NotificationPreferencesService,
+  suppressionFor,
+} from './notification-preferences.service';
 import { PushConfigService } from './push-config.service';
 import { ScheduledPushService } from './scheduled-push.service';
 
 const EXERCISE_NAME_MAX = 60;
+
+/** One pending alert per session; the key is what makes that true. */
+export const restAlertKey = (sessionId: string) => `rest:${sessionId}`;
 
 /**
  * NOTIF-03. The alert is a notification, never the in-app tone: `LIVE-01`
@@ -27,6 +35,7 @@ export class RestAlertService {
     private readonly db: DatabaseService,
     private readonly scheduled: ScheduledPushService,
     private readonly config: PushConfigService,
+    private readonly preferences: NotificationPreferencesService,
   ) {}
 
   async schedule(
@@ -50,11 +59,27 @@ export class RestAlertService {
     }
 
     const endsAt = new Date(input.endsAt);
+
+    // NOTIF-05: refuse now with the real reason rather than accepting and
+    // dropping it at send, so the session screen never implies an alert the
+    // owner has switched off or silenced.
+    const preferences = await this.preferences.forDelivery(userId);
+    const suppressed = suppressionFor(
+      'REST_ALERT',
+      preferences,
+      endsAt,
+      localMinuteOfDay,
+    );
+    if (suppressed) {
+      await this.scheduled.cancel(userId, restAlertKey(sessionId));
+      return { scheduledFor: null, reason: suppressed };
+    }
+
     const leadSeconds = (endsAt.getTime() - Date.now()) / 1000;
     if (leadSeconds < REST_ALERT_MIN_LEAD_SECONDS) {
       // Closer than the sweep resolution: the page's own tone is still the
       // faster channel, so claiming a push here would be a false promise.
-      await this.scheduled.cancel(userId, sessionId);
+      await this.scheduled.cancel(userId, restAlertKey(sessionId));
       return { scheduledFor: null, reason: 'TOO_SOON' };
     }
     if (leadSeconds > REST_ALERT_MAX_LEAD_SECONDS) {
@@ -72,13 +97,19 @@ export class RestAlertService {
       tag: `rest-${sessionId}`,
     };
 
-    await this.scheduled.schedule(userId, sessionId, endsAt, payload);
+    await this.scheduled.schedule({
+      userId,
+      dedupeKey: restAlertKey(sessionId),
+      sessionId,
+      sendAt: endsAt,
+      payload,
+    });
     return { scheduledFor: endsAt.toISOString(), reason: null };
   }
 
   async cancel(userId: string, sessionId: string): Promise<void> {
     await this.assertOwnedActiveSession(userId, sessionId);
-    await this.scheduled.cancel(userId, sessionId);
+    await this.scheduled.cancel(userId, restAlertKey(sessionId));
   }
 
   private async assertOwnedActiveSession(

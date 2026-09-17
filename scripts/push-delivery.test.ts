@@ -6,6 +6,7 @@ import { PushConfigService } from '../src/notifications/push/push-config.service
 import { PushSenderService } from '../src/notifications/push/push-sender.service';
 import { PushSubscriptionsService } from '../src/notifications/push/push-subscriptions.service';
 import { RestAlertService } from '../src/notifications/push/rest-alert.service';
+import { NotificationPreferencesService } from '../src/notifications/push/notification-preferences.service';
 import { ScheduledPushService } from '../src/notifications/push/scheduled-push.service';
 
 const configured = { isConfigured: true, publicKey: 'BPublicKey' };
@@ -26,25 +27,30 @@ const restAlertDb = (overrides: Record<string, unknown> = {}) => ({
 });
 
 const scheduledStub = () => {
-  const calls: { scheduled: unknown[]; cancelled: unknown[] } = {
+  const calls: { scheduled: any[]; cancelled: unknown[] } = {
     scheduled: [],
     cancelled: [],
   };
   const service = {
-    schedule: async (
-      userId: string,
-      sessionId: string,
-      sendAt: Date,
-      payload: unknown,
-    ) => {
-      calls.scheduled.push({ userId, sessionId, sendAt, payload });
+    schedule: async (args: unknown) => {
+      calls.scheduled.push(args);
     },
-    cancel: async (userId: string, sessionId: string) => {
-      calls.cancelled.push({ userId, sessionId });
+    cancel: async (userId: string, dedupeKey: string) => {
+      calls.cancelled.push({ userId, dedupeKey });
     },
   } as unknown as ScheduledPushService;
   return { service, calls };
 };
+
+/** Everything on, no quiet window: NOTIF-05 out of the way. */
+const permissivePreferences = {
+  forDelivery: async () => ({
+    categories: { REST_ALERT: true, TRAINING_REMINDER: true },
+    quietHours: null,
+    reminder: { minuteOfDay: null },
+    timeZone: 'Europe/Berlin',
+  }),
+} as unknown as NotificationPreferencesService;
 
 const inSeconds = (seconds: number) =>
   new Date(Date.now() + seconds * 1000).toISOString();
@@ -55,6 +61,7 @@ test('a rest alert is refused, not faked, when push is unconfigured', async () =
     asDb(restAlertDb()),
     scheduled,
     asConfig(unconfigured),
+    permissivePreferences,
   );
 
   const result = await alerts.schedule('user-1', 'session-1', {
@@ -72,6 +79,7 @@ test('an account with no subscribed device is told so', async () => {
     asDb(restAlertDb({ pushSubscription: { count: async () => 0 } })),
     scheduled,
     asConfig(configured),
+    permissivePreferences,
   );
 
   const result = await alerts.schedule('user-1', 'session-1', {
@@ -89,6 +97,7 @@ test('rest ending sooner than the sweep cancels instead of promising', async () 
     asDb(restAlertDb()),
     scheduled,
     asConfig(configured),
+    permissivePreferences,
   );
 
   const result = await alerts.schedule('user-1', 'session-1', {
@@ -100,7 +109,7 @@ test('rest ending sooner than the sweep cancels instead of promising', async () 
   assert.equal(calls.scheduled.length, 0);
   // A previous rest period's alert must not survive a set finished early.
   assert.deepEqual(calls.cancelled, [
-    { userId: 'user-1', sessionId: 'session-1' },
+    { userId: 'user-1', dedupeKey: 'rest:session-1' },
   ]);
 });
 
@@ -110,6 +119,7 @@ test('an absurd lead time is refused', async () => {
     asDb(restAlertDb()),
     scheduled,
     asConfig(configured),
+    permissivePreferences,
   );
 
   const result = await alerts.schedule('user-1', 'session-1', {
@@ -127,6 +137,7 @@ test('a scheduled alert names the lift and points at the session', async () => {
     asDb(restAlertDb()),
     scheduled,
     asConfig(configured),
+    permissivePreferences,
   );
   const endsAt = inSeconds(120);
 
@@ -157,6 +168,7 @@ test('a session the caller does not own is not found', async () => {
     asDb(restAlertDb({ workoutSession: { findFirst: async () => null } })),
     scheduled,
     asConfig(configured),
+    permissivePreferences,
   );
 
   await assert.rejects(
@@ -281,6 +293,7 @@ test('a gone endpoint is retired and a flaky one is kept', async () => {
       },
     }),
     asConfig(configured),
+    permissivePreferences,
   );
 
   const result = await sender.sendToUser('user-1', {
@@ -292,7 +305,7 @@ test('a gone endpoint is retired and a flaky one is kept', async () => {
     tag: 'rest-session-1',
   });
 
-  assert.deepEqual(result, { sent: 1, retired: 1 });
+    assert.deepEqual(result, { sent: 1, retired: 1, suppressed: null });
   assert.deepEqual(deleted, [['gone']]);
 });
 
@@ -308,6 +321,7 @@ test('nothing is sent when the server holds no VAPID key', async () => {
       },
     }),
     asConfig(unconfigured),
+    permissivePreferences,
   );
 
   const result = await sender.sendToUser('user-1', {
@@ -319,6 +333,6 @@ test('nothing is sent when the server holds no VAPID key', async () => {
     tag: 'rest-session-1',
   });
 
-  assert.deepEqual(result, { sent: 0, retired: 0 });
+  assert.deepEqual(result, { sent: 0, retired: 0, suppressed: null });
   assert.equal(queried, false);
 });

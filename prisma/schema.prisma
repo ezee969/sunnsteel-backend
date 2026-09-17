@@ -71,6 +71,14 @@ model User {
   notifications              Notification[]               @relation("NotificationRecipient")
   notificationsAsActor       Notification[]               @relation("NotificationActor")
   featuredProfileItems       FeaturedProfileItem[]
+  // NOTIF-05: per-category delivery switches, a local quiet window and the
+  // NOTIF-04 reminder time, all evaluated in `timeZone`. A null reminder
+  // minute means reminders are off; choosing a time is what opts in.
+  notifyRestAlert            Boolean                      @default(true)
+  notifyTrainingReminder     Boolean                      @default(true)
+  quietHoursStartMinute      Int?
+  quietHoursEndMinute        Int?
+  reminderMinuteOfDay        Int?
   pushSubscriptions          PushSubscription[]
   scheduledPushes            ScheduledPush[]
 }
@@ -502,11 +510,13 @@ model WorkoutSession {
   // routine slots. The snapshot keeps the prescription; this keeps the swap.
   exerciseSubstitutions Json                    @default("[]")
 
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  shares        SessionShare[]
-  notifications Notification[]
-  scheduledPush ScheduledPush?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  shares          SessionShare[]
+  notifications   Notification[]
+  /// At most one in practice: the `rest:<sessionId>` dedupe key enforces it.
+  /// The relation is one-to-many because `sessionId` is no longer unique.
+  scheduledPushes ScheduledPush[]
 
   @@index([userId, status, startedAt])
   @@index([userId, id])
@@ -719,15 +729,20 @@ model PushSubscription {
 /// NOTIF-03: one pending alert per session. A new rest period replaces the
 /// last, and the row is deleted once sent or cancelled, so nothing accumulates.
 model ScheduledPush {
-  id        String         @id @default(uuid())
+  id        String          @id @default(uuid())
   userId    String
-  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sessionId String         @unique
-  session   WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// What this pending push is for, unique so re-planning replaces rather than
+  /// duplicates: `rest:<sessionId>` for NOTIF-03, `reminder:<date>` for
+  /// NOTIF-04. It replaced a unique `sessionId`, which a reminder has none of.
+  dedupeKey String          @unique
+  /// Only a rest alert belongs to a session; a reminder is for a whole date.
+  sessionId String?
+  session   WorkoutSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   payload   Json
   /// Second-level precision; the sweep sends every row already due.
   sendAt    DateTime
-  createdAt DateTime       @default(now())
+  createdAt DateTime        @default(now())
 
   @@index([sendAt])
 }

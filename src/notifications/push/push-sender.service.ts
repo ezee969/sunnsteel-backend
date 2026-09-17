@@ -6,6 +6,11 @@ import type { PushPayload } from '@sunsteel/contracts';
 // the form that actually compiles to `require('web-push')`.
 import * as webpush from 'web-push';
 import { DatabaseService } from '../../database/database.service';
+import { localMinuteOfDay } from './local-time';
+import {
+  NotificationPreferencesService,
+  suppressionFor,
+} from './notification-preferences.service';
 import { PushConfigService } from './push-config.service';
 
 /**
@@ -20,6 +25,8 @@ interface SendResult {
   sent: number;
   /** Subscriptions deleted because the endpoint is permanently gone. */
   retired: number;
+  /** NOTIF-05: set when the owner's controls stopped this one. */
+  suppressed: 'CATEGORY_OFF' | 'QUIET_HOURS' | null;
 }
 
 @Injectable()
@@ -29,6 +36,7 @@ export class PushSenderService {
   constructor(
     private readonly db: DatabaseService,
     private readonly config: PushConfigService,
+    private readonly preferences: NotificationPreferencesService,
   ) {}
 
   /**
@@ -37,13 +45,30 @@ export class PushSenderService {
    * subscription must still get the alert on the phone in their pocket.
    */
   async sendToUser(userId: string, payload: PushPayload): Promise<SendResult> {
-    if (!this.config.isConfigured) return { sent: 0, retired: 0 };
+    if (!this.config.isConfigured) {
+      return { sent: 0, retired: 0, suppressed: null };
+    }
+
+    // NOTIF-05 is enforced here rather than at each call site, and at send
+    // rather than at schedule: a rest alert set before quiet hours begin still
+    // arrives inside them, and a category switched off after scheduling must
+    // stop the push already waiting.
+    const preferences = await this.preferences.forDelivery(userId);
+    const suppressed = suppressionFor(
+      payload.kind,
+      preferences,
+      new Date(),
+      localMinuteOfDay,
+    );
+    if (suppressed) return { sent: 0, retired: 0, suppressed };
 
     const subscriptions = await this.db.pushSubscription.findMany({
       where: { userId },
       select: { id: true, endpoint: true, p256dh: true, auth: true },
     });
-    if (subscriptions.length === 0) return { sent: 0, retired: 0 };
+    if (subscriptions.length === 0) {
+      return { sent: 0, retired: 0, suppressed: null };
+    }
 
     const body = JSON.stringify(payload);
     const gone: string[] = [];
@@ -76,7 +101,7 @@ export class PushSenderService {
     if (gone.length > 0) {
       await this.db.pushSubscription.deleteMany({ where: { id: { in: gone } } });
     }
-    return { sent, retired: gone.length };
+    return { sent, retired: gone.length, suppressed: null };
   }
 
   /**

@@ -36,24 +36,35 @@ export class ScheduledPushService {
     private readonly config: PushConfigService,
   ) {}
 
-  /** Replaces this session's pending alert, so a session holds at most one. */
-  async schedule(
-    userId: string,
-    sessionId: string,
-    sendAt: Date,
-    payload: PushPayload,
-  ): Promise<void> {
+  /**
+   * Upserts on `dedupeKey`, so re-planning replaces rather than duplicates: a
+   * new rest period replaces the session's pending alert, and a second planning
+   * tick for the same local date finds the reminder already there.
+   */
+  async schedule({
+    userId,
+    dedupeKey,
+    sendAt,
+    payload,
+    sessionId,
+  }: {
+    userId: string;
+    dedupeKey: string;
+    sendAt: Date;
+    payload: PushPayload;
+    sessionId?: string;
+  }): Promise<void> {
     const json = JSON.parse(JSON.stringify(payload)) as Prisma.InputJsonValue;
     await this.db.scheduledPush.upsert({
-      where: { sessionId },
-      create: { userId, sessionId, sendAt, payload: json },
-      update: { userId, sendAt, payload: json },
+      where: { dedupeKey },
+      create: { userId, dedupeKey, sessionId, sendAt, payload: json },
+      update: { userId, sessionId, sendAt, payload: json },
     });
   }
 
   /** Skipping rest, finishing the set early or ending the session cancels it. */
-  async cancel(userId: string, sessionId: string): Promise<void> {
-    await this.db.scheduledPush.deleteMany({ where: { userId, sessionId } });
+  async cancel(userId: string, dedupeKey: string): Promise<void> {
+    await this.db.scheduledPush.deleteMany({ where: { userId, dedupeKey } });
   }
 
   @Interval(PUSH_SWEEP_INTERVAL_MS)
