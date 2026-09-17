@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
   Param,
   ParseIntPipe,
   Query,
@@ -29,11 +30,16 @@ import { VolumeTrendQueryDto } from "./dto/volume-trend.dto";
 import { SessionComparisonQueryDto } from "./dto/session-comparison.dto";
 import { ProgressTimelineQueryDto } from "./dto/progress-timeline.dto";
 import type { RequestWithUser } from "../common/types/request-with-user";
+import { RestAlertService } from "../notifications/push/rest-alert.service";
+import { ScheduleRestAlertDto } from "../notifications/push/dto/schedule-rest-alert.dto";
 
 @UseGuards(SupabaseJwtGuard)
 @Controller("workouts")
 export class WorkoutsController {
-  constructor(private readonly workoutsService: WorkoutsService) {}
+  constructor(
+    private readonly workoutsService: WorkoutsService,
+    private readonly restAlerts: RestAlertService,
+  ) {}
 
   @Post("sessions/start")
   async start(
@@ -208,5 +214,29 @@ export class WorkoutsController {
       sessionId,
       routineExerciseId,
     );
+  }
+
+  /**
+   * NOTIF-03: schedule the push that fires when this session's rest period
+   * ends. One pending alert per session — a new rest period replaces the last.
+   * The response says plainly when nothing was scheduled, because the session
+   * screen must not imply an alert the owner will never receive.
+   */
+  @Put("sessions/:id/rest-alert")
+  async scheduleRestAlert(
+    @Req() req: RequestWithUser,
+    @Param("id") sessionId: string,
+    @Body() dto: ScheduleRestAlertDto,
+  ) {
+    return this.restAlerts.schedule(req.user.id, sessionId, dto);
+  }
+
+  @Delete("sessions/:id/rest-alert")
+  @HttpCode(204)
+  async cancelRestAlert(
+    @Req() req: RequestWithUser,
+    @Param("id") sessionId: string,
+  ) {
+    await this.restAlerts.cancel(req.user.id, sessionId);
   }
 }

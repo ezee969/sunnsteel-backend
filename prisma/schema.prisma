@@ -71,6 +71,8 @@ model User {
   notifications              Notification[]               @relation("NotificationRecipient")
   notificationsAsActor       Notification[]               @relation("NotificationActor")
   featuredProfileItems       FeaturedProfileItem[]
+  pushSubscriptions          PushSubscription[]
+  scheduledPushes            ScheduledPush[]
 }
 
 enum FeaturedProfileItemKind {
@@ -504,6 +506,7 @@ model WorkoutSession {
   updatedAt     DateTime       @updatedAt
   shares        SessionShare[]
   notifications Notification[]
+  scheduledPush ScheduledPush?
 
   @@index([userId, status, startedAt])
   @@index([userId, id])
@@ -576,6 +579,10 @@ model TrainingEvent {
   payload       Json
 
   @@index([userId, occurredAt, id])
+  // Created by hand in 20260914103000_milestone_achievements and never
+  // declared here, so every later migration proposed dropping it. The
+  // achievements and timeline reads walk it; declaring it ends the drift.
+  @@index([userId, type, occurredAt(sort: Desc), id(sort: Desc)], map: "training_event_user_type_occurred")
 }
 
 enum TrainingEventType {
@@ -687,6 +694,42 @@ enum NotificationKind {
   ACHIEVEMENT
   SESSION_PROGRESS
   NEW_FOLLOWER
+}
+
+/// NOTIF-08: one subscribed browser on one device. The endpoint is the
+/// capability to push to it, so it is unique and never returned to a client.
+model PushSubscription {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint       String   @unique
+  p256dh         String
+  auth           String
+  /// The browser's own expiry; almost always null.
+  expirationTime BigInt?
+  /// A short label derived by the client, so the owner recognises the device.
+  deviceLabel    String?
+  createdAt      DateTime @default(now())
+  /// Refreshed whenever the same endpoint registers again.
+  lastSeenAt     DateTime @default(now())
+
+  @@index([userId, lastSeenAt])
+}
+
+/// NOTIF-03: one pending alert per session. A new rest period replaces the
+/// last, and the row is deleted once sent or cancelled, so nothing accumulates.
+model ScheduledPush {
+  id        String         @id @default(uuid())
+  userId    String
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId String         @unique
+  session   WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  payload   Json
+  /// Second-level precision; the sweep sends every row already due.
+  sendAt    DateTime
+  createdAt DateTime       @default(now())
+
+  @@index([sendAt])
 }
 
 model Notification {

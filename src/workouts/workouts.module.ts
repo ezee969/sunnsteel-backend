@@ -25,9 +25,10 @@ import {
 import { GoalsModule } from "../goals/goals.module";
 import { WorkoutPersonalGoalsService } from "./workout-personal-goals.service";
 import { WorkoutPlateausService } from "./workout-plateaus.service";
+import { PushModule } from "../notifications/push/push.module";
 
 @Module({
-  imports: [DatabaseModule, GoalsModule],
+  imports: [DatabaseModule, GoalsModule, PushModule],
   controllers: [
     WorkoutsController,
     SessionSharesController,

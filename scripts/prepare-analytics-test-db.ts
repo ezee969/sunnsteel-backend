@@ -174,6 +174,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260916090000_featured_profile_items/migration.sql',
 					'utf8',
+				) +
+				'\n' +
+				// NOTIF-08/NOTIF-03: push subscriptions and scheduled alerts.
+				readFileSync(
+					'prisma/migrations/20260917074329_push_delivery/migration.sql',
+					'utf8',
 				),
     );
     prisma(
