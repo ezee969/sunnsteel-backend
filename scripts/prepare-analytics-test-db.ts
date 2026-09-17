@@ -195,6 +195,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260917170000_streak_at_risk_category/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// ROUT-04: routine visibility and share links.
+				readFileSync(
+					'prisma/migrations/20260917200000_routine_sharing/migration.sql',
+					'utf8',
 				),
     );
     prisma(

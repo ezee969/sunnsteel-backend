@@ -45,6 +45,7 @@ export const ROUTINE_WITH_DAYS_SELECT = {
   scheduleMode: true,
   restDays: true,
   rotationWeekdays: true,
+  visibility: true,
   createdAt: true,
   updatedAt: true,
   days: {

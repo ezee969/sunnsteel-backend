@@ -66,6 +66,7 @@ model User {
   favoriteExercises          UserFavoriteExercise[]
   starredExercises           StarredExercise[]
   sessionShares              SessionShare[]
+  routineShares              RoutineShare[]
   measurableGoals            MeasurableGoal[]
   scheduleOverrides          ScheduleOverride[]
   notifications              Notification[]               @relation("NotificationRecipient")
@@ -351,6 +352,9 @@ model Routine {
   restDays          Int[]               @default([])
   // SCHED-06: weekdays a ROTATION routine trains on; empty means any day, undated.
   rotationWeekdays  Int[]               @default([])
+  // ROUT-04: who may read this routine. The account-level PROF-06 routines
+  // rule is the upper bound; this can only narrow it, never widen it.
+  visibility        RoutineVisibility   @default(PRIVATE)
   // ROUT-08: the last version number handed out, so deleted numbers are never reused.
   lastVersionNumber Int                 @default(0)
   createdAt         DateTime            @default(now())
@@ -358,10 +362,18 @@ model Routine {
   days              RoutineDay[]
   workoutSessions   WorkoutSession[]
   versions          RoutineVersion[]
+  shares            RoutineShare[]
   scheduleOverrides ScheduleOverride[]
 
   @@index([userId, isFavorite])
   @@index([userId, isCompleted])
+}
+
+/// ROUT-04. PRIVATE is the default and today's behaviour for every routine.
+enum RoutineVisibility {
+  PRIVATE
+  FOLLOWERS
+  PUBLIC
 }
 
 enum RoutineScheduleMode {
@@ -529,6 +541,22 @@ model WorkoutSession {
 // SOC-07: an owner-created, revocable public link to selected parts of one
 // completed session's recap. `fields` holds SessionShareField values from
 // @sunsteel/contracts; the service validates them on write.
+/// ROUT-04: a revocable link to one routine. The token is the only credential,
+/// exactly as in SOC-07, and revocation is permanent.
+model RoutineShare {
+  id        String    @id @default(uuid())
+  token     String    @unique @db.VarChar(64)
+  routineId String
+  routine   Routine   @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+
+  @@index([routineId, revokedAt])
+  @@index([userId])
+}
+
 model SessionShare {
   id        String         @id @default(uuid())
   token     String         @unique @db.VarChar(64)

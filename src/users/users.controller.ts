@@ -33,6 +33,7 @@ import { MeasurableGoalsService } from '../goals/measurable-goals.service';
 import { ReplaceMeasurableGoalsDto } from './dto/replace-measurable-goals.dto';
 import { UpdatePlateauPreferencesDto } from './dto/update-plateau-preferences.dto';
 import { PlateauPreferencesService } from './plateau-preferences.service';
+import { RoutineSharingService } from '../routines/routine-sharing.service';
 import { FeaturedProfileItemsService } from './featured-profile-items.service';
 import { ReplaceFeaturedProfileItemsDto } from './dto/replace-featured-profile-items.dto';
 
@@ -46,6 +47,7 @@ export class UsersController {
     private readonly relationships: UserRelationshipsService,
     private readonly measurableGoals: MeasurableGoalsService,
     private readonly plateauPreferences: PlateauPreferencesService,
+    private readonly routineSharing: RoutineSharingService,
     private readonly featuredProfileItems: FeaturedProfileItemsService,
   ) {}
 
@@ -150,6 +152,20 @@ export class UsersController {
     @Query() query: FollowSuggestionsQueryDto,
   ) {
     return this.relationships.suggestions(req.user.id, query.limit);
+  }
+
+  /**
+   * ROUT-04: the member's routines this viewer may read. Both the account's
+   * PROF-06 routines rule and each routine's own visibility apply, narrower
+   * first, so a per-routine switch can never widen the account rule.
+   */
+  @Get(':identifier/routines')
+  async getRoutines(
+    @Request() req: RequestWithUser,
+    @Param('identifier') identifier: string,
+  ) {
+    const ownerId = await this.routineSharing.resolveOwnerId(identifier);
+    return this.routineSharing.listVisibleRoutines(req.user.id, ownerId);
   }
 
   @Get(':identifier/followers')

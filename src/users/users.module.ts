@@ -11,9 +11,18 @@ import { GoalsModule } from '../goals/goals.module';
 import { PlateauPreferencesService } from './plateau-preferences.service';
 import { FeaturedProfileItemsService } from './featured-profile-items.service';
 import { AchievementsModule } from '../achievements/achievements.module';
+import { RoutinesModule } from '../routines/routines.module';
 
 @Module({
-  imports: [TokenModule, AnalyticsModule, GoalsModule, AchievementsModule],
+  imports: [
+    TokenModule,
+    AnalyticsModule,
+    GoalsModule,
+    AchievementsModule,
+    // ROUT-04: the member routines read applies the routine rules, which the
+    // routines module owns.
+    RoutinesModule,
+  ],
   providers: [
     UsersService,
     TrainingLocationPreferencesService,
