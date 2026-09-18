@@ -1,6 +1,10 @@
 import * as assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
+import type {
+  ProfileVisibility,
+  RoutineVisibility,
+} from '@sunsteel/contracts';
 import { ACHIEVEMENT_DEFINITIONS } from '@sunsteel/contracts';
 import { BadRequestException } from '@nestjs/common';
 import { DatabaseService } from '../src/database/database.service';
@@ -14,6 +18,20 @@ const record = {
   estimated1rm: 53.3,
   achievedAt: new Date('2026-09-15T10:00:00.000Z'),
 };
+
+const stranger = { isOwner: false, isFollower: false };
+const follower = { isOwner: false, isFollower: true };
+const owner = { isOwner: true, isFollower: false };
+
+const routineRow = (id: string, visibility: RoutineVisibility) => ({
+  id,
+  name: 'Upper / Lower',
+  description: null,
+  scheduleMode: 'WEEKLY' as const,
+  visibility,
+  updatedAt: new Date('2026-09-17T10:00:00.000Z'),
+  days: [{ _count: { exercises: 4 } }, { _count: { exercises: 3 } }],
+});
 
 describe('FeaturedProfileItemsService', () => {
   it('normalizes order and replaces the whole selection under the account lock', async () => {
@@ -192,6 +210,7 @@ describe('FeaturedProfileItemsService', () => {
     const result = await new FeaturedProfileItemsService(db).resolveForProfile(
       'user-1',
       { records: false, achievements: true },
+      { isOwner: false, isFollower: true },
     );
 
     assert.deepEqual(
@@ -200,6 +219,123 @@ describe('FeaturedProfileItemsService', () => {
         ['ACHIEVEMENT', achievement.id, 1],
         ['RANK', 'APPRENTICE', 2],
       ],
+    );
+  });
+  it('offers only routines somebody else could reach, capped by the account rule', async () => {
+    // PROF-08: a routine the PROF-06 routines rule caps to PRIVATE is not
+    // offered, because featuring it would show the owner a slot nobody else
+    // can see.
+    const routines = [
+      routineRow('routine-public', 'PUBLIC'),
+      routineRow('routine-private', 'PRIVATE'),
+    ];
+    const created: Array<{ kind: string; referenceId: string }> = [];
+    const tx = {
+      $queryRaw: async () => [],
+      featuredProfileItem: {
+        deleteMany: async () => ({ count: 0 }),
+        createMany: async (args: {
+          data: Array<{ kind: string; referenceId: string }>;
+        }) => {
+          created.push(...args.data);
+          return { count: 1 };
+        },
+      },
+    };
+    const db = (routinesVisibility: ProfileVisibility) =>
+      ({
+        personalRecord: { findMany: async () => [] },
+        trainingEvent: { findMany: async () => [] },
+        workoutAnalyticsProjection: { findFirst: async () => null },
+        user: { findUnique: async () => ({ routinesVisibility }) },
+        routine: { findMany: async () => routines },
+        $transaction: async (callback: (client: typeof tx) => unknown) =>
+          callback(tx),
+      }) as unknown as DatabaseService;
+
+    await new FeaturedProfileItemsService(db('PUBLIC')).replace('user-1', [
+      { kind: 'ROUTINE', referenceId: 'routine-public' },
+    ]);
+    assert.deepEqual(created, [
+      {
+        userId: 'user-1',
+        kind: 'ROUTINE',
+        referenceId: 'routine-public',
+        position: 0,
+      },
+    ]);
+
+    await assert.rejects(
+      () =>
+        new FeaturedProfileItemsService(db('PUBLIC')).replace('user-1', [
+          { kind: 'ROUTINE', referenceId: 'routine-private' },
+        ]),
+      BadRequestException,
+      'a private routine is not featurable',
+    );
+    await assert.rejects(
+      () =>
+        new FeaturedProfileItemsService(db('PRIVATE')).replace('user-1', [
+          { kind: 'ROUTINE', referenceId: 'routine-public' },
+        ]),
+      BadRequestException,
+      'the account routines rule caps the routine',
+    );
+  });
+
+  it('resolves a featured routine through canViewRoutine, narrower rule first', async () => {
+    const resolve = async (
+      routinesVisibility: ProfileVisibility,
+      visibility: RoutineVisibility,
+      viewer: { isOwner: boolean; isFollower: boolean },
+    ) => {
+      const db = {
+        featuredProfileItem: {
+          findMany: async () => [
+            { kind: 'ROUTINE', referenceId: 'routine-1', position: 0 },
+          ],
+        },
+        personalRecord: { findMany: async () => [] },
+        trainingEvent: { findMany: async () => [] },
+        workoutAnalyticsProjection: { findFirst: async () => null },
+        user: { findUnique: async () => ({ routinesVisibility }) },
+        routine: {
+          findMany: async () => [routineRow('routine-1', visibility)],
+        },
+      } as unknown as DatabaseService;
+      return new FeaturedProfileItemsService(db).resolveForProfile(
+        'user-1',
+        { records: false, achievements: false },
+        viewer,
+      );
+    };
+
+    const shown = await resolve('PUBLIC', 'PUBLIC', stranger);
+    assert.deepEqual(shown.map(item => item.kind), ['ROUTINE']);
+    assert.deepEqual(
+      shown[0].kind === 'ROUTINE' ? shown[0].routine : null,
+      {
+        routineId: 'routine-1',
+        name: 'Upper / Lower',
+        description: null,
+        scheduleMode: 'WEEKLY',
+        dayCount: 2,
+        exerciseCount: 7,
+        updatedAt: '2026-09-17T10:00:00.000Z',
+      },
+    );
+
+    // The account rule caps the routine, never the reverse.
+    assert.deepEqual(await resolve('FOLLOWERS', 'PUBLIC', stranger), []);
+    assert.deepEqual(
+      (await resolve('FOLLOWERS', 'PUBLIC', follower)).map(item => item.kind),
+      ['ROUTINE'],
+    );
+    // A slot the viewer may not see is omitted, not emptied.
+    assert.deepEqual(await resolve('PUBLIC', 'PRIVATE', follower), []);
+    assert.deepEqual(
+      (await resolve('PRIVATE', 'PRIVATE', owner)).map(item => item.kind),
+      ['ROUTINE'],
     );
   });
 });

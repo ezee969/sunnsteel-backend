@@ -201,6 +201,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260917200000_routine_sharing/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// PROF-08: the ROUTINE featured-item kind.
+				readFileSync(
+					'prisma/migrations/20260918090000_featured_routine_kind/migration.sql',
+					'utf8',
 				),
     );
     prisma(

@@ -5,18 +5,27 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  CLONE_ROUTINE_REFUSALS,
   ROUTINE_SHARE_MAX_ACTIVE_LINKS,
+  type CloneRoutineRequest,
   type MemberRoutinesResponse,
+  type Routine,
   type RoutineShare,
   type RoutineShareListResponse,
   type RoutineVisibility,
   type SharedRoutine,
-  type SharedRoutineSummary,
 } from '@sunsteel/contracts';
 import { DatabaseService } from '../database/database.service';
+import { CreateRoutineDto } from './dto/create-routine.dto';
+import { readCloneSource, setupToClonedRoutine } from './routine-cloning';
 import { ROUTINE_WITH_DAYS_SELECT } from './routine.selects';
-import { captureRoutineSetup } from './routine-versions';
+import {
+  ROUTINE_SUMMARY_SELECT,
+  toSharedRoutineSummary,
+} from './routine-summary';
+import { captureRoutineSetup, setupExerciseIds } from './routine-versions';
 import { canViewRoutine } from './routine-visibility';
+import { RoutinesService } from './routines.service';
 
 // base64url of 18 random bytes is 24 characters; anything else is not a token.
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{24}$/;
@@ -48,7 +57,10 @@ const OWNER_SELECT = {
  */
 @Injectable()
 export class RoutineSharingService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(
+    private readonly db: DatabaseService,
+    private readonly routines: RoutinesService,
+  ) {}
 
   async setVisibility(
     userId: string,
@@ -164,15 +176,7 @@ export class RoutineSharingService {
     const routines = await this.db.routine.findMany({
       where: { userId: ownerId },
       orderBy: { updatedAt: 'desc' },
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        scheduleMode: true,
-        visibility: true,
-        updatedAt: true,
-        days: { select: { _count: { select: { exercises: true } } } },
-      },
+      select: ROUTINE_SUMMARY_SELECT,
     });
 
     const visible = routines.filter((routine) =>
@@ -182,22 +186,7 @@ export class RoutineSharingService {
       }),
     );
 
-    return {
-      routines: visible.map(
-        (routine): SharedRoutineSummary => ({
-          routineId: routine.id,
-          name: routine.name,
-          description: routine.description ?? null,
-          scheduleMode: routine.scheduleMode,
-          dayCount: routine.days.length,
-          exerciseCount: routine.days.reduce(
-            (total, day) => total + day._count.exercises,
-            0,
-          ),
-          updatedAt: routine.updatedAt.toISOString(),
-        }),
-      ),
-    };
+    return { routines: visible.map(toSharedRoutineSummary) };
   }
 
   /** An identifier is a uuid or a username, as everywhere else on profiles. */
@@ -210,10 +199,15 @@ export class RoutineSharingService {
     return owner.id;
   }
 
-  /** One visible routine in full, for a member browsing without a link. */
+  /**
+   * One visible routine in full, for a member browsing without a link. When
+   * `ownerId` is given the routine must belong to that member, so a profile
+   * route cannot be used to read somebody else's routine through it.
+   */
   async readVisibleRoutine(
     viewerId: string | null,
     routineId: string,
+    ownerId?: string,
   ): Promise<SharedRoutine> {
     const routine = await this.db.routine.findUnique({
       where: { id: routineId },
@@ -223,6 +217,9 @@ export class RoutineSharingService {
       },
     });
     if (!routine) throw new NotFoundException('Routine not found');
+    if (ownerId && routine.user.id !== ownerId) {
+      throw new NotFoundException('Routine not found');
+    }
 
     const isOwner = viewerId === routine.user.id;
     const isFollower = isOwner
@@ -255,6 +252,46 @@ export class RoutineSharingService {
       source: 'VISIBILITY',
       updatedAt: routine.updatedAt.toISOString(),
     };
+  }
+
+  /**
+   * ROUT-05. Clone a routine this viewer was allowed to read into one of their
+   * own. The two sources are the two reads that already exist, so the clone
+   * can never see more than a reader can: a link ignores visibility because
+   * the owner handed it out, and a routine id goes through `canViewRoutine`,
+   * which answers 404 when it may not be read.
+   *
+   * What is copied is `SharedRoutine.setup` and nothing else. The new routine
+   * starts `PRIVATE` with no links, no versions and no favourite or completed
+   * state, because inheriting a `PUBLIC` setting would republish somebody
+   * else's programme without anyone choosing to. It is independent from the
+   * moment it exists; recording where it came from is `ROUT-06`.
+   */
+  async cloneRoutine(
+    userId: string,
+    request: CloneRoutineRequest,
+  ): Promise<Routine> {
+    const source = readCloneSource(request);
+    const shared =
+      source.kind === 'LINK'
+        ? await this.readByToken(source.token)
+        : await this.readVisibleRoutine(userId, source.routineId);
+
+    // The setup names catalog exercises by id, exactly as a stored version
+    // does, so a routine sharing an exercise that has since been withdrawn is
+    // refused by name rather than created with a day that cannot be trained.
+    const ids = setupExerciseIds(shared.setup);
+    const known = await this.db.exercise.count({ where: { id: { in: ids } } });
+    if (known !== ids.length) {
+      throw new ConflictException(
+        `${CLONE_ROUTINE_REFUSALS.UNKNOWN_EXERCISE}: an exercise in this routine is no longer in the catalog`,
+      );
+    }
+
+    return this.routines.create(
+      userId,
+      setupToClonedRoutine(shared.setup) as unknown as CreateRoutineDto,
+    );
   }
 
   private mapShare(row: {

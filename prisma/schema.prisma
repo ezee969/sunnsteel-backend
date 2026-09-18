@@ -85,10 +85,13 @@ model User {
   scheduledPushes            ScheduledPush[]
 }
 
+/// PROF-08 adds ROUTINE: a shared routine is a fourth kind of featured item,
+/// resolved through the same ROUT-04 rule as any other read of a routine.
 enum FeaturedProfileItemKind {
   RECORD
   ACHIEVEMENT
   RANK
+  ROUTINE
 }
 
 model FeaturedProfileItem {

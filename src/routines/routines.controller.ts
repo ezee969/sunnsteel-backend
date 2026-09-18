@@ -11,7 +11,9 @@ import {
   Query,
 } from '@nestjs/common';
 import { RoutinesService } from './routines.service';
+import { RoutineSharingService } from './routine-sharing.service';
 import { SupabaseJwtGuard } from '../auth/guards/supabase-jwt.guard';
+import { CloneRoutineDto } from './dto/clone-routine.dto';
 import { CreateRoutineDto } from './dto/create-routine.dto';
 import { UpdateRoutineDto } from './dto/update-routine.dto';
 import { UpdateFavoriteDto } from './dto/update-favorite.dto';
@@ -22,11 +24,23 @@ import type { RequestWithUser } from '../common/types/request-with-user';
 @UseGuards(SupabaseJwtGuard)
 @Controller('routines')
 export class RoutinesController {
-  constructor(private readonly routinesService: RoutinesService) {}
+  constructor(
+    private readonly routinesService: RoutinesService,
+    private readonly routineSharing: RoutineSharingService,
+  ) {}
 
   @Post()
   async create(@Req() req: RequestWithUser, @Body() dto: CreateRoutineDto) {
     return this.routinesService.create(req.user.id, dto);
+  }
+
+  /**
+   * ROUT-05: a routine of this member's own, copied from one they were allowed
+   * to read. It sits here because what it produces is an ordinary routine.
+   */
+  @Post('clones')
+  async clone(@Req() req: RequestWithUser, @Body() dto: CloneRoutineDto) {
+    return this.routineSharing.cloneRoutine(req.user.id, dto);
   }
 
   @Get()

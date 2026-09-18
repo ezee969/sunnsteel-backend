@@ -168,6 +168,25 @@ export class UsersController {
     return this.routineSharing.listVisibleRoutines(req.user.id, ownerId);
   }
 
+  /**
+   * ROUT-05/PROF-08: one of that member's routines, when this viewer may read
+   * it. `canViewRoutine` answers, and a routine that is not this member's is
+   * 404 rather than a redirect to somebody else's.
+   */
+  @Get(':identifier/routines/:routineId')
+  async getRoutine(
+    @Request() req: RequestWithUser,
+    @Param('identifier') identifier: string,
+    @Param('routineId') routineId: string,
+  ) {
+    const ownerId = await this.routineSharing.resolveOwnerId(identifier);
+    return this.routineSharing.readVisibleRoutine(
+      req.user.id,
+      routineId,
+      ownerId,
+    );
+  }
+
   @Get(':identifier/followers')
   getFollowers(
     @Request() req: RequestWithUser,

@@ -513,7 +513,10 @@ export class UsersService {
               },
             })
           : null,
-        this.featuredProfileItems?.resolveForProfile(user.id, viewerAccess) ?? [],
+        this.featuredProfileItems?.resolveForProfile(user.id, viewerAccess, {
+          isOwner,
+          isFollower,
+        }) ?? [],
         viewerAccess.achievements && this.achievementsService
           ? this.achievementsService.forProfile(user.id)
           : null,
