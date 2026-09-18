@@ -63,6 +63,10 @@ model User {
   trainingLocations          TrainingLocationPreference[]
   following                  UserFollow[]                 @relation("UserFollowing")
   followers                  UserFollow[]                 @relation("UserFollowers")
+  blocksMade                 UserBlock[]                  @relation("BlocksMade")
+  blocksReceived             UserBlock[]                  @relation("BlocksReceived")
+  reportsFiled               MemberReport[]
+  clonedRoutines             Routine[]                    @relation("RoutineCloneAuthors")
   favoriteExercises          UserFavoriteExercise[]
   starredExercises           StarredExercise[]
   sessionShares              SessionShare[]
@@ -135,6 +139,53 @@ model UserFollow {
   @@index([followerId])
   @@index([followingId])
   @@map("Follow")
+}
+
+/// PROF-10: a symmetric block. One row, from the blocker to the blocked, but
+/// every read treats it as mutual: neither account sees the other anywhere.
+model UserBlock {
+  blockerId String
+  blockedId String
+  createdAt DateTime @default(now())
+  blocker   User     @relation("BlocksMade", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked   User     @relation("BlocksReceived", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@id([blockerId, blockedId])
+  @@index([blockerId])
+  @@index([blockedId])
+}
+
+/// PROF-10: a recorded report. TRUST-04 owns the queue, the review actions and
+/// the enforcement record; nothing here reads these rows yet, which is why the
+/// response never implies that anything does.
+model MemberReport {
+  id          String            @id @default(uuid())
+  reporterId  String
+  reporter    User              @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  subjectKind ReportSubjectKind
+  /// A member id, a routine id, or a session share token.
+  subjectId   String
+  reason      ReportReason
+  details     String?           @db.VarChar(500)
+  createdAt   DateTime          @default(now())
+
+  @@index([reporterId, createdAt])
+  @@index([subjectKind, subjectId])
+}
+
+enum ReportSubjectKind {
+  MEMBER
+  ROUTINE
+  SESSION
+}
+
+enum ReportReason {
+  SPAM
+  HARASSMENT
+  IMPERSONATION
+  UNSAFE_ADVICE
+  SEXUAL_CONTENT
+  OTHER
 }
 
 model BlacklistedToken {
@@ -360,6 +411,15 @@ model Routine {
   visibility        RoutineVisibility   @default(PRIVATE)
   // ROUT-08: the last version number handed out, so deleted numbers are never reused.
   lastVersionNumber Int                 @default(0)
+  // ROUT-06: what this routine was cloned from. Both are SET NULL rather than
+  // cascade, because deleting the source must not delete somebody else's copy;
+  // the clone then still says it was cloned and no longer says from what.
+  clonedFromRoutineId String?
+  clonedFromRoutine   Routine?          @relation("RoutineClones", fields: [clonedFromRoutineId], references: [id], onDelete: SetNull)
+  clones              Routine[]         @relation("RoutineClones")
+  clonedFromUserId    String?
+  clonedFromUser      User?             @relation("RoutineCloneAuthors", fields: [clonedFromUserId], references: [id], onDelete: SetNull)
+  clonedAt            DateTime?
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
   days              RoutineDay[]

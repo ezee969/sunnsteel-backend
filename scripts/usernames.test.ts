@@ -83,6 +83,10 @@ describe('UsersService usernames', () => {
           return profileRecord;
         },
       },
+    // PROF-10: this account blocks nobody and is blocked by nobody. The
+    // reads are mocked explicitly rather than defaulted, so a block that
+    // should hide something can never pass by being absent from a fixture.
+    userBlock: { findMany: async () => [], count: async () => 0 },
     } as unknown as DatabaseService;
     const service = new UsersService(db);
 
@@ -111,6 +115,10 @@ describe('UsersService usernames', () => {
           };
         },
       },
+    // PROF-10: this account blocks nobody and is blocked by nobody. The
+    // reads are mocked explicitly rather than defaulted, so a block that
+    // should hide something can never pass by being absent from a fixture.
+    userBlock: { findMany: async () => [], count: async () => 0 },
     } as unknown as DatabaseService;
     const service = new UsersService(db);
 
@@ -162,6 +170,10 @@ describe('UsersService usernames', () => {
           };
         },
       },
+    // PROF-10: this account blocks nobody and is blocked by nobody. The
+    // reads are mocked explicitly rather than defaulted, so a block that
+    // should hide something can never pass by being absent from a fixture.
+    userBlock: { findMany: async () => [], count: async () => 0 },
     } as unknown as DatabaseService;
     const service = new UsersService(db);
 
@@ -213,6 +225,10 @@ describe('UsersService usernames', () => {
           return profileRecord;
         },
       },
+    // PROF-10: this account blocks nobody and is blocked by nobody. The
+    // reads are mocked explicitly rather than defaulted, so a block that
+    // should hide something can never pass by being absent from a fixture.
+    userBlock: { findMany: async () => [], count: async () => 0 },
     } as unknown as DatabaseService;
     const service = new UsersService(db);
 
@@ -259,6 +275,10 @@ describe('UsersService usernames', () => {
           });
         },
       },
+    // PROF-10: this account blocks nobody and is blocked by nobody. The
+    // reads are mocked explicitly rather than defaulted, so a block that
+    // should hide something can never pass by being absent from a fixture.
+    userBlock: { findMany: async () => [], count: async () => 0 },
     } as unknown as DatabaseService;
     const service = new UsersService(db);
 
@@ -289,6 +309,10 @@ describe('UsersService usernames', () => {
           ];
         },
       },
+    // PROF-10: this account blocks nobody and is blocked by nobody. The
+    // reads are mocked explicitly rather than defaulted, so a block that
+    // should hide something can never pass by being absent from a fixture.
+    userBlock: { findMany: async () => [], count: async () => 0 },
     } as unknown as DatabaseService;
     const service = new UsersService(db);
 
@@ -318,6 +342,10 @@ describe('UsersService usernames', () => {
           return [];
         },
       },
+    // PROF-10: this account blocks nobody and is blocked by nobody. The
+    // reads are mocked explicitly rather than defaulted, so a block that
+    // should hide something can never pass by being absent from a fixture.
+    userBlock: { findMany: async () => [], count: async () => 0 },
     } as unknown as DatabaseService;
     const service = new UsersService(db);
 
@@ -352,6 +380,10 @@ describe('UsersService usernames', () => {
           };
         },
       },
+    // PROF-10: this account blocks nobody and is blocked by nobody. The
+    // reads are mocked explicitly rather than defaulted, so a block that
+    // should hide something can never pass by being absent from a fixture.
+    userBlock: { findMany: async () => [], count: async () => 0 },
     } as unknown as DatabaseService;
     const service = new UsersService(db);
 
@@ -385,6 +417,10 @@ describe('UsersService usernames', () => {
           return { followerId: 'viewer-1' };
         },
       },
+    // PROF-10: this account blocks nobody and is blocked by nobody. The
+    // reads are mocked explicitly rather than defaulted, so a block that
+    // should hide something can never pass by being absent from a fixture.
+    userBlock: { findMany: async () => [], count: async () => 0 },
     } as unknown as DatabaseService;
     const service = new UsersService(db);
 

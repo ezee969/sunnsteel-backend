@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 // Services
 import { DatabaseService } from '../database/database.service';
+import { blockPairWhere, blockedIdsWhere, otherPartyId } from './member-blocks';
 import {
   PREFERRED_TRAINING_STYLE_VALUES,
   ProfileDiscoverySettings,
@@ -106,6 +107,20 @@ export class UsersService {
     private readonly featuredProfileItems?: FeaturedProfileItemsService,
     private readonly achievementsService?: AchievementsService,
   ) {}
+
+  /**
+   * PROF-10: every account this viewer must neither see nor be seen by, read
+   * straight from the relation with the shared helpers. It is deliberately not
+   * an injected service: a privacy control must not be able to fail open
+   * because of how the module was wired.
+   */
+  private async hiddenMemberIds(viewerId: string): Promise<string[]> {
+    const rows = await this.db.userBlock.findMany({
+      where: blockedIdsWhere(viewerId),
+      select: { blockerId: true, blockedId: true },
+    });
+    return rows.map((row) => otherPartyId(row, viewerId));
+  }
 
   // Serialization boundary: Prisma record -> `UserProfile` contract
   // (folds follow counts, converts Date -> ISO string).
@@ -367,9 +382,11 @@ export class UsersService {
             : []),
         ];
 
+    // PROF-10: neither party of a block appears in the other's search.
+    const hidden = await this.hiddenMemberIds(excludeUserId);
     return this.db.user.findMany({
       where: {
-        id: { not: excludeUserId },
+        id: { not: excludeUserId, notIn: hidden },
         OR: searches,
       },
       select: {
@@ -425,6 +442,22 @@ export class UsersService {
     }
 
     const isOwner = viewerUserId === user.id;
+    // PROF-10: a blocked profile answers 404 in both directions, exactly as a
+    // denied routine does under ROUT-04. A 403 would confirm the account
+    // exists and that a block is the reason.
+    const blocked =
+      viewerUserId && !isOwner
+        ? (await this.db.userBlock.count({
+            where: blockPairWhere(viewerUserId, user.id),
+          })) > 0
+        : false;
+    if (blocked) throw new NotFoundException('User not found');
+    const viewerBlocksTarget =
+      viewerUserId && !isOwner
+        ? (await this.db.userBlock.count({
+            where: { blockerId: viewerUserId, blockedId: user.id },
+          })) > 0
+        : false;
     const followRelation = !viewerUserId || isOwner
       ? null
       : await this.db.userFollow.findUnique({
@@ -533,6 +566,9 @@ export class UsersService {
       followerCount: user._count.followers,
       followingCount: user._count.following,
       isFollowedByMe: isFollower,
+      ...(viewerUserId && !isOwner
+        ? { moderation: { isBlocked: viewerBlocksTarget } }
+        : {}),
       viewerAccess,
       featuredItems,
       ...(viewerAccess.biography ? { bio: biography?.bio ?? null } : {}),
@@ -598,6 +634,14 @@ export class UsersService {
       select: { id: true },
     });
     if (!targetUser) {
+      throw new NotFoundException('User not found');
+    }
+    // A block prevents a follow in both directions; the refusal is the same
+    // 404 the profile gives, so it cannot be used to detect a block.
+    const blockedPair = await this.db.userBlock.count({
+      where: blockPairWhere(viewerUserId, targetUserId),
+    });
+    if (blockedPair > 0) {
       throw new NotFoundException('User not found');
     }
 

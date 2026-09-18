@@ -18,6 +18,7 @@ import {
 } from '@sunsteel/contracts';
 
 import { DatabaseService } from '../database/database.service';
+import { blockedIdsWhere, otherPartyId } from './member-blocks';
 import { normalizeUsername } from './username';
 
 // Identity-only projection shared by every relationship surface. It matches
@@ -111,6 +112,20 @@ export class UserRelationshipsService {
   constructor(private readonly db: DatabaseService) {}
 
   /**
+   * PROF-10: every account this viewer must neither see nor be seen by. It is
+   * read from the relation with the shared `member-blocks` helpers rather than
+   * through an injected service, so no wiring mistake can quietly switch a
+   * privacy control off.
+   */
+  private async hiddenMemberIds(viewerId: string): Promise<string[]> {
+    const rows = await this.db.userBlock.findMany({
+      where: blockedIdsWhere(viewerId),
+      select: { blockerId: true, blockedId: true },
+    });
+    return rows.map(row => otherPartyId(row, viewerId));
+  }
+
+  /**
    * Relationship lists are readable by any signed-in member, matching the
    * follower/following counts the profile already shows. They are not part of
    * the unguarded `/profiles` read. Entries carry identity only.
@@ -128,6 +143,12 @@ export class UserRelationshipsService {
       select: { id: true },
     });
     if (!profile) {
+      throw new NotFoundException('User not found');
+    }
+    // PROF-10: a blocked profile is not readable, and answers as one that does
+    // not exist -- a 403 would confirm both the account and the block.
+    const hidden = await this.hiddenMemberIds(viewerId);
+    if (hidden.includes(profile.id)) {
       throw new NotFoundException('User not found');
     }
 
@@ -155,7 +176,9 @@ export class UserRelationshipsService {
       kind,
       items: await this.withViewerState(
         viewerId,
-        page.map(row => row.member),
+        // A blocked member is absent from somebody else's list too: the list
+        // is a discovery surface, and the block is symmetric.
+        page.map(row => row.member).filter(member => !hidden.includes(member.id)),
       ),
       ...(rows.length > limit && last
         ? {
@@ -188,7 +211,9 @@ export class UserRelationshipsService {
       select: { followingId: true },
     });
     const followedIds = followed.map(row => row.followingId);
-    const excludedIds = [...followedIds, viewerId];
+    // PROF-10: blocked in either direction is never a suggestion.
+    const hidden = await this.hiddenMemberIds(viewerId);
+    const excludedIds = [...followedIds, ...hidden, viewerId];
 
     const [networkCounts, fans] = await Promise.all([
       this.readNetworkCounts(followedIds, excludedIds),
@@ -208,7 +233,9 @@ export class UserRelationshipsService {
     if (ranked.length === 0) return { items: [] };
 
     const members = await this.db.user.findMany({
-      where: { id: { in: ranked.map(candidate => candidate.id) } },
+      where: {
+        id: { in: ranked.map(candidate => candidate.id), notIn: hidden },
+      },
       select: memberSelect,
     });
     const membersById = new Map(members.map(member => [member.id, member]));

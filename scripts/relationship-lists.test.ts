@@ -117,6 +117,10 @@ describe('UserRelationshipsService lists', () => {
           return [];
         },
       },
+    // PROF-10: this account blocks nobody and is blocked by nobody. The
+    // reads are mocked explicitly rather than defaulted, so a block that
+    // should hide something can never pass by being absent from a fixture.
+    userBlock: { findMany: async () => [], count: async () => 0 },
     } as unknown as DatabaseService;
     const service = new UserRelationshipsService(db);
 
@@ -155,6 +159,10 @@ describe('UserRelationshipsService lists', () => {
           return [];
         },
       },
+    // PROF-10: this account blocks nobody and is blocked by nobody. The
+    // reads are mocked explicitly rather than defaulted, so a block that
+    // should hide something can never pass by being absent from a fixture.
+    userBlock: { findMany: async () => [], count: async () => 0 },
     } as unknown as DatabaseService;
     const service = new UserRelationshipsService(db);
     const cursor = encodeRelationshipCursor({
@@ -189,6 +197,10 @@ describe('UserRelationshipsService lists', () => {
           return [];
         },
       },
+    // PROF-10: this account blocks nobody and is blocked by nobody. The
+    // reads are mocked explicitly rather than defaulted, so a block that
+    // should hide something can never pass by being absent from a fixture.
+    userBlock: { findMany: async () => [], count: async () => 0 },
     } as unknown as DatabaseService;
     const service = new UserRelationshipsService(db);
 
@@ -210,6 +222,10 @@ describe('UserRelationshipsService lists', () => {
           return [];
         },
       },
+    // PROF-10: this account blocks nobody and is blocked by nobody. The
+    // reads are mocked explicitly rather than defaulted, so a block that
+    // should hide something can never pass by being absent from a fixture.
+    userBlock: { findMany: async () => [], count: async () => 0 },
     } as unknown as DatabaseService;
     const service = new UserRelationshipsService(db);
 
@@ -245,6 +261,10 @@ describe('UserRelationshipsService suggestions', () => {
       user: {
         findMany: async () => [member('network-1'), member('fan-1')],
       },
+    // PROF-10: this account blocks nobody and is blocked by nobody. The
+    // reads are mocked explicitly rather than defaulted, so a block that
+    // should hide something can never pass by being absent from a fixture.
+    userBlock: { findMany: async () => [], count: async () => 0 },
     } as unknown as DatabaseService;
     const service = new UserRelationshipsService(db);
 
@@ -287,6 +307,10 @@ describe('UserRelationshipsService suggestions', () => {
         },
       },
       user: { findMany: async () => [] },
+    // PROF-10: this account blocks nobody and is blocked by nobody. The
+    // reads are mocked explicitly rather than defaulted, so a block that
+    // should hide something can never pass by being absent from a fixture.
+    userBlock: { findMany: async () => [], count: async () => 0 },
     } as unknown as DatabaseService;
     const service = new UserRelationshipsService(db);
 

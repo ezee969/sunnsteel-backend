@@ -16,6 +16,7 @@ import {
   type SharedRoutine,
 } from '@sunsteel/contracts';
 import { DatabaseService } from '../database/database.service';
+import { blockPairWhere } from '../users/member-blocks';
 import { CreateRoutineDto } from './dto/create-routine.dto';
 import { readCloneSource, setupToClonedRoutine } from './routine-cloning';
 import { ROUTINE_WITH_DAYS_SELECT } from './routine.selects';
@@ -164,6 +165,14 @@ export class RoutineSharingService {
       select: { routinesVisibility: true },
     });
     if (!owner) throw new NotFoundException('Member not found');
+    // PROF-10: a blocked member's routines are not listed, and the refusal is
+    // the one a missing member gets.
+    if (viewerId && viewerId !== ownerId) {
+      const blocked = await this.db.userBlock.count({
+        where: blockPairWhere(viewerId, ownerId),
+      });
+      if (blocked > 0) throw new NotFoundException('Member not found');
+    }
 
     const isOwner = viewerId === ownerId;
     const isFollower = isOwner
@@ -222,6 +231,13 @@ export class RoutineSharingService {
     }
 
     const isOwner = viewerId === routine.user.id;
+    if (viewerId && !isOwner) {
+      const blocked = await this.db.userBlock.count({
+        where: blockPairWhere(viewerId, routine.user.id),
+      });
+      // PROF-10: indistinguishable from a routine that does not exist.
+      if (blocked > 0) throw new NotFoundException('Routine not found');
+    }
     const isFollower = isOwner
       ? false
       : viewerId !== null &&
@@ -288,10 +304,26 @@ export class RoutineSharingService {
       );
     }
 
-    return this.routines.create(
+    const clone = await this.routines.create(
       userId,
       setupToClonedRoutine(shared.setup) as unknown as CreateRoutineDto,
     );
+    // ROUT-06: what it was cloned from, recorded on the clone only. The source
+    // is never told it was copied. The author is stored beside the routine id
+    // so the lineage survives the source being deleted.
+    const sourceRoutine = await this.db.routine.findUnique({
+      where: { id: shared.routineId },
+      select: { userId: true },
+    });
+    await this.db.routine.update({
+      where: { id: clone.id },
+      data: {
+        clonedFromRoutineId: shared.routineId,
+        clonedFromUserId: sourceRoutine?.userId ?? null,
+        clonedAt: new Date(),
+      },
+    });
+    return this.routines.findOne(userId, clone.id);
   }
 
   private mapShare(row: {

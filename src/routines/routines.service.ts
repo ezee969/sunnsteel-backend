@@ -9,6 +9,7 @@ import { Prisma, ProgressionScheme } from '@prisma/client';
 import { Routine, RoutineScheduleMode } from '@sunsteel/contracts';
 import { DatabaseService } from '../database/database.service';
 import { CreateRoutineDto } from './dto/create-routine.dto';
+import { resolveRoutineLineage } from './routine-lineage';
 import { UpdateRoutineDto } from './dto/update-routine.dto';
 import {
   ROUTINE_TOGGLE_SELECT,
@@ -134,10 +135,38 @@ export class RoutinesService {
     routines: RoutineWithDaysEntity[],
     db: Prisma.TransactionClient = this.db,
   ): Promise<Routine[]> {
+    // ROUT-06: these are the owner's own routines, so no follow or block can
+    // stand between them and a source they cloned; only the source routine's
+    // own rules apply, which `resolveRoutineLineage` reads.
+    const lineageFor = (routine: RoutineWithDaysEntity) =>
+      resolveRoutineLineage(
+        {
+          routineId: routine.clonedFromRoutine?.id ?? null,
+          clonedAt: routine.clonedAt,
+          author: routine.clonedFromUser
+            ? {
+                id: routine.clonedFromUser.id,
+                username: routine.clonedFromUser.username ?? '',
+                name: routine.clonedFromUser.name,
+                lastName: routine.clonedFromUser.lastName,
+                avatarUrl: routine.clonedFromUser.avatarUrl,
+              }
+            : null,
+          sourceVisibility: routine.clonedFromRoutine?.visibility ?? null,
+          authorRoutinesRule:
+            routine.clonedFromUser?.routinesVisibility ?? null,
+        },
+        {
+          isOwner: routine.clonedFromUser?.id === userId,
+          isFollower: false,
+          isBlocked: false,
+        },
+      );
+
     return Promise.all(
       routines.map(async (routine) => {
         if (routine.scheduleMode !== 'ROTATION') {
-          return toRoutineResponse(routine);
+          return toRoutineResponse(routine, null, lineageFor(routine));
         }
         const last = await db.workoutSession.findFirst({
           where: { userId, routineId: routine.id, status: 'COMPLETED' },
@@ -158,6 +187,7 @@ export class RoutinesService {
                 }
               : null,
           ),
+          lineageFor(routine),
         );
       }),
     );

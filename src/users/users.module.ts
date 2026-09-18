@@ -10,6 +10,9 @@ import { UserRelationshipsService } from './user-relationships.service';
 import { GoalsModule } from '../goals/goals.module';
 import { PlateauPreferencesService } from './plateau-preferences.service';
 import { FeaturedProfileItemsService } from './featured-profile-items.service';
+import { MemberBlocksService } from './member-blocks.service';
+import { MemberReportsService } from './member-reports.service';
+import { MemberReportsController } from './member-reports.controller';
 import { AchievementsModule } from '../achievements/achievements.module';
 import { RoutinesModule } from '../routines/routines.module';
 
@@ -29,9 +32,15 @@ import { RoutinesModule } from '../routines/routines.module';
     PlateauPreferencesService,
     UserRelationshipsService,
     FeaturedProfileItemsService,
+    MemberBlocksService,
+    MemberReportsService,
     DatabaseService,
   ],
   exports: [UsersService],
-  controllers: [UsersController, PublicProfilesController],
+  controllers: [
+    UsersController,
+    PublicProfilesController,
+    MemberReportsController,
+  ],
 })
 export class UsersModule {}

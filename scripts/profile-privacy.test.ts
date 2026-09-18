@@ -165,6 +165,10 @@ describe('UsersService privacy boundary', () => {
           };
         },
       },
+    // PROF-10: this account blocks nobody and is blocked by nobody. The
+    // reads are mocked explicitly rather than defaulted, so a block that
+    // should hide something can never pass by being absent from a fixture.
+    userBlock: { findMany: async () => [], count: async () => 0 },
     } as unknown as DatabaseService;
     const service = new UsersService(db);
 
@@ -212,6 +216,10 @@ describe('UsersService privacy boundary', () => {
           return storedProfile;
         },
       },
+    // PROF-10: this account blocks nobody and is blocked by nobody. The
+    // reads are mocked explicitly rather than defaulted, so a block that
+    // should hide something can never pass by being absent from a fixture.
+    userBlock: { findMany: async () => [], count: async () => 0 },
     } as unknown as DatabaseService;
     const service = new UsersService(db);
 
@@ -252,6 +260,10 @@ describe('UsersService privacy boundary', () => {
           return [];
         },
       },
+    // PROF-10: this account blocks nobody and is blocked by nobody. The
+    // reads are mocked explicitly rather than defaulted, so a block that
+    // should hide something can never pass by being absent from a fixture.
+    userBlock: { findMany: async () => [], count: async () => 0 },
     } as unknown as DatabaseService;
     const service = new UsersService(
       db,
@@ -320,6 +332,10 @@ describe('UsersService privacy boundary', () => {
       },
       workoutAnalyticsProjection: { findFirst: async () => null },
       personalRecord: { findMany: async () => [] },
+    // PROF-10: this account blocks nobody and is blocked by nobody. The
+    // reads are mocked explicitly rather than defaulted, so a block that
+    // should hide something can never pass by being absent from a fixture.
+    userBlock: { findMany: async () => [], count: async () => 0 },
     } as unknown as DatabaseService;
     const service = new UsersService(
       db,
@@ -409,6 +425,10 @@ describe('UsersService privacy boundary', () => {
           },
         ],
       },
+    // PROF-10: this account blocks nobody and is blocked by nobody. The
+    // reads are mocked explicitly rather than defaulted, so a block that
+    // should hide something can never pass by being absent from a fixture.
+    userBlock: { findMany: async () => [], count: async () => 0 },
     } as unknown as DatabaseService;
     const service = new UsersService(
       db,

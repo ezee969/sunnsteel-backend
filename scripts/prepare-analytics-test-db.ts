@@ -207,6 +207,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260918090000_featured_routine_kind/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// PROF-10/ROUT-06: blocks, reports and clone lineage.
+				readFileSync(
+					'prisma/migrations/20260918140000_blocks_reports_lineage/migration.sql',
+					'utf8',
 				),
     );
     prisma(

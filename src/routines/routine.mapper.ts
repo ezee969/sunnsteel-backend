@@ -3,6 +3,7 @@ import {
   Routine,
   RoutineDay,
   RoutineExercise,
+  RoutineLineage,
   RoutineSet,
 } from '@sunsteel/contracts';
 import { ROUTINE_WITH_DAYS_SELECT } from './routine.selects';
@@ -63,6 +64,7 @@ function toRoutineDay(d: RoutineDayEntity): RoutineDay {
 export function toRoutineResponse(
   r: RoutineWithDaysEntity,
   nextRotationDayId: string | null = null,
+  lineage: RoutineLineage | null = null,
 ): Routine {
   return {
     id: r.id,
@@ -77,6 +79,7 @@ export function toRoutineResponse(
     restDays: r.restDays,
     rotationWeekdays: r.rotationWeekdays,
     visibility: r.visibility,
+    ...(lineage ? { lineage } : {}),
     days: r.days.map(toRoutineDay),
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),

@@ -35,6 +35,7 @@ import { UpdatePlateauPreferencesDto } from './dto/update-plateau-preferences.dt
 import { PlateauPreferencesService } from './plateau-preferences.service';
 import { RoutineSharingService } from '../routines/routine-sharing.service';
 import { FeaturedProfileItemsService } from './featured-profile-items.service';
+import { MemberBlocksService } from './member-blocks.service';
 import { ReplaceFeaturedProfileItemsDto } from './dto/replace-featured-profile-items.dto';
 
 @UseGuards(SupabaseJwtGuard)
@@ -49,6 +50,7 @@ export class UsersController {
     private readonly plateauPreferences: PlateauPreferencesService,
     private readonly routineSharing: RoutineSharingService,
     private readonly featuredProfileItems: FeaturedProfileItemsService,
+    private readonly blocks: MemberBlocksService,
   ) {}
 
   @Get('time-zone')
@@ -138,6 +140,32 @@ export class UsersController {
     @Body() dto: UpdatePlateauPreferencesDto,
   ) {
     return this.plateauPreferences.update(req.user.id, dto.minSessions);
+  }
+
+  /**
+   * PROF-10: the viewer's own block list, and the two controls over it. They
+   * live under the reserved `me` segment, so they cannot shadow a member's
+   * profile route.
+   */
+  @Get('me/blocks')
+  listBlocks(@Request() req: RequestWithUser) {
+    return this.blocks.list(req.user.id);
+  }
+
+  @Put('me/blocks/:identifier')
+  blockMember(
+    @Request() req: RequestWithUser,
+    @Param('identifier') identifier: string,
+  ) {
+    return this.blocks.block(req.user.id, identifier);
+  }
+
+  @Delete('me/blocks/:identifier')
+  unblockMember(
+    @Request() req: RequestWithUser,
+    @Param('identifier') identifier: string,
+  ) {
+    return this.blocks.unblock(req.user.id, identifier);
   }
 
   @Get('search')
