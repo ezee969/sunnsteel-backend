@@ -87,6 +87,8 @@ model User {
   reminderMinuteOfDay        Int?
   pushSubscriptions          PushSubscription[]
   scheduledPushes            ScheduledPush[]
+  activitySharingDefaults    ActivitySharingDefault[]
+  activityEntryOverrides     ActivityEntryOverride[]
 }
 
 /// PROF-08 adds ROUTINE: a shared routine is a fourth kind of featured item,
@@ -392,49 +394,60 @@ model StarredExercise {
 
 // A training routine owned by a single user (non-shareable for now)
 model Routine {
-  id                String              @id @default(uuid())
-  userId            String
-  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name              String
-  description       String?
-  isPeriodized      Boolean             @default(false)
-  isFavorite        Boolean             @default(false)
-  isCompleted       Boolean             @default(false)
+  id                  String                   @id @default(uuid())
+  userId              String
+  user                User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name                String
+  description         String?
+  isPeriodized        Boolean                  @default(false)
+  isFavorite          Boolean                  @default(false)
+  isCompleted         Boolean                  @default(false)
   // ROUT-11: WEEKLY days carry a weekday; ROTATION days run in `order`.
-  scheduleMode      RoutineScheduleMode @default(WEEKLY)
+  scheduleMode        RoutineScheduleMode      @default(WEEKLY)
   // SCHED-07: planned rest weekdays of a weekly routine (never training days).
-  restDays          Int[]               @default([])
+  restDays            Int[]                    @default([])
   // SCHED-06: weekdays a ROTATION routine trains on; empty means any day, undated.
-  rotationWeekdays  Int[]               @default([])
+  rotationWeekdays    Int[]                    @default([])
   // ROUT-04: who may read this routine. The account-level PROF-06 routines
   // rule is the upper bound; this can only narrow it, never widen it.
-  visibility        RoutineVisibility   @default(PRIVATE)
+  visibility          RoutineVisibility        @default(PRIVATE)
   // ROUT-08: the last version number handed out, so deleted numbers are never reused.
-  lastVersionNumber Int                 @default(0)
+  lastVersionNumber   Int                      @default(0)
   // ROUT-07: owner-declared claims about the programme. They reuse the
   // PROF-05 enums but belong to the routine, not to its author: a person's
   // training identity is not evidence of what their routine is for.
-  goal              TrainingGoal?
-  experienceLevel   TrainingExperienceLevel?
+  goal                TrainingGoal?
+  experienceLevel     TrainingExperienceLevel?
   // ROUT-06: what this routine was cloned from. Both are SET NULL rather than
   // cascade, because deleting the source must not delete somebody else's copy;
   // the clone then still says it was cloned and no longer says from what.
   clonedFromRoutineId String?
-  clonedFromRoutine   Routine?          @relation("RoutineClones", fields: [clonedFromRoutineId], references: [id], onDelete: SetNull)
-  clones              Routine[]         @relation("RoutineClones")
+  clonedFromRoutine   Routine?                 @relation("RoutineClones", fields: [clonedFromRoutineId], references: [id], onDelete: SetNull)
+  clones              Routine[]                @relation("RoutineClones")
   clonedFromUserId    String?
-  clonedFromUser      User?             @relation("RoutineCloneAuthors", fields: [clonedFromUserId], references: [id], onDelete: SetNull)
+  clonedFromUser      User?                    @relation("RoutineCloneAuthors", fields: [clonedFromUserId], references: [id], onDelete: SetNull)
   clonedAt            DateTime?
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  days              RoutineDay[]
-  workoutSessions   WorkoutSession[]
-  versions          RoutineVersion[]
-  shares            RoutineShare[]
-  scheduleOverrides ScheduleOverride[]
+  // SOC-03: when this routine last became visible to anyone (PRIVATE to
+  // FOLLOWERS or PUBLIC). Null on routines shared before SOC-03, which
+  // therefore produce no activity entry rather than an invented date.
+  sharedAt            DateTime?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  days                RoutineDay[]
+  workoutSessions     WorkoutSession[]
+  versions            RoutineVersion[]
+  shares              RoutineShare[]
+  scheduleOverrides   ScheduleOverride[]
 
   @@index([userId, isFavorite])
   @@index([userId, isCompleted])
+  @@index([userId, sharedAt])
+  // Created by 20260918140000_blocks_reports_lineage and
+  // 20260919100000_routine_classification but never declared, so every later
+  // generated migration proposed dropping them. Declaring them ends the drift.
+  @@index([clonedFromRoutineId])
+  @@index([goal])
+  @@index([experienceLevel])
 }
 
 /// ROUT-04. PRIVATE is the default and today's behaviour for every routine.
@@ -861,4 +874,43 @@ model Notification {
 
   @@unique([userId, sourceKey])
   @@index([userId, createdAt])
+}
+
+/// SOC-03/SOC-04: the activity types a member can share. Entries are
+/// generated on read from verified data; only the owner's choices are stored.
+enum ActivityType {
+  SESSION_COMPLETED
+  PERSONAL_RECORD
+  PROGRESSION_CHANGED
+  ACHIEVEMENT_UNLOCKED
+  STREAK_MILESTONE
+  COMEBACK
+  ROUTINE_SHARED
+}
+
+/// SOC-04: the default audience of one activity type. A missing row is
+/// PRIVATE, so nothing reaches anyone until its owner chooses.
+model ActivitySharingDefault {
+  userId    String
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      ActivityType
+  audience  ProfileVisibility
+  updatedAt DateTime          @updatedAt
+
+  @@id([userId, type])
+}
+
+/// SOC-04: one entry's own audience, keyed by the entry's stable source key.
+/// PRIVATE withdraws it. The section rule still caps whatever is stored here.
+model ActivityEntryOverride {
+  userId    String
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entryKey  String            @db.VarChar(200)
+  type      ActivityType
+  audience  ProfileVisibility
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@id([userId, entryKey])
+  @@index([userId, type])
 }

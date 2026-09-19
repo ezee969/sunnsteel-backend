@@ -38,6 +38,12 @@ const shareSelect = {
   createdAt: true,
 } as const;
 
+/** SOC-03: whether a visibility change is an act of sharing the routine. */
+export const sharedAtChange = (
+  previous: RoutineVisibility,
+  next: RoutineVisibility,
+) => previous === 'PRIVATE' && next !== 'PRIVATE';
+
 /** 144 bits of randomness: the token is the only credential for a link. */
 export function createRoutineShareToken(): string {
   return randomBytes(18).toString('base64url');
@@ -68,10 +74,24 @@ export class RoutineSharingService {
     routineId: string,
     visibility: RoutineVisibility,
   ): Promise<{ visibility: RoutineVisibility }> {
-    await this.assertOwned(userId, routineId);
+    const current = await this.db.routine.findFirst({
+      where: { id: routineId, userId },
+      select: { visibility: true },
+    });
+    if (!current) throw new NotFoundException('Routine not found');
     const routine = await this.db.routine.update({
       where: { id: routineId },
-      data: { visibility },
+      data: {
+        visibility,
+        // SOC-03: sharing is the moment a private routine becomes visible to
+        // anyone, and that moment is the activity entry's date. Widening or
+        // narrowing a routine that was already shared is not a new share,
+        // and making it private keeps the date: the entry's audience is then
+        // capped by the routine itself.
+        ...(sharedAtChange(current.visibility, visibility)
+          ? { sharedAt: new Date() }
+          : {}),
+      },
       select: { visibility: true },
     });
     return { visibility: routine.visibility };

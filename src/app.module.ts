@@ -17,6 +17,7 @@ import { HealthModule } from './health/health.module';
 import { AchievementsModule } from './achievements/achievements.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PushModule } from './notifications/push/push.module';
+import { ActivityModule } from './activity/activity.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { PushModule } from './notifications/push/push.module';
     AchievementsModule,
     NotificationsModule,
     PushModule,
+    ActivityModule,
   ],
   providers: [
     {

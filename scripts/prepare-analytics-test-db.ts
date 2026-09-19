@@ -219,6 +219,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260919100000_routine_classification/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// SOC-03/SOC-04: activity sharing defaults, overrides and sharedAt.
+				readFileSync(
+					'prisma/migrations/20260919120000_activity_sharing/migration.sql',
+					'utf8',
 				),
     );
     prisma(
