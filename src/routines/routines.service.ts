@@ -214,6 +214,9 @@ export class RoutinesService {
         },
         name: dto.name,
         description: dto.description,
+        // ROUT-07: undeclared stays undeclared; there is no default claim.
+        goal: dto.goal ?? null,
+        experienceLevel: dto.experienceLevel ?? null,
         isPeriodized: false,
         scheduleMode,
         restDays: normalizeRestDays(scheduleMode, days, dto.restDays),
@@ -332,6 +335,10 @@ export class RoutinesService {
         ...(dto.name && { name: dto.name }),
         ...(dto.description !== undefined && {
           description: dto.description,
+        }),
+        ...(dto.goal !== undefined && { goal: dto.goal }),
+        ...(dto.experienceLevel !== undefined && {
+          experienceLevel: dto.experienceLevel,
         }),
         isPeriodized: false,
         scheduleMode,

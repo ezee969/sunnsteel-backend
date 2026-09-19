@@ -27,6 +27,10 @@ import {
   ROUTINE_SCHEDULE_MODES,
   RoutineScheduleMode,
   RoutineSet,
+  TRAINING_EXPERIENCE_LEVEL_VALUES,
+  TRAINING_GOAL_VALUES,
+  TrainingExperienceLevel,
+  TrainingGoal,
 } from '@sunsteel/contracts';
 
 // Progression schemes accepted by the backend.
@@ -150,6 +154,15 @@ export class CreateRoutineDto implements CreateRoutineRequest {
 
   @IsOptional()
   description?: string;
+
+  // ROUT-07: owner-declared. Null clears it; omitting it leaves it alone.
+  @IsOptional()
+  @IsIn([...TRAINING_GOAL_VALUES, null] as unknown as string[])
+  goal?: TrainingGoal | null;
+
+  @IsOptional()
+  @IsIn([...TRAINING_EXPERIENCE_LEVEL_VALUES, null] as unknown as string[])
+  experienceLevel?: TrainingExperienceLevel | null;
 
   @IsBoolean()
   isPeriodized: boolean; // must be false for now

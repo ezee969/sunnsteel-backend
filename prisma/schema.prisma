@@ -411,6 +411,11 @@ model Routine {
   visibility        RoutineVisibility   @default(PRIVATE)
   // ROUT-08: the last version number handed out, so deleted numbers are never reused.
   lastVersionNumber Int                 @default(0)
+  // ROUT-07: owner-declared claims about the programme. They reuse the
+  // PROF-05 enums but belong to the routine, not to its author: a person's
+  // training identity is not evidence of what their routine is for.
+  goal              TrainingGoal?
+  experienceLevel   TrainingExperienceLevel?
   // ROUT-06: what this routine was cloned from. Both are SET NULL rather than
   // cascade, because deleting the source must not delete somebody else's copy;
   // the clone then still says it was cloned and no longer says from what.

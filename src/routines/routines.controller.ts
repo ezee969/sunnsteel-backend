@@ -12,8 +12,10 @@ import {
 } from '@nestjs/common';
 import { RoutinesService } from './routines.service';
 import { RoutineSharingService } from './routine-sharing.service';
+import { RoutineDiscoveryService } from './routine-discovery.service';
 import { SupabaseJwtGuard } from '../auth/guards/supabase-jwt.guard';
 import { CloneRoutineDto } from './dto/clone-routine.dto';
+import { DiscoverRoutinesDto } from './dto/discover-routines.dto';
 import { CreateRoutineDto } from './dto/create-routine.dto';
 import { UpdateRoutineDto } from './dto/update-routine.dto';
 import { UpdateFavoriteDto } from './dto/update-favorite.dto';
@@ -27,6 +29,7 @@ export class RoutinesController {
   constructor(
     private readonly routinesService: RoutinesService,
     private readonly routineSharing: RoutineSharingService,
+    private readonly discovery: RoutineDiscoveryService,
   ) {}
 
   @Post()
@@ -49,6 +52,15 @@ export class RoutinesController {
     @Query() filter: GetRoutinesFilterDto,
   ) {
     return this.routinesService.findAll(req.user.id, filter);
+  }
+
+  /**
+   * ROUT-07: routines other members have shared that this viewer may read.
+   * Declared before `:id` so the literal segment wins the route match.
+   */
+  @Get('discover')
+  discover(@Req() req: RequestWithUser, @Query() query: DiscoverRoutinesDto) {
+    return this.discovery.discover(req.user.id, query);
   }
 
   @Get('favorites')

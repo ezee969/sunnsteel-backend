@@ -79,6 +79,8 @@ export function toRoutineResponse(
     restDays: r.restDays,
     rotationWeekdays: r.rotationWeekdays,
     visibility: r.visibility,
+    goal: r.goal,
+    experienceLevel: r.experienceLevel,
     ...(lineage ? { lineage } : {}),
     days: r.days.map(toRoutineDay),
     createdAt: r.createdAt.toISOString(),

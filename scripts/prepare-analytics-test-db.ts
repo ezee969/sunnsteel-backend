@@ -213,6 +213,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260918140000_blocks_reports_lineage/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// ROUT-07: owner-declared routine goal and experience level.
+				readFileSync(
+					'prisma/migrations/20260919100000_routine_classification/migration.sql',
+					'utf8',
 				),
     );
     prisma(

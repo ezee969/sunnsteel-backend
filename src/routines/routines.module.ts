@@ -9,6 +9,7 @@ import {
   SharedRoutinesController,
 } from './routine-shares.controller';
 import { RoutineSharingService } from './routine-sharing.service';
+import { RoutineDiscoveryService } from './routine-discovery.service';
 
 @Module({
   imports: [DatabaseModule],
@@ -18,7 +19,12 @@ import { RoutineSharingService } from './routine-sharing.service';
     RoutineSharesController,
     SharedRoutinesController,
   ],
-  providers: [RoutinesService, RoutineVersionsService, RoutineSharingService],
+  providers: [
+    RoutinesService,
+    RoutineVersionsService,
+    RoutineSharingService,
+    RoutineDiscoveryService,
+  ],
   exports: [RoutinesService, RoutineSharingService],
 })
 export class RoutinesModule {}

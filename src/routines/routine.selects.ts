@@ -46,6 +46,9 @@ export const ROUTINE_WITH_DAYS_SELECT = {
   restDays: true,
   rotationWeekdays: true,
   visibility: true,
+  // ROUT-07: owner-declared classification.
+  goal: true,
+  experienceLevel: true,
   // ROUT-06: what this routine was cloned from. The source's own visibility
   // and its author's PROF-06 routines rule come with it, because the lineage
   // is resolved through the same ROUT-04 rule as any other read of it.
