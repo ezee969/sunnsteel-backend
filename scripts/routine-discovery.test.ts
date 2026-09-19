@@ -10,14 +10,15 @@ import {
   SETUP_SECONDS_PER_EXERCISE,
   type FacetDay,
 } from '../src/routines/routine-facets';
+import type { MuscleGroup } from '@sunsteel/contracts';
 
 const exercise = (
   overrides: {
     restSeconds?: number;
     reps?: number;
     sets?: number;
-    primary?: string[];
-    secondary?: string[];
+    primary?: MuscleGroup[];
+    secondary?: MuscleGroup[];
     equipment?: string[];
   } = {},
 ) => ({
@@ -29,8 +30,8 @@ const exercise = (
     maxReps: null,
   })),
   exercise: {
-    primaryMuscles: (overrides.primary ?? ['CHEST']) as never,
-    secondaryMuscles: (overrides.secondary ?? ['TRICEPS']) as never,
+    primaryMuscles: overrides.primary ?? ['PECTORAL'],
+    secondaryMuscles: overrides.secondary ?? ['TRICEPS'],
     equipmentRequired: overrides.equipment ?? ['barbell'],
   },
 });
@@ -55,8 +56,8 @@ describe('ROUT-07 duration estimate', () => {
             { repType: 'RANGE', reps: null, minReps: 6, maxReps: 10 },
           ],
           exercise: {
-            primaryMuscles: [] as never,
-            secondaryMuscles: [] as never,
+            primaryMuscles: [],
+            secondaryMuscles: [],
             equipmentRequired: [],
           },
         },
@@ -96,12 +97,12 @@ describe('ROUT-07 derived facets', () => {
     const facets = deriveRoutineFacets([
       {
         exercises: [
-          exercise({ primary: ['CHEST'], secondary: ['TRICEPS'] }),
-          exercise({ primary: ['TRICEPS'], secondary: ['CHEST'] }),
+          exercise({ primary: ['PECTORAL'], secondary: ['TRICEPS'] }),
+          exercise({ primary: ['TRICEPS'], secondary: ['PECTORAL'] }),
         ],
       },
     ]);
-    assert.deepEqual(facets.muscles, ['CHEST', 'TRICEPS']);
+    assert.deepEqual(facets.muscles, ['PECTORAL', 'TRICEPS']);
   });
 
   it('collects every piece of equipment the routine needs, once', () => {
@@ -205,8 +206,8 @@ describe('ROUT-07 filters', () => {
   it('applies days, muscle and duration exactly', () => {
     assert.equal(matchesDiscoveryFilters(candidate, { days: 2 }), true);
     assert.equal(matchesDiscoveryFilters(candidate, { days: 3 }), false);
-    assert.equal(matchesDiscoveryFilters(candidate, { muscle: 'CHEST' }), true);
-    assert.equal(matchesDiscoveryFilters(candidate, { muscle: 'QUADS' }), false);
+    assert.equal(matchesDiscoveryFilters(candidate, { muscle: 'PECTORAL' }), true);
+    assert.equal(matchesDiscoveryFilters(candidate, { muscle: 'QUADRICEPS' }), false);
     assert.equal(
       matchesDiscoveryFilters(candidate, {
         duration: durationBand(candidate.longestDayMinutes),
