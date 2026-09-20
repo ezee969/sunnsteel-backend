@@ -126,6 +126,18 @@ DTOs/enums are sourced from the published `@sunsteel/contracts` package rather t
 - Global rate limiting via `ThrottlerGuard` (`src/app.module.ts`).
 - Built-in endpoints: `GET /health`, `GET /metrics` (Prometheus, IP-allowlisted).
 
+## Closing a slice
+
+The order the gates run in, and what each one is the only owner of. The
+frontend's `CLAUDE.md` carries the same list; keep them saying the same thing.
+
+1. **Contracts**, only when a shared shape changed: edit `../sunnsteel-contracts`, verify, publish, then install that version here and in the frontend.
+2. **`npm run verify`, once, at the end**, with the dev server stopped. While iterating run `npm run lint`, `npm run typecheck` and `npm test`; the gate re-runs all of them plus the build and the build-import check. **The test tally is in `verify`'s own output** — do not run `npm test` again to read it.
+3. **Migration**: `npx prisma migrate deploy` (and `npx prisma generate`) with the dev server stopped — it holds the Prisma query-engine DLL — and register the file in `scripts/prepare-analytics-test-db.ts` in the same change.
+4. **Real-stack checks** against the running server, for what a Node test structurally cannot reach: Prisma `where` clauses, JSON-path filters, the order authorization runs in, cursors over real rows. A rule already covered by a pure test does not need a second assertion over HTTP. **A script that writes to the deployment database is never committed** — it is written, run, and deleted, so nobody can run it by accident later.
+5. **Never write files in this repository while the frontend's `ui:regression` sweep is running.** `npm run start:dev` watches the tree and restarts; a restart mid-sweep fails every case in flight with the backend unreachable, and the run has to be discarded.
+6. **Docs**: the roadmap closure with its decisions and what you did *not* verify, `CLAUDE.md`/`AGENTS.md` kept in sync, `../FEATURES.md` when a feature ships.
+
 ## Code style
 
 - Match the surrounding file's formatting (tabs/spaces and semicolon usage vary across existing files).
