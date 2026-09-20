@@ -22,6 +22,9 @@ const privateSettings = {
 
 const storedProfile = {
   timeZone: 'UTC',
+  // TRUST-04: nothing here is hidden; the moderation tests own that case.
+  moderationHiddenAt: null,
+  isModerator: false,
   id: 'owner-1',
   email: 'owner@example.test',
   username: 'owner_handle',
@@ -242,6 +245,9 @@ describe('UsersService privacy boundary', () => {
     const db = {
       user: {
         findFirst: async () => storedProfile,
+        // TRUST-04's hide read. It is a count of the viewer's own row, not a
+        // section, so it must not register as a sensitive read.
+        count: async () => 0,
         findUnique: async () => {
           sensitiveReads += 1;
           return storedProfile;
@@ -312,6 +318,7 @@ describe('UsersService privacy boundary', () => {
           locationVisibility: 'FOLLOWERS',
           achievementsVisibility: 'PUBLIC',
         }),
+        count: async () => 0,
         findUnique: async (args: { select: Record<string, boolean> }) => {
           if (args.select.bio) {
             biographyReads += 1;
@@ -380,6 +387,7 @@ describe('UsersService privacy boundary', () => {
           achievementsVisibility: 'FOLLOWERS',
           bodyMetricsVisibility: 'FOLLOWERS',
         }),
+        count: async () => 0,
         findUnique: async (args: { select: Record<string, boolean> }) => {
           if (args.select.bio) return { bio: 'Strength built patiently.' };
           if (args.select.location) return { location: 'Berlin, Germany' };

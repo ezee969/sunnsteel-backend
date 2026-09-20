@@ -91,6 +91,15 @@ model User {
   activityEntryOverrides     ActivityEntryOverride[]
   activityReactionsMade      ActivityEntryReaction[]      @relation("ActivityReactionsMade")
   activityReactionsReceived  ActivityEntryReaction[]      @relation("ActivityReactionsReceived")
+  // TRUST-04: the whole authorization model for moderation. There is one
+  // moderator, so a flag is the honest shape; a roles table would be a
+  // subsystem built for a second moderator who does not exist.
+  isModerator                Boolean                      @default(false)
+  /// TRUST-04: set by HIDE_SUBJECT. The account keeps everything it owns and
+  /// still reads its own profile; nobody else can reach it.
+  moderationHiddenAt         DateTime?
+  moderationActions          ModerationAction[]           @relation("ModerationActor")
+  reportsResolved            MemberReport[]               @relation("ReportResolver")
 }
 
 /// PROF-08 adds ROUTINE: a shared routine is a fourth kind of featured item,
@@ -163,18 +172,66 @@ model UserBlock {
 /// the enforcement record; nothing here reads these rows yet, which is why the
 /// response never implies that anything does.
 model MemberReport {
-  id          String            @id @default(uuid())
-  reporterId  String
-  reporter    User              @relation(fields: [reporterId], references: [id], onDelete: Cascade)
-  subjectKind ReportSubjectKind
+  id           String            @id @default(uuid())
+  reporterId   String
+  reporter     User              @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  subjectKind  ReportSubjectKind
   /// A member id, a routine id, or a session share token.
-  subjectId   String
-  reason      ReportReason
-  details     String?           @db.VarChar(500)
-  createdAt   DateTime          @default(now())
+  subjectId    String
+  reason       ReportReason
+  details      String?           @db.VarChar(500)
+  createdAt    DateTime          @default(now())
+  /// TRUST-04. OPEN until a moderator dismisses it or acts on the subject.
+  /// It is denormalised from the enforcement records on purpose -- the queue
+  /// pages on it -- and only ever written in the same transaction as the
+  /// ModerationAction row that explains it.
+  status       ReportStatus      @default(OPEN)
+  resolvedAt   DateTime?
+  resolvedById String?
+  resolvedBy   User?             @relation("ReportResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
 
   @@index([reporterId, createdAt])
   @@index([subjectKind, subjectId])
+  @@index([status, createdAt, id])
+  @@index([subjectKind, subjectId, status])
+}
+
+/// TRUST-04: one moderator power, used once. Rows are appended and never
+/// updated or deleted -- undoing a hide appends a RESTORE_SUBJECT record
+/// rather than editing the HIDE_SUBJECT one, which is the only way "the
+/// record is never editable" and "a mistaken hide is not permanent" can both
+/// hold. VIEW_SUBJECT is recorded for the same reason as the rest: reading
+/// somebody's reported content is a power, and an unlogged read is the one
+/// nobody could audit afterwards.
+model ModerationAction {
+  id          String               @id @default(uuid())
+  moderatorId String
+  moderator   User                 @relation("ModerationActor", fields: [moderatorId], references: [id], onDelete: Cascade)
+  kind        ModerationActionKind
+  /// The report the action was taken from, kept even if the report is gone.
+  reportId    String?
+  subjectKind ReportSubjectKind
+  /// The resolved subject: a member id, a routine id or a share token.
+  subjectId   String
+  note        String?              @db.VarChar(500)
+  createdAt   DateTime             @default(now())
+
+  @@index([createdAt, id])
+  @@index([subjectKind, subjectId, createdAt])
+  @@index([reportId])
+}
+
+enum ReportStatus {
+  OPEN
+  DISMISSED
+  ACTIONED
+}
+
+enum ModerationActionKind {
+  VIEW_SUBJECT
+  DISMISS_REPORT
+  HIDE_SUBJECT
+  RESTORE_SUBJECT
 }
 
 enum ReportSubjectKind {
@@ -433,6 +490,10 @@ model Routine {
   // FOLLOWERS or PUBLIC). Null on routines shared before SOC-03, which
   // therefore produce no activity entry rather than an invented date.
   sharedAt            DateTime?
+  /// TRUST-04: set by HIDE_SUBJECT. `canViewRoutine` refuses it to everyone
+  /// but the owner before it asks anything else; the routine, its days, its
+  /// versions and its links are untouched.
+  moderationHiddenAt  DateTime?
   createdAt           DateTime                 @default(now())
   updatedAt           DateTime                 @updatedAt
   days                RoutineDay[]
@@ -641,15 +702,19 @@ model RoutineShare {
 }
 
 model SessionShare {
-  id        String         @id @default(uuid())
-  token     String         @unique @db.VarChar(64)
-  sessionId String
-  session   WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  fields    String[]
-  createdAt DateTime       @default(now())
-  revokedAt DateTime?
+  id                 String         @id @default(uuid())
+  token              String         @unique @db.VarChar(64)
+  sessionId          String
+  session            WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId             String
+  user               User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fields             String[]
+  createdAt          DateTime       @default(now())
+  revokedAt          DateTime?
+  /// TRUST-04: set by HIDE_SUBJECT. The token stops resolving; the link is
+  /// not revoked and the session is untouched, so the owner can be told the
+  /// difference and a restore puts it back exactly as it was.
+  moderationHiddenAt DateTime?
 
   @@index([sessionId, revokedAt])
   @@index([userId])

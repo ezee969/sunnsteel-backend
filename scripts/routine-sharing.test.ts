@@ -12,11 +12,14 @@ const viewer = { isOwner: false, isFollower: false };
 const follower = { isOwner: false, isFollower: true };
 const owner = { isOwner: true, isFollower: false };
 
+// TRUST-04 added the moderation argument; these nine combinations are about
+// the ROUT-04 rules, so they are all asked of a routine nobody has hidden.
+// `scripts/moderation.test.ts` owns what a hide does to the same table.
 const can = (
   account: ProfileVisibility,
   routine: RoutineVisibility,
   context = viewer,
-) => canViewRoutine(account, routine, context);
+) => canViewRoutine(account, routine, context, { moderationHiddenAt: null });
 
 test('the owner always reads their own routine, whatever both rules say', () => {
   assert.equal(can('PRIVATE', 'PRIVATE', owner), true);

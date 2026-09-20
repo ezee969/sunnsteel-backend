@@ -21,6 +21,7 @@ const source = (overrides: Partial<LineageSource> = {}): LineageSource => ({
   clonedAt,
   author,
   sourceVisibility: 'PUBLIC',
+  sourceModerationHiddenAt: null,
   authorRoutinesRule: 'PUBLIC',
   ...overrides,
 });

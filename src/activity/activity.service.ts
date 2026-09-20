@@ -42,7 +42,7 @@ import { DatabaseService } from '../database/database.service';
 import { canViewRoutine } from '../routines/routine-visibility';
 import { readSnapshot } from '../workouts/analytics/session-snapshot';
 import { routineDayName } from '../workouts/workout-session.selects';
-import { blockPairWhere, blockedIdsWhere, otherPartyId } from '../users/member-blocks';
+import { hiddenFromViewer, isHiddenFromViewer } from '../users/member-blocks';
 import {
   mapProfilePrivacy,
   resolveProfileViewerAccess,
@@ -110,6 +110,7 @@ const ROUTINE_SELECT = {
   name: true,
   sharedAt: true,
   visibility: true,
+  moderationHiddenAt: true,
   days: { select: { _count: { select: { exercises: true } } } },
 } as const;
 
@@ -177,18 +178,15 @@ export class ActivityService {
     viewerId: string,
     query: ActivityPageQuery,
   ): Promise<ActivityFeedResponse> {
-    const [blockRows, follows] = await Promise.all([
-      this.db.userBlock.findMany({
-        where: blockedIdsWhere(viewerId),
-        select: { blockerId: true, blockedId: true },
-      }),
+    const [hiddenIds, follows] = await Promise.all([
+      hiddenFromViewer(this.db, viewerId),
       this.db.userFollow.findMany({
         where: { followerId: viewerId },
         orderBy: { createdAt: 'desc' },
         select: { followingId: true },
       }),
     ]);
-    const hidden = new Set(blockRows.map((row) => otherPartyId(row, viewerId)));
+    const hidden = new Set(hiddenIds);
     const followed = follows
       .map((row) => row.followingId)
       .filter((id) => !hidden.has(id));
@@ -224,14 +222,9 @@ export class ActivityService {
     });
     if (!row) throw new NotFoundException('User not found');
     const isOwner = row.id === viewerId;
-    // A block answers 404 before any activity is read, in both directions,
-    // exactly as the profile does.
-    if (
-      !isOwner &&
-      (await this.db.userBlock.count({
-        where: blockPairWhere(viewerId, row.id),
-      })) > 0
-    ) {
+    // A block or a TRUST-04 hide answers 404 before any activity is read,
+    // exactly as the profile does and for the same reason.
+    if (!isOwner && (await isHiddenFromViewer(this.db, viewerId, row.id))) {
       throw new NotFoundException('User not found');
     }
     const isFollower =
@@ -522,6 +515,7 @@ export class ActivityService {
           author.privacy.routines,
           routine.visibility,
           author.context,
+          routine,
         )
       ) {
         continue;
@@ -611,17 +605,14 @@ export class ActivityService {
     viewerId: string,
   ): Promise<Map<string, ActivityReactionSummary>> {
     if (entryKeys.length === 0) return new Map();
-    const [rows, blocks] = await Promise.all([
+    const [rows, hiddenIds] = await Promise.all([
       this.db.activityEntryReaction.findMany({
         where: { entryKey: { in: entryKeys } },
         select: { entryKey: true, userId: true, reaction: true },
       }),
-      this.db.userBlock.findMany({
-        where: blockedIdsWhere(viewerId),
-        select: { blockerId: true, blockedId: true },
-      }),
+      hiddenFromViewer(this.db, viewerId),
     ]);
-    const hidden = new Set(blocks.map((row) => otherPartyId(row, viewerId)));
+    const hidden = new Set(hiddenIds);
     const byEntry = new Map<
       string,
       { userId: string; reaction: ActivityReaction }[]
@@ -685,7 +676,9 @@ export class ActivityService {
       // The routine's own rule, asked through the shipped function for each
       // value it can hold, so the query is `canViewRoutine` and not a copy.
       const readable = ROUTINE_VISIBILITY_VALUES.filter((visibility) =>
-        canViewRoutine(author.privacy.routines, visibility, author.context),
+        canViewRoutine(author.privacy.routines, visibility, author.context, {
+          moderationHiddenAt: null,
+        }),
       );
       if (readable.length === 0) continue;
       const excluded = [...author.plan.exclude]
@@ -703,6 +696,9 @@ export class ActivityService {
         perAuthor.push({
           userId: author.row.id,
           visibility: { in: readable },
+          // TRUST-04: a hidden routine leaves every feed but its owner's, the
+          // same narrowing `canViewRoutine` applies row by row below.
+          ...(author.context.isOwner ? {} : { moderationHiddenAt: null }),
           OR: parts,
         });
       }
@@ -868,11 +864,11 @@ export class ActivityService {
     if (authorId === viewerId) {
       throw new BadRequestException('You cannot react to your own activity');
     }
-    const [row, blocked] = await Promise.all([
+    const [row, hidden] = await Promise.all([
       this.db.user.findUnique({ where: { id: authorId }, select: AUTHOR_SELECT }),
-      this.db.userBlock.count({ where: blockPairWhere(viewerId, authorId) }),
+      isHiddenFromViewer(this.db, viewerId, authorId),
     ]);
-    if (!row || blocked > 0) {
+    if (!row || hidden) {
       throw new NotFoundException('Activity entry not found');
     }
     const isFollower = Boolean(
@@ -967,7 +963,7 @@ export class ActivityService {
     if (entryId.startsWith('routine:')) {
       const routine = await this.db.routine.findUnique({
         where: { id: entryId.slice('routine:'.length) },
-        select: { visibility: true },
+        select: { visibility: true, moderationHiddenAt: true },
       });
       return (
         !!routine &&
@@ -976,6 +972,7 @@ export class ActivityService {
           author.privacy.routines,
           routine.visibility,
           author.context,
+          routine,
         )
       );
     }

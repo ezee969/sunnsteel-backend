@@ -31,6 +31,9 @@ const shareSelect = {
   token: true,
   fields: true,
   createdAt: true,
+  // TRUST-04: reported to the owner on their own list, so a link that opens
+  // for nobody does not sit there looking live.
+  moderationHiddenAt: true,
 } as const;
 
 /** 144 bits of randomness: the token is the only credential for a share. */
@@ -150,8 +153,11 @@ export class WorkoutSessionShareService {
     if (!TOKEN_PATTERN.test(token)) {
       throw new NotFoundException('Shared session not found');
     }
+    // TRUST-04: a hidden share stops resolving. `revokedAt` is untouched, so
+    // the owner still sees an active link -- flagged as hidden -- and a
+    // restore puts it back rather than forcing them to issue a new one.
     const share = await this.db.sessionShare.findFirst({
-      where: { token, revokedAt: null },
+      where: { token, revokedAt: null, moderationHiddenAt: null },
       select: {
         sessionId: true,
         userId: true,
@@ -198,6 +204,7 @@ export class WorkoutSessionShareService {
     token: string;
     fields: string[];
     createdAt: Date;
+    moderationHiddenAt: Date | null;
   }): SessionShare {
     return {
       id: share.id,
@@ -205,6 +212,7 @@ export class WorkoutSessionShareService {
       token: share.token,
       fields: normalizeShareFields(share.fields),
       createdAt: share.createdAt.toISOString(),
+      isHiddenByModeration: share.moderationHiddenAt !== null,
     };
   }
 }

@@ -58,10 +58,14 @@ function isRoutineFeaturable(
   accountRule: ProfileVisibility,
   visibility: RoutineVisibility,
   audience: FeaturedRoutineAudience,
+  moderation: { moderationHiddenAt: Date | null },
 ): boolean {
+  // TRUST-04: a hidden routine is offered to nobody, its owner included --
+  // featuring it would put a slot on the profile that no viewer renders.
+  if (moderation.moderationHiddenAt) return false;
   return audience.kind === 'OWNER_SELECTING'
     ? effectiveRoutineVisibility(accountRule, visibility) !== 'PRIVATE'
-    : canViewRoutine(accountRule, visibility, audience);
+    : canViewRoutine(accountRule, visibility, audience, moderation);
 }
 
 @Injectable()
@@ -317,6 +321,7 @@ export class FeaturedProfileItemsService {
             owner.routinesVisibility,
             routine.visibility,
             audience,
+            routine,
           ),
         )
         .map(routine => [routine.id, toSharedRoutineSummary(routine)] as const),

@@ -79,6 +79,9 @@ export function toRoutineResponse(
     restDays: r.restDays,
     rotationWeekdays: r.rotationWeekdays,
     visibility: r.visibility,
+    // TRUST-04: the owner's own read, and only theirs -- every other read of
+    // a hidden routine is refused before it reaches a mapper.
+    isHiddenByModeration: r.moderationHiddenAt !== null,
     goal: r.goal,
     experienceLevel: r.experienceLevel,
     ...(lineage ? { lineage } : {}),

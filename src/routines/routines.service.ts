@@ -153,6 +153,8 @@ export class RoutinesService {
               }
             : null,
           sourceVisibility: routine.clonedFromRoutine?.visibility ?? null,
+          sourceModerationHiddenAt:
+            routine.clonedFromRoutine?.moderationHiddenAt ?? null,
           authorRoutinesRule:
             routine.clonedFromUser?.routinesVisibility ?? null,
         },

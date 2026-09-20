@@ -48,7 +48,13 @@ describe('MemberBlocksService', () => {
       upserts: [],
     };
     const db = {
-      user: { findFirst: async () => ({ id: 'them' }) },
+      // TRUST-04: `hiddenFromViewer`/`isHiddenFromViewer` also ask `user`
+      // for moderation hides, so the stub answers both delegates.
+      user: {
+        findFirst: async () => ({ id: 'them' }),
+        count: async () => 0,
+        findMany: async () => [],
+      },
       userBlock: {
         count: async () => 0,
         upsert: (args: unknown) => {
@@ -92,7 +98,13 @@ describe('MemberBlocksService', () => {
   });
 
   it('refuses to block yourself', async () => {
-    const { db } = makeDb({ user: { findFirst: async () => ({ id: 'me' }) } });
+    const { db } = makeDb({
+      user: {
+        findFirst: async () => ({ id: 'me' }),
+        count: async () => 0,
+        findMany: async () => [],
+      },
+    });
     await assert.rejects(
       () => new MemberBlocksService(db).block('me', 'me'),
       BadRequestException,
@@ -140,6 +152,7 @@ describe('PROF-10 enforcement on the profile read', () => {
     routinesVisibility: 'PUBLIC',
     achievementsVisibility: 'PUBLIC',
     bodyMetricsVisibility: 'PUBLIC',
+    moderationHiddenAt: null,
     _count: { followers: 0, following: 0 },
   };
 
@@ -147,6 +160,9 @@ describe('PROF-10 enforcement on the profile read', () => {
     ({
       user: {
         findFirst: async () => storedProfile,
+        // TRUST-04 reads `count` for the hide; it must not be a sensitive
+        // read, which is exactly what this test is checking.
+        count: async () => 0,
         findUnique: async () => {
           sensitive();
           return null;
@@ -212,7 +228,12 @@ describe('PROF-10 enforcement on the profile read', () => {
         count: async () => 1,
       },
       user: {
-        findMany: async (args: { where: typeof where }) => {
+        findMany: async (args: {
+          where: { moderationHiddenAt?: unknown; id?: { notIn?: string[] } };
+        }) => {
+          // TRUST-04's hidden-accounts read shares this delegate; it is the
+          // one carrying `moderationHiddenAt`, and nothing is hidden here.
+          if (args.where.moderationHiddenAt) return [];
           where = args.where;
           return [];
         },

@@ -20,6 +20,8 @@ export interface LineageSource {
   author: (SharedRoutineOwner & { id: string }) | null;
   /** The source routine's own visibility, when it still exists. */
   sourceVisibility: RoutineVisibility | null;
+  /** TRUST-04: the source routine's hide, when it still exists. */
+  sourceModerationHiddenAt: Date | null;
   /** The author's account-level PROF-06 routines rule. */
   authorRoutinesRule: ProfileVisibility | null;
 }
@@ -45,10 +47,12 @@ export function resolveRoutineLineage(
     source.author !== null &&
     source.sourceVisibility !== null &&
     source.authorRoutinesRule !== null &&
-    canViewRoutine(source.authorRoutinesRule, source.sourceVisibility, {
-      isOwner: viewer.isOwner,
-      isFollower: viewer.isFollower,
-    });
+    canViewRoutine(
+      source.authorRoutinesRule,
+      source.sourceVisibility,
+      { isOwner: viewer.isOwner, isFollower: viewer.isFollower },
+      { moderationHiddenAt: source.sourceModerationHiddenAt },
+    );
 
   if (!canSeeSource) {
     return {

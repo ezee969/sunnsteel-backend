@@ -18,7 +18,7 @@ import {
 } from '@sunsteel/contracts';
 
 import { DatabaseService } from '../database/database.service';
-import { blockedIdsWhere, otherPartyId } from './member-blocks';
+import { hiddenFromViewer } from './member-blocks';
 import { normalizeUsername } from './username';
 
 // Identity-only projection shared by every relationship surface. It matches
@@ -112,17 +112,12 @@ export class UserRelationshipsService {
   constructor(private readonly db: DatabaseService) {}
 
   /**
-   * PROF-10: every account this viewer must neither see nor be seen by. It is
-   * read from the relation with the shared `member-blocks` helpers rather than
-   * through an injected service, so no wiring mistake can quietly switch a
-   * privacy control off.
+   * PROF-10 blocks and TRUST-04 hides, answered together by the shared
+   * `member-blocks` helper rather than through an injected service, so no
+   * wiring mistake can quietly switch a privacy control off.
    */
   private async hiddenMemberIds(viewerId: string): Promise<string[]> {
-    const rows = await this.db.userBlock.findMany({
-      where: blockedIdsWhere(viewerId),
-      select: { blockerId: true, blockedId: true },
-    });
-    return rows.map(row => otherPartyId(row, viewerId));
+    return hiddenFromViewer(this.db, viewerId);
   }
 
   /**

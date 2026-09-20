@@ -95,6 +95,7 @@ describe('UserRelationshipsService lists', () => {
           ]);
           return { id: 'owner-1' };
         },
+        findMany: async () => [],
       },
       userFollow: {
         findMany: async (
@@ -117,9 +118,10 @@ describe('UserRelationshipsService lists', () => {
           return [];
         },
       },
-    // PROF-10: this account blocks nobody and is blocked by nobody. The
-    // reads are mocked explicitly rather than defaulted, so a block that
-    // should hide something can never pass by being absent from a fixture.
+    // PROF-10/TRUST-04: this account blocks nobody, is blocked by nobody and
+    // nothing is hidden by moderation. The reads are mocked explicitly rather
+    // than defaulted, so a rule that should hide something can never pass by
+    // being absent from a fixture.
     userBlock: { findMany: async () => [], count: async () => 0 },
     } as unknown as DatabaseService;
     const service = new UserRelationshipsService(db);
@@ -152,16 +154,17 @@ describe('UserRelationshipsService lists', () => {
   it('continues after the cursor with a stable date and id tie-break', async () => {
     let listArgs: { where: Record<string, unknown> } | undefined;
     const db = {
-      user: { findFirst: async () => ({ id: 'owner-1' }) },
+      user: { findFirst: async () => ({ id: 'owner-1' }), findMany: async () => [] },
       userFollow: {
         findMany: async (args: { where: Record<string, unknown> }) => {
           listArgs ??= args;
           return [];
         },
       },
-    // PROF-10: this account blocks nobody and is blocked by nobody. The
-    // reads are mocked explicitly rather than defaulted, so a block that
-    // should hide something can never pass by being absent from a fixture.
+    // PROF-10/TRUST-04: this account blocks nobody, is blocked by nobody and
+    // nothing is hidden by moderation. The reads are mocked explicitly rather
+    // than defaulted, so a rule that should hide something can never pass by
+    // being absent from a fixture.
     userBlock: { findMany: async () => [], count: async () => 0 },
     } as unknown as DatabaseService;
     const service = new UserRelationshipsService(db);
@@ -190,16 +193,17 @@ describe('UserRelationshipsService lists', () => {
   it('limits mutuals to followers the viewer also follows', async () => {
     let listArgs: { where: Record<string, unknown> } | undefined;
     const db = {
-      user: { findFirst: async () => ({ id: 'owner-1' }) },
+      user: { findFirst: async () => ({ id: 'owner-1' }), findMany: async () => [] },
       userFollow: {
         findMany: async (args: { where: Record<string, unknown> }) => {
           listArgs ??= args;
           return [];
         },
       },
-    // PROF-10: this account blocks nobody and is blocked by nobody. The
-    // reads are mocked explicitly rather than defaulted, so a block that
-    // should hide something can never pass by being absent from a fixture.
+    // PROF-10/TRUST-04: this account blocks nobody, is blocked by nobody and
+    // nothing is hidden by moderation. The reads are mocked explicitly rather
+    // than defaulted, so a rule that should hide something can never pass by
+    // being absent from a fixture.
     userBlock: { findMany: async () => [], count: async () => 0 },
     } as unknown as DatabaseService;
     const service = new UserRelationshipsService(db);
@@ -215,16 +219,17 @@ describe('UserRelationshipsService lists', () => {
   it('returns 404 for an unknown profile before reading relations', async () => {
     let relationReads = 0;
     const db = {
-      user: { findFirst: async () => null },
+      user: { findFirst: async () => null, findMany: async () => [] },
       userFollow: {
         findMany: async () => {
           relationReads += 1;
           return [];
         },
       },
-    // PROF-10: this account blocks nobody and is blocked by nobody. The
-    // reads are mocked explicitly rather than defaulted, so a block that
-    // should hide something can never pass by being absent from a fixture.
+    // PROF-10/TRUST-04: this account blocks nobody, is blocked by nobody and
+    // nothing is hidden by moderation. The reads are mocked explicitly rather
+    // than defaulted, so a rule that should hide something can never pass by
+    // being absent from a fixture.
     userBlock: { findMany: async () => [], count: async () => 0 },
     } as unknown as DatabaseService;
     const service = new UserRelationshipsService(db);
@@ -259,11 +264,17 @@ describe('UserRelationshipsService suggestions', () => {
         },
       },
       user: {
-        findMany: async () => [member('network-1'), member('fan-1')],
+        // TRUST-04's hidden-accounts read comes through the same delegate and
+        // is the one carrying `moderationHiddenAt`; nothing is hidden here.
+        findMany: async (args: { where?: Record<string, unknown> }) =>
+          args.where?.moderationHiddenAt
+            ? []
+            : [member('network-1'), member('fan-1')],
       },
-    // PROF-10: this account blocks nobody and is blocked by nobody. The
-    // reads are mocked explicitly rather than defaulted, so a block that
-    // should hide something can never pass by being absent from a fixture.
+    // PROF-10/TRUST-04: this account blocks nobody, is blocked by nobody and
+    // nothing is hidden by moderation. The reads are mocked explicitly rather
+    // than defaulted, so a rule that should hide something can never pass by
+    // being absent from a fixture.
     userBlock: { findMany: async () => [], count: async () => 0 },
     } as unknown as DatabaseService;
     const service = new UserRelationshipsService(db);
@@ -307,9 +318,10 @@ describe('UserRelationshipsService suggestions', () => {
         },
       },
       user: { findMany: async () => [] },
-    // PROF-10: this account blocks nobody and is blocked by nobody. The
-    // reads are mocked explicitly rather than defaulted, so a block that
-    // should hide something can never pass by being absent from a fixture.
+    // PROF-10/TRUST-04: this account blocks nobody, is blocked by nobody and
+    // nothing is hidden by moderation. The reads are mocked explicitly rather
+    // than defaulted, so a rule that should hide something can never pass by
+    // being absent from a fixture.
     userBlock: { findMany: async () => [], count: async () => 0 },
     } as unknown as DatabaseService;
     const service = new UserRelationshipsService(db);

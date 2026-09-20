@@ -8,7 +8,7 @@ import {
   type RoutineDiscoveryResponse,
 } from '@sunsteel/contracts';
 import { DatabaseService } from '../database/database.service';
-import { blockedIdsWhere, otherPartyId } from '../users/member-blocks';
+import { hiddenFromViewer } from '../users/member-blocks';
 import { deriveRoutineFacets, matchesDiscoveryFilters } from './routine-facets';
 import { canViewRoutine } from './routine-visibility';
 
@@ -18,6 +18,7 @@ const DISCOVERY_SELECT = {
   description: true,
   scheduleMode: true,
   visibility: true,
+  moderationHiddenAt: true,
   goal: true,
   experienceLevel: true,
   updatedAt: true,
@@ -86,17 +87,13 @@ export class RoutineDiscoveryService {
     );
     const offset = decodeCursor(query.cursor);
 
-    const [blockRows, followRows] = await Promise.all([
-      this.db.userBlock.findMany({
-        where: blockedIdsWhere(viewerId),
-        select: { blockerId: true, blockedId: true },
-      }),
+    const [hidden, followRows] = await Promise.all([
+      hiddenFromViewer(this.db, viewerId),
       this.db.userFollow.findMany({
         where: { followerId: viewerId },
         select: { followingId: true },
       }),
     ]);
-    const hidden = blockRows.map((row) => otherPartyId(row, viewerId));
     const followed = new Set(followRows.map((row) => row.followingId));
 
     const rows = await this.db.routine.findMany({
@@ -121,6 +118,7 @@ export class RoutineDiscoveryService {
         routine.user.routinesVisibility,
         routine.visibility,
         { isOwner: false, isFollower: followed.has(routine.user.id) },
+        routine,
       );
       if (!allowed) continue;
 

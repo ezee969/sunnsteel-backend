@@ -181,7 +181,13 @@ describe('WorkoutSessionShareService public read', () => {
       },
     };
     await assert.rejects(service(db).getShared(token), NotFoundException);
-    assert.deepEqual(where, { token, revokedAt: null });
+    // TRUST-04 narrows the same query rather than adding a second check: a
+    // hidden share stops resolving for whoever holds the link.
+    assert.deepEqual(where, {
+      token,
+      revokedAt: null,
+      moderationHiddenAt: null,
+    });
   });
 
   it('returns only the selected recap fields with the owner identity and unit', async () => {

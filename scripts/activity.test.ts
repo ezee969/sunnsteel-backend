@@ -451,6 +451,9 @@ describe('ActivityService', () => {
         findFirst: track('user.findFirst', row('them')),
         findUnique: track('user.findUnique', row('me')),
         findMany: track('user.findMany', [] as unknown[]),
+        // TRUST-04: nothing here is hidden by moderation. Stated for the same
+        // reason the block reads below are.
+        count: track('user.count', 0),
       },
       // Stated explicitly: this account blocks nobody. A fixture that omitted
       // the block read would let a block pass by silence.
@@ -509,7 +512,9 @@ describe('ActivityService', () => {
     // Both directions: the pair, not only "I blocked them".
     assert.deepEqual(where, blockPairWhere('me', 'them'));
     assert.deepEqual(
-      reads.filter((name) => !['user.findFirst'].includes(name)),
+      // `user.count` is TRUST-04's half of the same gate, asked alongside the
+      // block rather than after it, so neither can be skipped.
+      reads.filter((name) => !['user.findFirst', 'user.count'].includes(name)),
       [],
       'no activity, sharing or follow read happens before the refusal',
     );
@@ -534,7 +539,11 @@ describe('ActivityService', () => {
       user: {
         findFirst: async () => null,
         findUnique: async () => null,
-        findMany: async (args: unknown) => {
+        count: async () => 0,
+        findMany: async (args: { where?: Record<string, unknown> }) => {
+          // TRUST-04's hidden-accounts read shares this delegate and is the
+          // one carrying `moderationHiddenAt`; nothing is hidden here.
+          if (args.where?.moderationHiddenAt) return [];
           authorQuery = args;
           return [];
         },
@@ -720,6 +729,8 @@ describe('ActivityService reactions', () => {
     const writes: unknown[] = []
     const db = {
       user: {
+        // TRUST-04: nothing hidden by moderation in these fixtures.
+        count: async () => 0,
         findUnique: async () => ({
           id: 'them',
           username: 'them',

@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 // Services
 import { DatabaseService } from '../database/database.service';
-import { blockPairWhere, blockedIdsWhere, otherPartyId } from './member-blocks';
+import { hiddenFromViewer, isHiddenFromViewer } from './member-blocks';
 import {
   PREFERRED_TRAINING_STYLE_VALUES,
   ProfileDiscoverySettings,
@@ -78,6 +78,8 @@ const userProfileSelect = {
   discoverableByName: true,
   discoverableByUsername: true,
   discoverableByContacts: true,
+  // TRUST-04: the owner's own read only. It never reaches PublicUserProfile.
+  isModerator: true,
   createdAt: true,
   updatedAt: true,
   _count: {
@@ -109,17 +111,13 @@ export class UsersService {
   ) {}
 
   /**
-   * PROF-10: every account this viewer must neither see nor be seen by, read
-   * straight from the relation with the shared helpers. It is deliberately not
-   * an injected service: a privacy control must not be able to fail open
-   * because of how the module was wired.
+   * PROF-10 blocks and TRUST-04 hides, answered together by the shared helper
+   * so a read cannot honour one and omit the other. It is deliberately not an
+   * injected service: a privacy control must not be able to fail open because
+   * of how the module was wired.
    */
   private async hiddenMemberIds(viewerId: string): Promise<string[]> {
-    const rows = await this.db.userBlock.findMany({
-      where: blockedIdsWhere(viewerId),
-      select: { blockerId: true, blockedId: true },
-    });
-    return rows.map((row) => otherPartyId(row, viewerId));
+    return hiddenFromViewer(this.db, viewerId);
   }
 
   // Serialization boundary: Prisma record -> `UserProfile` contract
@@ -145,6 +143,7 @@ export class UsersService {
       discoverableByName,
       discoverableByUsername,
       discoverableByContacts,
+      isModerator,
       ...profile
     } = user;
     return {
@@ -164,6 +163,7 @@ export class UsersService {
         discoverableByUsername,
         discoverableByContacts,
       },
+      isModerator,
       trainingIdentity: {
         goals: trainingGoals,
         experienceLevel: trainingExperienceLevel,
@@ -428,6 +428,7 @@ export class UsersService {
         routinesVisibility: true,
         achievementsVisibility: true,
         bodyMetricsVisibility: true,
+        moderationHiddenAt: true,
         _count: {
           select: {
             followers: true,
@@ -442,14 +443,19 @@ export class UsersService {
     }
 
     const isOwner = viewerUserId === user.id;
+    // TRUST-04: a hidden account answers 404 to everyone but itself, and it is
+    // checked before the block and before any sensitive read -- including on
+    // the unguarded route, which has no viewer to compare against. The owner
+    // keeps their own profile intact; the hide removes it from others.
+    if (user.moderationHiddenAt && !isOwner) {
+      throw new NotFoundException('User not found');
+    }
     // PROF-10: a blocked profile answers 404 in both directions, exactly as a
     // denied routine does under ROUT-04. A 403 would confirm the account
     // exists and that a block is the reason.
     const blocked =
       viewerUserId && !isOwner
-        ? (await this.db.userBlock.count({
-            where: blockPairWhere(viewerUserId, user.id),
-          })) > 0
+        ? await isHiddenFromViewer(this.db, viewerUserId, user.id)
         : false;
     if (blocked) throw new NotFoundException('User not found');
     const viewerBlocksTarget =
@@ -636,12 +642,10 @@ export class UsersService {
     if (!targetUser) {
       throw new NotFoundException('User not found');
     }
-    // A block prevents a follow in both directions; the refusal is the same
-    // 404 the profile gives, so it cannot be used to detect a block.
-    const blockedPair = await this.db.userBlock.count({
-      where: blockPairWhere(viewerUserId, targetUserId),
-    });
-    if (blockedPair > 0) {
+    // A block prevents a follow in both directions, and a TRUST-04 hide
+    // prevents one in the same way; the refusal is the same 404 the profile
+    // gives, so it cannot be used to detect either.
+    if (await isHiddenFromViewer(this.db, viewerUserId, targetUserId)) {
       throw new NotFoundException('User not found');
     }
 

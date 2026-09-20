@@ -46,6 +46,9 @@ export const ROUTINE_WITH_DAYS_SELECT = {
   restDays: true,
   rotationWeekdays: true,
   visibility: true,
+  // TRUST-04: a moderator's hide, reported to the owner and applied to
+  // everybody else by `canViewRoutine`.
+  moderationHiddenAt: true,
   // ROUT-07: owner-declared classification.
   goal: true,
   experienceLevel: true,
@@ -54,7 +57,9 @@ export const ROUTINE_WITH_DAYS_SELECT = {
   // is resolved through the same ROUT-04 rule as any other read of it.
   clonedAt: true,
   clonedFromRoutineId: true,
-  clonedFromRoutine: { select: { id: true, visibility: true } },
+  clonedFromRoutine: {
+    select: { id: true, visibility: true, moderationHiddenAt: true },
+  },
   clonedFromUser: {
     select: {
       id: true,

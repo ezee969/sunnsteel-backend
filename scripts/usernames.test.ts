@@ -410,6 +410,9 @@ describe('UsersService usernames', () => {
     const db = {
       user: {
         findFirst: async () => profileRecord,
+        // TRUST-04's hide read; nothing is hidden here.
+        count: async () => 0,
+        findMany: async () => [],
       },
       userFollow: {
         findUnique: async (args: unknown) => {
@@ -417,9 +420,10 @@ describe('UsersService usernames', () => {
           return { followerId: 'viewer-1' };
         },
       },
-    // PROF-10: this account blocks nobody and is blocked by nobody. The
-    // reads are mocked explicitly rather than defaulted, so a block that
-    // should hide something can never pass by being absent from a fixture.
+    // PROF-10/TRUST-04: this account blocks nobody, is blocked by nobody and
+    // nothing is hidden by moderation. The reads are mocked explicitly rather
+    // than defaulted, so a rule that should hide something can never pass by
+    // being absent from a fixture.
     userBlock: { findMany: async () => [], count: async () => 0 },
     } as unknown as DatabaseService;
     const service = new UsersService(db);

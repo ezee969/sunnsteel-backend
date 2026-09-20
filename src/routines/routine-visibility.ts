@@ -17,13 +17,29 @@ export interface RoutineViewerContext {
   isFollower: boolean;
 }
 
+/**
+ * TRUST-04: the routine's moderation state, passed as its own argument rather
+ * than folded into `routineVisibility`, so the owner's own control and a
+ * moderator's hide can never be mistaken for each other in the copy that
+ * reports either. It is a required field: adding it here is what made the
+ * compiler name every read that had to consider it.
+ */
+export interface RoutineModerationState {
+  moderationHiddenAt: Date | null;
+}
+
 export function canViewRoutine(
   accountRoutinesRule: ProfileVisibility,
   routineVisibility: RoutineVisibility,
   context: RoutineViewerContext,
+  moderation: RoutineModerationState,
 ): boolean {
-  // The owner always reads their own, whatever either rule says.
+  // The owner always reads their own, whatever either rule says. A hide takes
+  // the routine away from everyone else; it never takes it from its author.
   if (context.isOwner) return true;
+  // TRUST-04: a hidden routine is refused before either rule is asked, so the
+  // hide cannot be widened by a later change to one of them.
+  if (moderation.moderationHiddenAt) return false;
   // PRIVATE is not a profile visibility value, and it ends the question.
   if (routineVisibility === 'PRIVATE') return false;
   return (

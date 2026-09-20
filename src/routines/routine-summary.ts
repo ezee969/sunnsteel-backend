@@ -12,6 +12,7 @@ export const ROUTINE_SUMMARY_SELECT = {
   description: true,
   scheduleMode: true,
   visibility: true,
+  moderationHiddenAt: true,
   updatedAt: true,
   days: { select: { _count: { select: { exercises: true } } } },
 } as const;

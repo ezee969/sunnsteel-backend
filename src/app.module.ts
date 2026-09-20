@@ -18,6 +18,7 @@ import { AchievementsModule } from './achievements/achievements.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PushModule } from './notifications/push/push.module';
 import { ActivityModule } from './activity/activity.module';
+import { ModerationModule } from './moderation/moderation.module';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { ActivityModule } from './activity/activity.module';
     NotificationsModule,
     PushModule,
     ActivityModule,
+    ModerationModule,
   ],
   providers: [
     {

@@ -231,6 +231,13 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260920120000_activity_reactions/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// TRUST-04: the moderator flag, report review state, the hide
+				// columns and the append-only enforcement log.
+				readFileSync(
+					'prisma/migrations/20260920160000_moderation_foundation/migration.sql',
+					'utf8',
 				),
     );
     prisma(

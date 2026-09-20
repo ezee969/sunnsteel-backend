@@ -16,7 +16,7 @@ import {
   type SharedRoutine,
 } from '@sunsteel/contracts';
 import { DatabaseService } from '../database/database.service';
-import { blockPairWhere } from '../users/member-blocks';
+import { isHiddenFromViewer } from '../users/member-blocks';
 import { CreateRoutineDto } from './dto/create-routine.dto';
 import { readCloneSource, setupToClonedRoutine } from './routine-cloning';
 import { ROUTINE_WITH_DAYS_SELECT } from './routine.selects';
@@ -155,7 +155,13 @@ export class RoutineSharingService {
         user: { select: OWNER_SELECT },
       },
     });
-    if (!share?.routine) throw new NotFoundException('Link not found');
+    // TRUST-04: a hidden routine stops resolving for whoever holds the link.
+    // The link is not revoked -- a restore puts it back working -- but while
+    // the hide is in force "hidden from everyone" has to include link holders,
+    // or the strongest action the product has would be trivially bypassed.
+    if (!share?.routine || share.routine.moderationHiddenAt) {
+      throw new NotFoundException('Link not found');
+    }
 
     return {
       routineId: share.routine.id,
@@ -185,13 +191,14 @@ export class RoutineSharingService {
       select: { routinesVisibility: true },
     });
     if (!owner) throw new NotFoundException('Member not found');
-    // PROF-10: a blocked member's routines are not listed, and the refusal is
-    // the one a missing member gets.
-    if (viewerId && viewerId !== ownerId) {
-      const blocked = await this.db.userBlock.count({
-        where: blockPairWhere(viewerId, ownerId),
-      });
-      if (blocked > 0) throw new NotFoundException('Member not found');
+    // PROF-10: a blocked member's routines are not listed, nor a TRUST-04
+    // hidden member's, and the refusal is the one a missing member gets.
+    if (
+      viewerId &&
+      viewerId !== ownerId &&
+      (await isHiddenFromViewer(this.db, viewerId, ownerId))
+    ) {
+      throw new NotFoundException('Member not found');
     }
 
     const isOwner = viewerId === ownerId;
@@ -209,10 +216,12 @@ export class RoutineSharingService {
     });
 
     const visible = routines.filter((routine) =>
-      canViewRoutine(owner.routinesVisibility, routine.visibility, {
-        isOwner,
-        isFollower,
-      }),
+      canViewRoutine(
+        owner.routinesVisibility,
+        routine.visibility,
+        { isOwner, isFollower },
+        routine,
+      ),
     );
 
     return { routines: visible.map(toSharedRoutineSummary) };
@@ -251,12 +260,13 @@ export class RoutineSharingService {
     }
 
     const isOwner = viewerId === routine.user.id;
-    if (viewerId && !isOwner) {
-      const blocked = await this.db.userBlock.count({
-        where: blockPairWhere(viewerId, routine.user.id),
-      });
+    if (
+      viewerId &&
+      !isOwner &&
+      (await isHiddenFromViewer(this.db, viewerId, routine.user.id))
+    ) {
       // PROF-10: indistinguishable from a routine that does not exist.
-      if (blocked > 0) throw new NotFoundException('Routine not found');
+      throw new NotFoundException('Routine not found');
     }
     const isFollower = isOwner
       ? false
@@ -266,10 +276,12 @@ export class RoutineSharingService {
         })) > 0;
 
     if (
-      !canViewRoutine(routine.user.routinesVisibility, routine.visibility, {
-        isOwner,
-        isFollower,
-      })
+      !canViewRoutine(
+        routine.user.routinesVisibility,
+        routine.visibility,
+        { isOwner, isFollower },
+        routine,
+      )
     ) {
       // Not "forbidden": a routine the viewer may not read must not be
       // distinguishable from one that does not exist.
