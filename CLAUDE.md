@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-NestJS + Prisma backend for Sunnsteel (workout/routine tracking). Runs on Windows 11. Never try to mount/run the project yourself; ask the user to start it.
+NestJS + Prisma backend for Sunnsteel (workout/routine tracking). Runs on Windows 11. Start, restart and stop the dev server yourself when you need it, and say so when you do — there is no need to ask the owner first. Stop it before `npm run verify` and before any Prisma migration or `generate`, which need the query-engine DLL free.
 
 ## Commands
 
-- Run API: `npm run start:dev` (tsx watch, default `http://localhost:4000/api`)
+- Run API: `npm run start:dev` (`node --watch` over ts-node, default `http://localhost:4000/api`)
 - Run API + frontend together: `npm run dev:all` (PowerShell launcher `scripts/start-dev.ps1`)
 - Build: `npm run build` (`tsc -p tsconfig.build.json`)
 - Lint: `npm run lint` / `npm run lint:fix`
@@ -20,6 +20,20 @@ NestJS + Prisma backend for Sunnsteel (workout/routine tracking). Runs on Window
 - Get a Supabase token for manual API testing: `npm run token:supabase`
 
 `npm test` runs the Node test runner via the existing ts-node dependency. It currently covers 291 tests across thirty-nine script files, including dashboard statistics, projected progress, strength trends, exercise-performance history, muscle-group heatmaps, volume trends, session comparison, progress timelines, measurable personal goals, milestone achievements, comeback recognition, session recap/recovery, live records, progression, profile privacy/discovery, profile achievement ledgers and featured accomplishments, relationship lists/suggestions, session sharing, exercise substitutions, routine versions, schedule overrides, notifications, push delivery and rest alerts, notification controls, training-reminder planning and streak-at-risk evidence, routine-sharing visibility rules, routine cloning and lineage, routine discovery facets and filters, activity visibility, links, tie-safe pagination and themed reactions, member blocks, the exercise catalog and training locations; it is included in `npm run verify`.
+
+## Database
+
+**Local development** is a PostgreSQL 17 server owned by this machine, not a hosted provider: `localhost:5432`, database `sunnsteel`, binaries in `C:\Users\Ezequiel\pgsql`, data in `C:\Users\Ezequiel\pgdata`. It is not registered as a Windows service, so it does not come back on its own after a reboot:
+
+```bash
+"C:\Users\Ezequiel\pgsql\bin\pg_ctl" -D "C:\Users\Ezequiel\pgdata" -l "C:\Users\Ezequiel\pgdata\server.log" start
+```
+
+The same command with `stop` shuts it down, and `server.log` in that data directory is the first thing to read when a connection fails. `.env` holds the only copy of its generated password.
+
+**Production** is Railway Postgres 17 in the `SUNS sv` project, reached over Railway's private network; the backend service composes its `DATABASE_URL` from `${{Postgres.POSTGRES_PASSWORD}}` and `${{Postgres.RAILWAY_PRIVATE_DOMAIN}}`. **There is no public TCP proxy**, so production is unreachable from a developer machine by design. Working with production data means taking a dump through Railway, never repointing `.env` at it.
+
+Until 2026-09-20 both ran against a single hosted Neon database; that project is deleted, and a reference to Neon anywhere is stale. The split has a consequence worth holding on to: **local data no longer mirrors production**, and `prisma migrate reset` or a destructive script is now safe to run locally, which it was not while `.env` pointed at the deployment database. Local started from a dump of that shared database, kept at `C:\Users\Ezequiel\pgdata-backup-neon-2026-09-20.dump`.
 
 ## Architecture
 
