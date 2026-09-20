@@ -19,6 +19,8 @@ import {
   type ActivityPage,
   type ActivityPageQuery,
   type ActivityPreviewQuery,
+  type ActivityReaction,
+  type ActivityReactionSummary,
   type ActivitySharingSettings,
   type ActivityType,
   type ComebackRecognition,
@@ -30,6 +32,8 @@ import {
   type RoutineVisibility,
   type SetActivityEntryAudienceRequest,
   type SetActivityEntryAudienceResponse,
+  type SetActivityReactionRequest,
+  type SetActivityReactionResponse,
   type SharedRoutineOwner,
   type UpdateActivitySharingRequest,
 } from '@sunsteel/contracts';
@@ -51,8 +55,10 @@ import {
   defaultAudienceFor,
   entrySharing,
   eventActivityType,
+  emptyReactionSummary,
   eventToEntry,
   isAfterCursor,
+  nextReaction,
   isPlanEmpty,
   pageActivity,
   planAllows,
@@ -60,6 +66,7 @@ import {
   routineEntryKey,
   routineToEntry,
   sourceTake,
+  summarizeReactions,
   type ActivityCursor,
   type ActivityEventRow,
   type ActivitySessionFacts,
@@ -195,7 +202,7 @@ export class ActivityService {
     const authors = await this.loadAuthors(
       rows.map((row) => ({ row, context: { isOwner: false, isFollower: true } })),
     );
-    const page = await this.read(authors, query);
+    const page = await this.read(authors, query, viewerId);
     return {
       entries: page.entries.map((read) => read.entry),
       ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}),
@@ -243,7 +250,7 @@ export class ActivityService {
     const authors = await this.loadAuthors([
       { row, context: { isOwner, isFollower } },
     ]);
-    const page = await this.read(authors, query);
+    const page = await this.read(authors, query, viewerId);
     return {
       entries: page.entries.map((read) => read.entry),
       ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}),
@@ -259,7 +266,7 @@ export class ActivityService {
     const [author] = await this.loadAuthors([
       { row, context: { isOwner: true, isFollower: false } },
     ]);
-    const page = await this.read([author], query);
+    const page = await this.read([author], query, ownerId);
     return {
       entries: page.entries.map(
         (read): OwnActivityEntry => ({
@@ -293,7 +300,7 @@ export class ActivityService {
         context: { isOwner: false, isFollower: query.audience === 'FOLLOWERS' },
       },
     ]);
-    const page = await this.read(authors, query);
+    const page = await this.read(authors, query, ownerId);
     return {
       entries: page.entries.map((read) => read.entry),
       ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}),
@@ -471,6 +478,7 @@ export class ActivityService {
   private async read(
     allAuthors: Author[],
     query: ActivityPageQuery,
+    viewerId: string,
   ): Promise<{ entries: ReadEntry[]; nextCursor?: string }> {
     const limit = Math.min(
       Math.max(query.limit ?? ACTIVITY_PAGE_DEFAULT_LIMIT, 1),
@@ -579,10 +587,54 @@ export class ActivityService {
         ? [{ entry, type: entry.type, userId: event.userId }]
         : [];
     });
+    const reactions = await this.readReactions(
+      entries.map((read) => read.entry.id),
+      viewerId,
+    );
+    for (const read of entries) {
+      read.entry.reactions =
+        reactions.get(read.entry.id) ?? emptyReactionSummary();
+    }
     return {
       entries,
       ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}),
     };
+  }
+
+  /**
+   * SOC-05. One query for the page. Members either side of a block are left
+   * out of the counts, so a number can never reveal one of them; there is no
+   * list of who reacted, only totals and the viewer's own choice.
+   */
+  private async readReactions(
+    entryKeys: string[],
+    viewerId: string,
+  ): Promise<Map<string, ActivityReactionSummary>> {
+    if (entryKeys.length === 0) return new Map();
+    const [rows, blocks] = await Promise.all([
+      this.db.activityEntryReaction.findMany({
+        where: { entryKey: { in: entryKeys } },
+        select: { entryKey: true, userId: true, reaction: true },
+      }),
+      this.db.userBlock.findMany({
+        where: blockedIdsWhere(viewerId),
+        select: { blockerId: true, blockedId: true },
+      }),
+    ]);
+    const hidden = new Set(blocks.map((row) => otherPartyId(row, viewerId)));
+    const byEntry = new Map<
+      string,
+      { userId: string; reaction: ActivityReaction }[]
+    >();
+    for (const row of rows) {
+      if (hidden.has(row.userId)) continue;
+      const list = byEntry.get(row.entryKey) ?? [];
+      list.push({ userId: row.userId, reaction: row.reaction });
+      byEntry.set(row.entryKey, list);
+    }
+    return new Map(
+      [...byEntry].map(([key, list]) => [key, summarizeReactions(list, viewerId)]),
+    );
   }
 
   private async readEvents(
@@ -797,6 +849,145 @@ export class ActivityService {
         (record) => `${record.userId}:${record.exerciseId}:${record.setLogId}`,
       ),
     );
+  }
+
+  /**
+   * SOC-05. A reaction on one entry, gated by the read that already decides
+   * who may see that entry: the author is resolved from the key, the same
+   * plan is rebuilt for this viewer, and an entry they may not see answers
+   * **404**, exactly as the member read does — never a 403, which would
+   * confirm the entry exists. Reacting to your own activity is refused
+   * outright; there is nothing to acknowledge.
+   */
+  async setReaction(
+    viewerId: string,
+    request: SetActivityReactionRequest,
+  ): Promise<SetActivityReactionResponse> {
+    const authorId = await this.resolveEntryAuthor(request.entryId);
+    if (!authorId) throw new NotFoundException('Activity entry not found');
+    if (authorId === viewerId) {
+      throw new BadRequestException('You cannot react to your own activity');
+    }
+    const [row, blocked] = await Promise.all([
+      this.db.user.findUnique({ where: { id: authorId }, select: AUTHOR_SELECT }),
+      this.db.userBlock.count({ where: blockPairWhere(viewerId, authorId) }),
+    ]);
+    if (!row || blocked > 0) {
+      throw new NotFoundException('Activity entry not found');
+    }
+    const isFollower = Boolean(
+      await this.db.userFollow.findUnique({
+        where: {
+          followerId_followingId: { followerId: viewerId, followingId: authorId },
+        },
+        select: { followerId: true },
+      }),
+    );
+    const [author] = await this.loadAuthors([
+      { row, context: { isOwner: false, isFollower } },
+    ]);
+    const visible = await this.isEntryVisible(author, request.entryId);
+    if (!visible) throw new NotFoundException('Activity entry not found');
+
+    const current = await this.db.activityEntryReaction.findUnique({
+      where: {
+        userId_entryKey: { userId: viewerId, entryKey: request.entryId },
+      },
+      select: { reaction: true },
+    });
+    const next = nextReaction(current?.reaction ?? null, request.reaction);
+    if (next === null) {
+      await this.db.activityEntryReaction.deleteMany({
+        where: { userId: viewerId, entryKey: request.entryId },
+      });
+    } else {
+      await this.db.activityEntryReaction.upsert({
+        where: {
+          userId_entryKey: { userId: viewerId, entryKey: request.entryId },
+        },
+        create: {
+          userId: viewerId,
+          entryKey: request.entryId,
+          authorId,
+          reaction: next,
+        },
+        update: { reaction: next, authorId },
+      });
+    }
+    const summaries = await this.readReactions([request.entryId], viewerId);
+    return {
+      entryId: request.entryId,
+      reactions: summaries.get(request.entryId) ?? emptyReactionSummary(),
+    };
+  }
+
+  /** Who an entry belongs to, or null when no such entry exists. */
+  private async resolveEntryAuthor(entryId: string): Promise<string | null> {
+    if (entryId.startsWith('routine:')) {
+      const routine = await this.db.routine.findFirst({
+        where: {
+          id: entryId.slice('routine:'.length),
+          sharedAt: { not: null },
+          days: { some: { exercises: { some: {} } } },
+        },
+        select: { userId: true },
+      });
+      return routine?.userId ?? null;
+    }
+    if (entryId.startsWith('comeback:')) {
+      // `comeback:<returnEventId>:<recognitionEventId>:v1`; both belong to the
+      // member whose return it was, and the derivation below confirms it.
+      const recognitionEventId = entryId.split(':')[2];
+      const event = recognitionEventId
+        ? await this.db.trainingEvent.findUnique({
+            where: { id: recognitionEventId },
+            select: { userId: true, type: true },
+          })
+        : null;
+      if (!event || event.type !== 'SESSION_COMPLETED') return null;
+      const recognitions = await this.comebackRecognitions(event.userId);
+      return recognitions.some((recognition) => recognition.id === entryId)
+        ? event.userId
+        : null;
+    }
+    const event = await this.db.trainingEvent.findUnique({
+      where: { eventKey: entryId },
+      select: { userId: true, type: true, payload: true },
+    });
+    if (!event || !eventActivityType(event)) return null;
+    return event.userId;
+  }
+
+  /** Whether this author's entry is one the viewer's plan allows right now. */
+  private async isEntryVisible(
+    author: Author,
+    entryId: string,
+  ): Promise<boolean> {
+    if (isPlanEmpty(author.plan)) return false;
+    if (entryId.startsWith('routine:')) {
+      const routine = await this.db.routine.findUnique({
+        where: { id: entryId.slice('routine:'.length) },
+        select: { visibility: true },
+      });
+      return (
+        !!routine &&
+        planAllows(author.plan, 'ROUTINE_SHARED', entryId) &&
+        canViewRoutine(
+          author.privacy.routines,
+          routine.visibility,
+          author.context,
+        )
+      );
+    }
+    if (entryId.startsWith('comeback:')) {
+      return planAllows(author.plan, 'COMEBACK', entryId);
+    }
+    const event = await this.db.trainingEvent.findUnique({
+      where: { eventKey: entryId },
+      select: { type: true, payload: true },
+    });
+    const type = event ? eventActivityType(event) : null;
+    return !!type && planAllows(author.plan, type, entryId);
   }
 
   /** The type of one of the owner's own entries, or null when they have no such entry. */

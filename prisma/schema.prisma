@@ -89,6 +89,8 @@ model User {
   scheduledPushes            ScheduledPush[]
   activitySharingDefaults    ActivitySharingDefault[]
   activityEntryOverrides     ActivityEntryOverride[]
+  activityReactionsMade      ActivityEntryReaction[]      @relation("ActivityReactionsMade")
+  activityReactionsReceived  ActivityEntryReaction[]      @relation("ActivityReactionsReceived")
 }
 
 /// PROF-08 adds ROUTINE: a shared routine is a fourth kind of featured item,
@@ -913,4 +915,33 @@ model ActivityEntryOverride {
 
   @@id([userId, entryKey])
   @@index([userId, type])
+}
+
+/// SOC-05: the four themed reactions. They acknowledge one activity entry and
+/// nothing else: no total counts them and nothing is ordered by them.
+enum ActivityReaction {
+  STRENGTH
+  DISCIPLINE
+  RESPECT
+  INSPIRING
+}
+
+/// SOC-05: one member's reaction to one activity entry. The primary key is
+/// the pair, so choosing another replaces it and there is nothing to
+/// accumulate. `authorId` is the entry's owner, resolved when the reaction is
+/// accepted: the read needs it to group by author, and a key belongs to one
+/// author by construction.
+model ActivityEntryReaction {
+  userId    String
+  user      User             @relation("ActivityReactionsMade", fields: [userId], references: [id], onDelete: Cascade)
+  entryKey  String           @db.VarChar(200)
+  authorId  String
+  author    User             @relation("ActivityReactionsReceived", fields: [authorId], references: [id], onDelete: Cascade)
+  reaction  ActivityReaction
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@id([userId, entryKey])
+  @@index([entryKey])
+  @@index([authorId, entryKey])
 }

@@ -15,6 +15,7 @@ import {
   ActivityPageQueryDto,
   ActivityPreviewQueryDto,
   SetActivityEntryAudienceDto,
+  SetActivityReactionDto,
   UpdateActivitySharingDto,
 } from './dto/activity.dto';
 
@@ -65,6 +66,15 @@ export class ActivityController {
     @Body() dto: UpdateActivitySharingDto,
   ) {
     return this.activity.updateSharing(req.user.id, dto);
+  }
+
+  /** SOC-05: acknowledging one entry, refused when the viewer may not see it. */
+  @Put('entries/reaction')
+  setReaction(
+    @Request() req: RequestWithUser,
+    @Body() dto: SetActivityReactionDto,
+  ) {
+    return this.activity.setReaction(req.user.id, dto);
   }
 
   @Put('entries/audience')

@@ -3,6 +3,7 @@ import { BadRequestException } from '@nestjs/common';
 import {
   ACHIEVEMENT_DEFINITIONS,
   ACTIVITY_DEFAULT_AUDIENCE,
+  ACTIVITY_REACTIONS,
   ACTIVITY_TYPE_SECTIONS,
   ACTIVITY_TYPES,
   type ActivityAudience,
@@ -10,6 +11,8 @@ import {
   type ActivityEntry,
   type ActivityEntrySharing,
   type ActivityLink,
+  type ActivityReaction,
+  type ActivityReactionSummary,
   type ActivityType,
   type ComebackRecognition,
   type ProfilePrivacySettings,
@@ -245,6 +248,43 @@ export interface EntryContext {
 const groupKeyFor = (sessionId: string | null) =>
   sessionId ? `session:${sessionId}` : null;
 
+/**
+ * SOC-05. Builders attach this, and the read replaces it with the page's real
+ * summaries: an entry always carries the shape, so a surface can never render
+ * a reaction control that has no counts behind it.
+ */
+export const emptyReactionSummary = (): ActivityReactionSummary => ({
+  counts: Object.fromEntries(
+    ACTIVITY_REACTIONS.map((reaction) => [reaction, 0]),
+  ) as ActivityReactionSummary['counts'],
+  viewerReaction: null,
+});
+
+/**
+ * One entry's reactions as this viewer may see them. The caller passes only
+ * rows it is allowed to count -- both sides of a block are filtered out before
+ * this, so a number can never reveal a member the viewer blocked -- and the
+ * viewer's own choice is reported so the control can show it. No list of who
+ * reacted is produced: that is an identity surface of its own.
+ */
+export function summarizeReactions(
+  rows: { userId: string; reaction: ActivityReaction }[],
+  viewerId: string,
+): ActivityReactionSummary {
+  const summary = emptyReactionSummary();
+  for (const row of rows) {
+    summary.counts[row.reaction] += 1;
+    if (row.userId === viewerId) summary.viewerReaction = row.reaction;
+  }
+  return summary;
+}
+
+/** Choosing the reaction already chosen removes it, so there is one per entry. */
+export const nextReaction = (
+  current: ActivityReaction | null,
+  chosen: ActivityReaction | null,
+): ActivityReaction | null => (chosen === null || chosen === current ? null : chosen);
+
 const num = (value: unknown) =>
   typeof value === 'number' && Number.isFinite(value) ? value : 0;
 const str = (value: unknown, fallback = '') =>
@@ -314,6 +354,7 @@ export function eventToEntry(
     occurredAt: event.occurredAt.toISOString(),
     author: context.author,
     groupKey: groupKeyFor(event.sessionId),
+    reactions: emptyReactionSummary(),
   };
   const linkContext = {
     isOwner: context.isOwner,
@@ -423,6 +464,7 @@ export function comebackToEntry(
     occurredAt: recognition.recognizedAt,
     author: context.author,
     groupKey: groupKeyFor(recognition.sourceSessionId),
+    reactions: emptyReactionSummary(),
     link: activityLink('COMEBACK', {
       isOwner: context.isOwner,
       username: context.author.username,
@@ -453,6 +495,7 @@ export function routineToEntry(
     occurredAt: routine.sharedAt.toISOString(),
     author: context.author,
     groupKey: null,
+    reactions: emptyReactionSummary(),
     link: activityLink('ROUTINE_SHARED', {
       isOwner: context.isOwner,
       username: context.author.username,

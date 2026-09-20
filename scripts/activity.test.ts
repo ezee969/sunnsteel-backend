@@ -5,6 +5,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import {
   ACHIEVEMENT_DEFINITIONS,
   ACTIVITY_TYPE_SECTIONS,
+  ACTIVITY_REACTIONS,
   ACTIVITY_TYPES,
   PROFILE_VISIBILITY_VALUES,
   type ActivityType,
@@ -19,14 +20,17 @@ import {
   encodeActivityCursor,
   entrySharing,
   eventActivityType,
+  emptyReactionSummary,
   eventToEntry,
   isAfterCursor,
   narrowerAudience,
+  nextReaction,
   pageActivity,
   planAllows,
   planAuthorActivity,
   seenDigest,
   sourceTake,
+  summarizeReactions,
   type ActivityCursor,
   type AuthorSharingChoices,
 } from '../src/activity/activity-rules';
@@ -670,3 +674,177 @@ describe('ActivityService', () => {
     });
   });
 });
+
+describe('SOC-05 themed reactions', () => {
+  it('counts each kind and reports only the viewer their own choice', () => {
+    const summary = summarizeReactions(
+      [
+        { userId: 'me', reaction: 'RESPECT' },
+        { userId: 'other', reaction: 'RESPECT' },
+        { userId: 'third', reaction: 'STRENGTH' },
+      ],
+      'me',
+    )
+    assert.equal(summary.counts.RESPECT, 2)
+    assert.equal(summary.counts.STRENGTH, 1)
+    assert.equal(summary.counts.DISCIPLINE, 0)
+    assert.equal(summary.viewerReaction, 'RESPECT')
+    // Somebody else's view of the same rows knows nothing of my choice.
+    assert.equal(summarizeReactions([{ userId: 'me', reaction: 'RESPECT' }], 'other').viewerReaction, null)
+  })
+
+  it('starts every kind at zero, so a control always has counts behind it', () => {
+    const empty = emptyReactionSummary()
+    assert.deepEqual(Object.keys(empty.counts).sort(), [...ACTIVITY_REACTIONS].sort())
+    assert.equal(Object.values(empty.counts).every(count => count === 0), true)
+    assert.equal(empty.viewerReaction, null)
+  })
+
+  it('keeps one reaction per entry: choosing another replaces, the same one removes', () => {
+    assert.equal(nextReaction(null, 'STRENGTH'), 'STRENGTH')
+    assert.equal(nextReaction('STRENGTH', 'RESPECT'), 'RESPECT')
+    assert.equal(nextReaction('STRENGTH', 'STRENGTH'), null, 'choosing it again removes it')
+    assert.equal(nextReaction('STRENGTH', null), null)
+    assert.equal(nextReaction(null, null), null)
+  })
+
+  it('is a small fixed catalog, so it can never become a score', () => {
+    assert.equal(ACTIVITY_REACTIONS.length, 4)
+  })
+})
+
+describe('ActivityService reactions', () => {
+  const entryKey = 'session:s1:completed:v1'
+
+  const reactionDb = (overrides: Record<string, unknown> = {}) => {
+    const writes: unknown[] = []
+    const db = {
+      user: {
+        findUnique: async () => ({
+          id: 'them',
+          username: 'them',
+          name: 'Them',
+          lastName: null,
+          avatarUrl: null,
+          bioVisibility: 'PRIVATE',
+          locationVisibility: 'PRIVATE',
+          trainingIdentityVisibility: 'PRIVATE',
+          historyVisibility: 'PUBLIC',
+          recordsVisibility: 'PUBLIC',
+          routinesVisibility: 'PUBLIC',
+          achievementsVisibility: 'PUBLIC',
+          bodyMetricsVisibility: 'PRIVATE',
+        }),
+        findFirst: async () => null,
+        findMany: async () => [],
+      },
+      // Stated explicitly: nobody blocks anybody here.
+      userBlock: { count: async () => 0, findMany: async () => [] },
+      userFollow: { findUnique: async () => ({ followerId: 'me' }), findMany: async () => [] },
+      activitySharingDefault: {
+        findMany: async () => [
+          { userId: 'them', type: 'SESSION_COMPLETED', audience: 'PUBLIC' },
+        ],
+        findUnique: async () => null,
+        upsert: async () => ({}),
+      },
+      activityEntryOverride: { findMany: async () => [], upsert: async () => ({}), deleteMany: async () => ({}) },
+      activityEntryReaction: {
+        findUnique: async () => null,
+        findMany: async () => [],
+        upsert: async (args: unknown) => {
+          writes.push(args)
+          return {}
+        },
+        deleteMany: async (args: unknown) => {
+          writes.push(args)
+          return {}
+        },
+      },
+      trainingEvent: {
+        findUnique: async () => ({
+          userId: 'them',
+          type: 'SESSION_COMPLETED',
+          payload: { schemaVersion: 1 },
+        }),
+        findMany: async () => [],
+      },
+      routine: { findMany: async () => [], findFirst: async () => null, findUnique: async () => null },
+      workoutAnalyticsProjection: { findFirst: async () => null },
+      workoutSession: { findMany: async () => [] },
+      personalRecord: { findMany: async () => [] },
+      $transaction: async (ops: unknown[]) => Promise.all(ops),
+      ...overrides,
+    } as unknown as DatabaseService
+    return { db, writes }
+  }
+
+  it('accepts a reaction on an entry the viewer may see, and stores its author', async () => {
+    const { db, writes } = reactionDb()
+    const result = await new ActivityService(db).setReaction('me', {
+      entryId: entryKey,
+      reaction: 'RESPECT',
+    })
+    assert.equal(
+      (writes[0] as { create: { authorId: string; reaction: string } }).create.authorId,
+      'them',
+    )
+    assert.equal(result.entryId, entryKey)
+  })
+
+  it('refuses to let anyone react to their own activity', async () => {
+    const { db } = reactionDb({
+      trainingEvent: {
+        findUnique: async () => ({
+          userId: 'me',
+          type: 'SESSION_COMPLETED',
+          payload: { schemaVersion: 1 },
+        }),
+        findMany: async () => [],
+      },
+    })
+    await assert.rejects(
+      new ActivityService(db).setReaction('me', { entryId: entryKey, reaction: 'RESPECT' }),
+      BadRequestException,
+    )
+  })
+
+  it('answers 404 for an entry the viewer may not see, and across a block', async () => {
+    // The kind is shared with nobody, so the plan does not allow the entry.
+    const hidden = reactionDb({
+      activitySharingDefault: { findMany: async () => [], findUnique: async () => null, upsert: async () => ({}) },
+    })
+    await assert.rejects(
+      new ActivityService(hidden.db).setReaction('me', { entryId: entryKey, reaction: 'RESPECT' }),
+      NotFoundException,
+    )
+    assert.deepEqual(hidden.writes, [], 'nothing is written for an entry it will not admit')
+
+    let blockWhere: unknown
+    const blocked = reactionDb({
+      userBlock: {
+        count: async (args: { where: unknown }) => {
+          blockWhere = args.where
+          return 1
+        },
+        findMany: async () => [],
+      },
+    })
+    await assert.rejects(
+      new ActivityService(blocked.db).setReaction('me', { entryId: entryKey, reaction: 'RESPECT' }),
+      NotFoundException,
+    )
+    assert.deepEqual(blockWhere, blockPairWhere('me', 'them'), 'both directions')
+    assert.deepEqual(blocked.writes, [])
+  })
+
+  it('refuses an entry that does not exist', async () => {
+    const { db } = reactionDb({
+      trainingEvent: { findUnique: async () => null, findMany: async () => [] },
+    })
+    await assert.rejects(
+      new ActivityService(db).setReaction('me', { entryId: entryKey, reaction: 'RESPECT' }),
+      NotFoundException,
+    )
+  })
+})

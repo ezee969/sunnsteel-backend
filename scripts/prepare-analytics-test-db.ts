@@ -225,6 +225,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260919120000_activity_sharing/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// SOC-05: themed reactions on an activity entry.
+				readFileSync(
+					'prisma/migrations/20260920120000_activity_reactions/migration.sql',
+					'utf8',
 				),
     );
     prisma(

@@ -15,13 +15,16 @@ import {
   ACTIVITY_ENTRY_ID_MAX_LENGTH,
   ACTIVITY_PAGE_MAX_LIMIT,
   ACTIVITY_PREVIEW_AUDIENCES,
+  ACTIVITY_REACTIONS,
   PROFILE_VISIBILITY_VALUES,
   type ActivityAudience,
   type ActivityPageQuery,
   type ActivityPreviewAudience,
   type ActivityPreviewQuery,
+  type ActivityReaction,
   type ActivityType,
   type SetActivityEntryAudienceRequest,
+  type SetActivityReactionRequest,
   type UpdateActivitySharingRequest,
 } from '@sunsteel/contracts';
 
@@ -67,4 +70,17 @@ export class SetActivityEntryAudienceDto
   @ValidateIf((_, value) => value !== null)
   @IsIn(PROFILE_VISIBILITY_VALUES as unknown as string[])
   audience!: ActivityAudience | null;
+}
+
+export class SetActivityReactionDto implements SetActivityReactionRequest {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(ACTIVITY_ENTRY_ID_MAX_LENGTH)
+  entryId!: string;
+
+  // `null` removes it, so only a non-null reaction is checked against the
+  // catalog; a missing one fails, as it should.
+  @ValidateIf((_, value) => value !== null)
+  @IsIn(ACTIVITY_REACTIONS as unknown as string[])
+  reaction!: ActivityReaction | null;
 }
