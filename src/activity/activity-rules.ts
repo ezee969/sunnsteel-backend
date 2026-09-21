@@ -2,11 +2,15 @@ import { createHash } from 'node:crypto';
 import { BadRequestException } from '@nestjs/common';
 import {
   ACHIEVEMENT_DEFINITIONS,
+  ACTIVITY_COMMENT_MAX_LENGTH,
+  ACTIVITY_COMMENTS_PAGE_SIZE,
+  ACTIVITY_COMMENTS_PER_DAY_MAX,
   ACTIVITY_DEFAULT_AUDIENCE,
   ACTIVITY_REACTIONS,
   ACTIVITY_TYPE_SECTIONS,
   ACTIVITY_TYPES,
   type ActivityAudience,
+  type ActivityCommentSummary,
   type ActivityCap,
   type ActivityEntry,
   type ActivityEntrySharing,
@@ -261,6 +265,18 @@ export const emptyReactionSummary = (): ActivityReactionSummary => ({
 });
 
 /**
+ * SOC-06's equivalent, and for the same reason: every entry carries the shape
+ * so no surface renders a comment control with nothing behind it. The service
+ * fills in the real counts for a page in one query; an entry built here starts
+ * at none, and `canComment` starts false so a half-built entry can never offer
+ * a control the budget has not been checked for.
+ */
+export const emptyCommentSummary = (): ActivityCommentSummary => ({
+  count: 0,
+  canComment: false,
+});
+
+/**
  * One entry's reactions as this viewer may see them. The caller passes only
  * rows it is allowed to count -- both sides of a block are filtered out before
  * this, so a number can never reveal a member the viewer blocked -- and the
@@ -355,6 +371,7 @@ export function eventToEntry(
     author: context.author,
     groupKey: groupKeyFor(event.sessionId),
     reactions: emptyReactionSummary(),
+    comments: emptyCommentSummary(),
   };
   const linkContext = {
     isOwner: context.isOwner,
@@ -465,6 +482,7 @@ export function comebackToEntry(
     author: context.author,
     groupKey: groupKeyFor(recognition.sourceSessionId),
     reactions: emptyReactionSummary(),
+    comments: emptyCommentSummary(),
     link: activityLink('COMEBACK', {
       isOwner: context.isOwner,
       username: context.author.username,
@@ -496,6 +514,7 @@ export function routineToEntry(
     author: context.author,
     groupKey: null,
     reactions: emptyReactionSummary(),
+    comments: emptyCommentSummary(),
     link: activityLink('ROUTINE_SHARED', {
       isOwner: context.isOwner,
       username: context.author.username,
@@ -617,4 +636,89 @@ export function pageActivity<Entry extends { id: string; occurredAt: string }>(
       seen: [...new Set([...carried, ...sameInstant])],
     }),
   };
+}
+
+// Activity comments (SOC-06) --------------------------------------------------
+
+/**
+ * What a viewer may see of an entry's comments without reading them. The rows
+ * handed in are already the ones this viewer is allowed to count -- both sides
+ * of a block and every moderator-hidden comment are filtered out before
+ * this -- so the number always matches what a read of the list returns. A
+ * count that disagreed would advertise a comment the viewer cannot open.
+ *
+ * `canComment` is about the viewer's own budget, not about permission: the
+ * activity read already decided whether they may see the entry at all, and
+ * anyone who may see it may comment on it.
+ */
+export function summarizeComments(
+  visibleCount: number,
+  input: { commentsToday: number },
+): ActivityCommentSummary {
+  return {
+    count: visibleCount,
+    canComment: input.commentsToday < ACTIVITY_COMMENTS_PER_DAY_MAX,
+  };
+}
+
+/**
+ * Whether this viewer may delete this comment. Two people may: the member who
+ * wrote it, and the member whose activity it hangs from -- it is their workout
+ * it is attached to, and a comment on it that they cannot remove would make
+ * their own entry somebody else's surface.
+ *
+ * A moderator is deliberately absent. `TRUST-04` hides a comment rather than
+ * deleting it, so the enforcement record stays the only account of what a
+ * moderator did, and nothing a moderator touches is destroyed.
+ */
+export function canDeleteComment(
+  comment: { userId: string; authorId: string },
+  viewerId: string,
+): boolean {
+  return comment.userId === viewerId || comment.authorId === viewerId;
+}
+
+/**
+ * A comment's text as it will be stored, or null when there is nothing to
+ * store. Trimmed, because trailing whitespace is not content, and refused when
+ * it is empty or over the cap rather than silently truncated -- a comment
+ * clipped mid-sentence would misrepresent its author.
+ */
+export function normalizeCommentBody(raw: string): string | null {
+  const body = raw.trim();
+  if (!body) return null;
+  if (body.length > ACTIVITY_COMMENT_MAX_LENGTH) return null;
+  return body;
+}
+
+/**
+ * The comment cursor is the last row's `createdAt` and id. Two comments can
+ * share a millisecond, so the instant alone would drop or repeat one at a page
+ * boundary; the id makes the order total. It is the same reason `SOC-03`'s
+ * cursor carries digests, in the simpler case where the rows have real ids.
+ */
+export interface CommentCursor {
+  at: Date;
+  id: string;
+}
+
+export function encodeCommentCursor(cursor: CommentCursor): string {
+  return Buffer.from(`${cursor.at.toISOString()}|${cursor.id}`).toString(
+    'base64url',
+  );
+}
+
+export function decodeCommentCursor(raw?: string): CommentCursor | null {
+  if (!raw) return null;
+  const [at, id] = Buffer.from(raw, 'base64url').toString('utf8').split('|');
+  if (!at || !id) return null;
+  const parsed = new Date(at);
+  return Number.isNaN(parsed.getTime()) ? null : { at: parsed, id };
+}
+
+export function commentPageSize(limit?: number): number {
+  if (!limit || Number.isNaN(limit) || limit < 1) {
+    return ACTIVITY_COMMENTS_PAGE_SIZE;
+  }
+  return Math.min(Math.floor(limit), ACTIVITY_COMMENTS_PAGE_SIZE);
 }

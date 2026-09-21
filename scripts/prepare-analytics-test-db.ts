@@ -248,6 +248,13 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260920160000_moderation_foundation/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// SOC-06: comments on an activity entry, plus the COMMENT report
+				// kind and the ACTIVITY_COMMENT notification kind.
+				readFileSync(
+					'prisma/migrations/20260921140000_activity_comments/migration.sql',
+					'utf8',
 				),
     );
     prisma(

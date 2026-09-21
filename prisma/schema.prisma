@@ -91,6 +91,8 @@ model User {
   activityEntryOverrides     ActivityEntryOverride[]
   activityReactionsMade      ActivityEntryReaction[]      @relation("ActivityReactionsMade")
   activityReactionsReceived  ActivityEntryReaction[]      @relation("ActivityReactionsReceived")
+  activityCommentsMade       ActivityComment[]            @relation("ActivityCommentsMade")
+  activityCommentsReceived   ActivityComment[]            @relation("ActivityCommentsReceived")
   // TRUST-04: the whole authorization model for moderation. There is one
   // moderator, so a flag is the honest shape; a roles table would be a
   // subsystem built for a second moderator who does not exist.
@@ -238,6 +240,7 @@ enum ReportSubjectKind {
   MEMBER
   ROUTINE
   SESSION
+  COMMENT
 }
 
 enum ReportReason {
@@ -881,6 +884,8 @@ enum NotificationKind {
   ACHIEVEMENT
   SESSION_PROGRESS
   NEW_FOLLOWER
+  /// SOC-06: the first kind another member causes on purpose.
+  ACTIVITY_COMMENT
 }
 
 /// NOTIF-08: one subscribed browser on one device. The endpoint is the
@@ -996,6 +1001,38 @@ enum ActivityReaction {
 /// accumulate. `authorId` is the entry's owner, resolved when the reaction is
 /// accepted: the read needs it to group by author, and a key belongs to one
 /// author by construction.
+/// SOC-06: a comment on one generated activity entry.
+///
+/// Keyed by the same stable `entryKey` a SOC-05 reaction uses, because SOC-03
+/// entries are generated on read and never stored -- that key is the only
+/// identity an activity has. `authorId` is the entry's owner, resolved and
+/// stored when the comment is accepted, so the read that lists comments and the
+/// notification that announces one both know who they belong to without
+/// re-deriving the entry.
+///
+/// Unlike a reaction there may be many per member per entry, so it has its own
+/// id. Deleting is a real delete: nothing else in the product reads these rows,
+/// so there is nothing a tombstone would protect.
+model ActivityComment {
+  id                 String    @id @default(uuid())
+  entryKey           String    @db.VarChar(200)
+  /// Who wrote it.
+  userId             String
+  user               User      @relation("ActivityCommentsMade", fields: [userId], references: [id], onDelete: Cascade)
+  /// Whose activity it is attached to; they may delete it as well.
+  authorId           String
+  author             User      @relation("ActivityCommentsReceived", fields: [authorId], references: [id], onDelete: Cascade)
+  body               String    @db.VarChar(500)
+  /// TRUST-04: set by HIDE_SUBJECT. Gone for everyone but its writer; the row
+  /// and its text are untouched, exactly as a hidden routine keeps its days.
+  moderationHiddenAt DateTime?
+  createdAt          DateTime  @default(now())
+
+  @@index([entryKey, createdAt, id])
+  @@index([authorId, createdAt])
+  @@index([userId, createdAt])
+}
+
 model ActivityEntryReaction {
   userId    String
   user      User             @relation("ActivityReactionsMade", fields: [userId], references: [id], onDelete: Cascade)
