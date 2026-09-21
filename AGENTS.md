@@ -35,7 +35,15 @@ The same command with `stop` shuts it down, and `server.log` in that data direct
 
 The **backend service itself is public** at `https://sunnsteel-backend-production.up.railway.app` (port 4000, healthcheck `/api/health`), and the Railway API is reachable through the authenticated Railway MCP connector — deploy status, service config and logs are readable without touching the database. Read those rather than guessing at production state.
 
-**The deploy applies migrations, and it does so twice on purpose.** `railway.json` sets `preDeployCommand` to `npx prisma migrate deploy`, which runs *before* the new deployment goes live: a migration that fails there aborts the deploy and leaves the running version serving. `startCommand` is still `npm run deploy`, which runs `migrate deploy` again at boot — a no-op by then, kept as a belt-and-braces step while the pre-deploy hook is new. Once a deploy has visibly run the pre-deploy step, `startCommand` can drop to `npm run start:prod`. **Never move migrations back into the start command alone**: a failure there is an outage, because `restartPolicyType: ON_FAILURE` retries the boot ten times with the service down.
+**A red CI run does not fail the deploy — it silently skips it.** The service
+has `checkSuites: true`, so Railway waits for the GitHub check suite and marks
+the deployment `SKIPPED` when it is red. Production then stays on the previous
+commit with nothing that looks like a failure. After any push, confirm the
+deployment reached `SUCCESS`; a green `git push` proves nothing. This is a good
+property — it is what kept a four-day-stale production from taking a broken
+migration — but only if somebody checks.
+
+**Migrations run before the deploy goes live, not at boot.** `railway.json` sets `preDeployCommand` to `npx prisma migrate deploy`; a migration that fails there aborts the deploy and the running version keeps serving. `startCommand` is `npm run start:prod`, which does **not** migrate. Confirmed working on 2026-09-21: the deploy logged `migrate deploy` at 11:57:16 from the hook and the service started at 11:57:28. **Never move migrations back into the start command**: a failure there is an outage rather than a failed deploy, because `restartPolicyType: ON_FAILURE` retries the boot ten times with the service down. `npm run deploy` still exists for running both by hand.
 
 Until 2026-09-20 both ran against a single hosted Neon database; that project is deleted, and a reference to Neon anywhere is stale. The split has a consequence worth holding on to: **local data no longer mirrors production**, and `prisma migrate reset` or a destructive script is now safe to run locally, which it was not while `.env` pointed at the deployment database. Local started from a dump of that shared database, kept at `C:\Users\Ezequiel\pgdata-backup-neon-2026-09-20.dump`.
 
