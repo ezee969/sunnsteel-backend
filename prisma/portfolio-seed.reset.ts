@@ -16,6 +16,7 @@ export interface ResetCounts {
 	notifications: number
 	projections: number
 	follows: number
+	reports: number
 	users: number
 }
 
@@ -104,6 +105,22 @@ export async function resetPortfolioSeed(
 			})
 		: { count: 0 }
 
+	// TRUST-04 reports. A report filed *by* a peer cascades with the account,
+	// but `MemberReport.subjectId` is a plain string rather than a relation, so
+	// a report *about* a peer or their routine would outlive them and sit in
+	// the moderation queue pointing at nothing. Both directions go explicitly.
+	const reportSubjects = [...peerIds, ...routineIds]
+	const reports = reportSubjects.length
+		? await prisma.memberReport.deleteMany({
+				where: {
+					OR: [
+						{ reporterId: { in: peerIds } },
+						{ subjectId: { in: reportSubjects } },
+					],
+				},
+			})
+		: { count: 0 }
+
 	const users = peerIds.length
 		? await prisma.user.deleteMany({ where: { id: { in: peerIds } } })
 		: { count: 0 }
@@ -114,6 +131,7 @@ export async function resetPortfolioSeed(
 		routines: routines.count,
 		...analytics,
 		follows: follows.count,
+		reports: reports.count,
 		users: users.count,
 	}
 }

@@ -3,7 +3,12 @@ import 'reflect-metadata'
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 
-import { ProgressionScheme, RepType } from '@prisma/client'
+import {
+	ProgressionScheme,
+	RepType,
+	ReportReason,
+	ReportSubjectKind,
+} from '@prisma/client'
 
 import { DatabaseService } from '../src/database/database.service'
 import { UserRelationshipsService } from '../src/users/user-relationships.service'
@@ -959,6 +964,40 @@ async function main() {
 	]
 	await prisma.userFollow.createMany({ data: follows, skipDuplicates: true })
 
+	// --- moderation queue (TRUST-04) -------------------------------------------
+	// A few open reports so `/moderation` photographs the feature rather than
+	// its empty state. Every one is **peer about peer**: a portfolio frame must
+	// not show the owner reported, and a report about the owner's own routine
+	// would put their content in a moderation queue for the sake of a picture.
+	//
+	// Nothing here is reviewed. The queue is meant to look like work waiting,
+	// which is what an honest screenshot of it shows.
+	const reports = [
+		{
+			reporterId: peerIds[1],
+			subjectKind: ReportSubjectKind.MEMBER,
+			subjectId: peerIds[4],
+			reason: ReportReason.SPAM,
+			details: 'Posting the same supplement link on every routine.',
+		},
+		{
+			reporterId: peerIds[3],
+			subjectKind: ReportSubjectKind.ROUTINE,
+			subjectId: seedId('routine', 'peer', PEERS[0].handle),
+			reason: ReportReason.UNSAFE_ADVICE,
+			details:
+				'Prescribes a 1RM attempt every session with no deload. Not safe for the experience level it claims.',
+		},
+		{
+			reporterId: peerIds[5],
+			subjectKind: ReportSubjectKind.MEMBER,
+			subjectId: peerIds[4],
+			reason: ReportReason.HARASSMENT,
+			details: null,
+		},
+	].filter((report) => report.reporterId && report.subjectId)
+	await prisma.memberReport.createMany({ data: reports, skipDuplicates: true })
+
 	// --- owner analytics -------------------------------------------------------
 	// Replays every completed session of the account, real ones included, into
 	// a fresh generation, exactly as the backfill job would.
@@ -983,6 +1022,7 @@ async function main() {
 		peerSessions,
 		peerSetLogs,
 		follows: follows.length,
+		reports: reports.length,
 	}
 
 	const manifest: SeedManifest = {
