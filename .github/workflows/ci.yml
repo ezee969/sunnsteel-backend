@@ -47,6 +47,54 @@ jobs:
       - name: Load compiled application modules
         run: npm run test:build
 
+  # The migration chain applied the way production applies it: `migrate deploy`
+  # against an empty database. The analytics job below runs a hand-maintained
+  # concatenation of migration SQL instead, which is a different code path --
+  # it proves the listed files work, not that the chain does. Without this job
+  # an ordering problem, a migration that fails on a clean database or a
+  # `_prisma_migrations` mismatch is discovered by Railway at boot, where the
+  # migration runs as part of the start command.
+  migrations:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: isolated
+          POSTGRES_DB: migration_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:isolated@127.0.0.1:5432/migration_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+
+      - name: Apply every migration to an empty database
+        run: npx prisma migrate deploy
+
+      # Fails when a migration file was edited after being applied, when one is
+      # missing, or when the schema and the chain disagree -- the drift that
+      # otherwise surfaces as a failed deploy.
+      - name: Migration chain matches the schema
+        run: npx prisma migrate status
+
+      # A second `migrate deploy` must be a no-op. Production restarts run it
+      # on every boot, so a migration that is not idempotent takes the service
+      # down on its second start rather than its first.
+      - name: Re-applying is a no-op
+        run: npx prisma migrate deploy
+
   analytics-integration:
     runs-on: ubuntu-latest
     services:

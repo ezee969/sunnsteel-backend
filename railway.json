@@ -4,6 +4,7 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
+    "preDeployCommand": ["npx prisma migrate deploy"],
     "startCommand": "npm run deploy",
     "healthcheckPath": "/api/health",
     "healthcheckTimeout": 300,
