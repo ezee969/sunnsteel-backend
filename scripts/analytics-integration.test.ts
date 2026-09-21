@@ -17,6 +17,17 @@ import { toWorkoutSessionResponse } from '../src/workouts/workout-session.mapper
 
 const enabled = process.env.ANALYTICS_TEST_DATABASE === 'isolated';
 
+/**
+ * Today at UTC midnight, read once so a suite running across midnight places
+ * every seeded session against the same day.
+ */
+const ANCHOR = (() => {
+  const now = new Date();
+  return new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+  );
+})();
+
 test(
   'analytics on real PostgreSQL: atomic finishes, historical parity, resumable backfill, cutover and bounded reads',
   { skip: !enabled },
@@ -100,8 +111,25 @@ test(
         [3, null, null, true],
         [4, 0, 0, false],
       ] as const) {
+        // Relative to today, never a literal date. These sessions were pinned
+        // to August 2026 and the volume-trend assertion below reads a rolling
+        // four-week window, so the fixture aged out of its own window and the
+        // suite began failing on a date rather than on a change — it did,
+        // silently, between 2026-09-17 and 2026-09-21, and blocked every
+        // deploy once Railway started gating on the check suite.
+        //
+        // The span sits 16 to 8 days back: inside the four weeks with margin,
+        // and at least a week old, so every session stays in a completed week
+        // whatever weekday the suite runs on.
         const endedAt = new Date(
-          `2026-08-${String(20 + index * 2).padStart(2, '0')}T22:30:00Z`,
+          Date.UTC(
+            ANCHOR.getUTCFullYear(),
+            ANCHOR.getUTCMonth(),
+            ANCHOR.getUTCDate() - 16 + index * 2,
+            22,
+            30,
+            0,
+          ),
         );
         await db.workoutSession.create({
           data: {

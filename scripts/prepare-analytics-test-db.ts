@@ -100,6 +100,16 @@ async function main() {
 					'utf8',
 				) +
 				'\n' +
+				// SOC-07: `SessionShare`. The analytics fixture predates it and no
+				// analytics test reads it, but later migrations ALTER the table --
+				// TRUST-04 adds its hide column -- so the curated chain has to carry
+				// it to stay self-consistent. Leaving it out failed CI with P1014,
+				// "the underlying table for model SessionShare does not exist".
+				readFileSync(
+					'prisma/migrations/20260913180000_session_shares/migration.sql',
+					'utf8',
+				) +
+				'\n' +
 				// EXER-09: the integration test creates Exercise rows, and the
 				// generated client selects every Exercise column.
 				readFileSync(
