@@ -257,6 +257,12 @@ async function main() {
 					'utf8',
 				) +
 				NEWLINE +
+				// SOC-08: mutual partnerships and their independent grants.
+				readFileSync(
+					'prisma/migrations/20260922110000_training_partners/migration.sql',
+					'utf8',
+				) +
+				NEWLINE +
 				// TD-47: drops the pre-Supabase auth storage. The curated chain
 				// above never created those tables, so only the User.password
 				// drop does anything here -- and it must, because the generated

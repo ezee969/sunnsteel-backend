@@ -14,6 +14,7 @@ import {
   blockedIdsWhere,
   otherPartyId,
 } from './member-blocks';
+import { trainingPartnerPairKey } from './training-partner-access';
 
 const MEMBER_SELECT = {
   id: true,
@@ -95,6 +96,12 @@ export class MemberBlocksService {
             { followerId: target, followingId: viewerId },
           ],
         },
+      }),
+      // SOC-08: a block ends the partnership and its grants in the same
+      // transaction. Leaving either side's access alive would make the block
+      // look effective in lists while it still exposed training data.
+      this.db.trainingPartnership.deleteMany({
+        where: { pairKey: trainingPartnerPairKey(viewerId, target) },
       }),
     ]);
     return this.list(viewerId);

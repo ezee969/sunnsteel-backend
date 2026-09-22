@@ -14,6 +14,7 @@ import { MemberReportsService } from './member-reports.service';
 import { MemberReportsController } from './member-reports.controller';
 import { AchievementsModule } from '../achievements/achievements.module';
 import { RoutinesModule } from '../routines/routines.module';
+import { TrainingPartnersService } from './training-partners.service';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { RoutinesModule } from '../routines/routines.module';
     FeaturedProfileItemsService,
     MemberBlocksService,
     MemberReportsService,
+    TrainingPartnersService,
     DatabaseService,
   ],
   exports: [UsersService],

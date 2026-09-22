@@ -43,8 +43,13 @@ describe('MemberBlocksService', () => {
   };
 
   const makeDb = (overrides: Record<string, unknown> = {}) => {
-    const calls: { follows: unknown[]; upserts: unknown[] } = {
+    const calls: {
+      follows: unknown[];
+      partnerships: unknown[];
+      upserts: unknown[];
+    } = {
       follows: [],
+      partnerships: [],
       upserts: [],
     };
     const db = {
@@ -70,6 +75,12 @@ describe('MemberBlocksService', () => {
           return args;
         },
       },
+      trainingPartnership: {
+        deleteMany: (args: unknown) => {
+          calls.partnerships.push(args);
+          return args;
+        },
+      },
       $transaction: async (ops: unknown[]) => ops,
       ...overrides,
     } as unknown as DatabaseService;
@@ -91,6 +102,9 @@ describe('MemberBlocksService', () => {
           ],
         },
       },
+    ]);
+    assert.deepEqual(calls.partnerships, [
+      { where: { pairKey: 'me:them' } },
     ]);
     assert.deepEqual(result.blocks, [
       { member, blockedAt: '2026-09-18T10:00:00.000Z' },

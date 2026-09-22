@@ -54,6 +54,7 @@ import { canViewRoutine } from '../routines/routine-visibility';
 import { readSnapshot } from '../workouts/analytics/session-snapshot';
 import { routineDayName } from '../workouts/workout-session.selects';
 import { hiddenFromViewer, isHiddenFromViewer } from '../users/member-blocks';
+import { trainingPartnerPermissions } from '../users/training-partner-access';
 import {
   mapProfilePrivacy,
   resolveProfileViewerAccess,
@@ -308,19 +309,22 @@ export class ActivityService {
     if (!isOwner && (await isHiddenFromViewer(this.db, viewerId, row.id))) {
       throw new NotFoundException('User not found');
     }
-    const isFollower =
-      !isOwner &&
-      Boolean(
-        await this.db.userFollow.findUnique({
-          where: {
-            followerId_followingId: {
-              followerId: viewerId,
-              followingId: row.id,
+    const [follow, partnerPermissions] = isOwner
+      ? [null, null]
+      : await Promise.all([
+          this.db.userFollow.findUnique({
+            where: {
+              followerId_followingId: {
+                followerId: viewerId,
+                followingId: row.id,
+              },
             },
-          },
-          select: { followerId: true },
-        }),
-      );
+            select: { followerId: true },
+          }),
+          trainingPartnerPermissions(this.db, viewerId, row.id),
+        ]);
+    const isFollower =
+      !isOwner && (Boolean(follow) || partnerPermissions?.activity === true);
     const authors = await this.loadAuthors([
       { row, context: { isOwner, isFollower } },
     ]);
@@ -787,19 +791,22 @@ export class ActivityService {
         : isHiddenFromViewer(this.db, viewerId, authorId),
     ]);
     if (!row || hidden) throw new NotFoundException('Activity entry not found');
-    const isFollower =
-      !isOwner &&
-      Boolean(
-        await this.db.userFollow.findUnique({
-          where: {
-            followerId_followingId: {
-              followerId: viewerId,
-              followingId: authorId,
+    const [follow, partnerPermissions] = isOwner
+      ? [null, null]
+      : await Promise.all([
+          this.db.userFollow.findUnique({
+            where: {
+              followerId_followingId: {
+                followerId: viewerId,
+                followingId: authorId,
+              },
             },
-          },
-          select: { followerId: true },
-        }),
-      );
+            select: { followerId: true },
+          }),
+          trainingPartnerPermissions(this.db, viewerId, authorId),
+        ]);
+    const isFollower =
+      !isOwner && (Boolean(follow) || partnerPermissions?.activity === true);
     const [author] = await this.loadAuthors([
       { row, context: { isOwner, isFollower } },
     ]);
@@ -1171,14 +1178,17 @@ export class ActivityService {
     if (!row || hidden) {
       throw new NotFoundException('Activity entry not found');
     }
-    const isFollower = Boolean(
-      await this.db.userFollow.findUnique({
+    const [follow, partnerPermissions] = await Promise.all([
+      this.db.userFollow.findUnique({
         where: {
           followerId_followingId: { followerId: viewerId, followingId: authorId },
         },
         select: { followerId: true },
       }),
-    );
+      trainingPartnerPermissions(this.db, viewerId, authorId),
+    ]);
+    const isFollower =
+      Boolean(follow) || partnerPermissions.activity === true;
     const [author] = await this.loadAuthors([
       { row, context: { isOwner: false, isFollower } },
     ]);

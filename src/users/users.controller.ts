@@ -37,6 +37,8 @@ import { RoutineSharingService } from '../routines/routine-sharing.service';
 import { FeaturedProfileItemsService } from './featured-profile-items.service';
 import { MemberBlocksService } from './member-blocks.service';
 import { ReplaceFeaturedProfileItemsDto } from './dto/replace-featured-profile-items.dto';
+import { UpdateTrainingPartnerPermissionsDto } from './dto/update-training-partner-permissions.dto';
+import { TrainingPartnersService } from './training-partners.service';
 
 @UseGuards(SupabaseJwtGuard)
 @Controller('users')
@@ -51,6 +53,7 @@ export class UsersController {
     private readonly routineSharing: RoutineSharingService,
     private readonly featuredProfileItems: FeaturedProfileItemsService,
     private readonly blocks: MemberBlocksService,
+    private readonly trainingPartners: TrainingPartnersService,
   ) {}
 
   @Get('time-zone')
@@ -168,6 +171,49 @@ export class UsersController {
     return this.blocks.unblock(req.user.id, identifier);
   }
 
+  /** SOC-08: the viewer's incoming, outgoing and active relationships. */
+  @Get('me/training-partners')
+  listTrainingPartners(@Request() req: RequestWithUser) {
+    return this.trainingPartners.list(req.user.id);
+  }
+
+  @Post('me/training-partners/:partnershipId/accept')
+  acceptTrainingPartner(
+    @Request() req: RequestWithUser,
+    @Param('partnershipId') partnershipId: string,
+  ) {
+    return this.trainingPartners.accept(req.user.id, partnershipId);
+  }
+
+  @Put('me/training-partners/:partnershipId/permissions')
+  updateTrainingPartnerPermissions(
+    @Request() req: RequestWithUser,
+    @Param('partnershipId') partnershipId: string,
+    @Body() dto: UpdateTrainingPartnerPermissionsDto,
+  ) {
+    return this.trainingPartners.updatePermissions(
+      req.user.id,
+      partnershipId,
+      dto,
+    );
+  }
+
+  @Get('me/training-partners/:partnershipId/schedule')
+  getTrainingPartnerSchedule(
+    @Request() req: RequestWithUser,
+    @Param('partnershipId') partnershipId: string,
+  ) {
+    return this.trainingPartners.schedule(req.user.id, partnershipId);
+  }
+
+  @Delete('me/training-partners/:partnershipId')
+  removeTrainingPartner(
+    @Request() req: RequestWithUser,
+    @Param('partnershipId') partnershipId: string,
+  ) {
+    return this.trainingPartners.remove(req.user.id, partnershipId);
+  }
+
   @Get('search')
   searchUsers(@Request() req: RequestWithUser, @Query() query: SearchUsersDto) {
     return this.usersService.searchUsers(query.q, req.user.id, query.limit);
@@ -194,6 +240,14 @@ export class UsersController {
   ) {
     const ownerId = await this.routineSharing.resolveOwnerId(identifier);
     return this.routineSharing.listVisibleRoutines(req.user.id, ownerId);
+  }
+
+  @Post(':identifier/training-partner-request')
+  requestTrainingPartner(
+    @Request() req: RequestWithUser,
+    @Param('identifier') identifier: string,
+  ) {
+    return this.trainingPartners.request(req.user.id, identifier);
   }
 
   /**

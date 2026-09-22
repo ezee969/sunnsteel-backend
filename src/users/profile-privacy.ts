@@ -41,8 +41,21 @@ export function canViewProfileSection(
 
 export function resolveProfileViewerAccess(
   settings: ProfilePrivacySettings,
-  context: { isOwner: boolean; isFollower: boolean },
+  context: {
+    isOwner: boolean;
+    isFollower: boolean;
+    partnerProgress?: boolean;
+    partnerRoutines?: boolean;
+  },
 ): ProfileViewerAccess {
+  const progressContext = {
+    isOwner: context.isOwner,
+    isFollower: context.isFollower || context.partnerProgress === true,
+  };
+  const routinesContext = {
+    isOwner: context.isOwner,
+    isFollower: context.isFollower || context.partnerRoutines === true,
+  };
   return {
     biography: canViewProfileSection(settings.biography, context),
     location: canViewProfileSection(settings.location, context),
@@ -50,10 +63,16 @@ export function resolveProfileViewerAccess(
       settings.trainingIdentity,
       context,
     ),
-    workoutHistory: canViewProfileSection(settings.workoutHistory, context),
-    records: canViewProfileSection(settings.records, context),
-    routines: canViewProfileSection(settings.routines, context),
-    achievements: canViewProfileSection(settings.achievements, context),
+    workoutHistory: canViewProfileSection(
+      settings.workoutHistory,
+      progressContext,
+    ),
+    records: canViewProfileSection(settings.records, progressContext),
+    routines: canViewProfileSection(settings.routines, routinesContext),
+    achievements: canViewProfileSection(
+      settings.achievements,
+      progressContext,
+    ),
     bodyMetrics: canViewProfileSection(settings.bodyMetrics, context),
   };
 }

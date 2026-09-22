@@ -8,6 +8,7 @@ import {
 // Services
 import { DatabaseService } from '../database/database.service';
 import { hiddenFromViewer, isHiddenFromViewer } from './member-blocks';
+import { trainingPartnerPermissions } from './training-partner-access';
 import {
   PREFERRED_TRAINING_STYLE_VALUES,
   ProfileDiscoverySettings,
@@ -414,6 +415,11 @@ export class UsersService {
         ? await isHiddenFromViewer(this.db, viewerUserId, user.id)
         : false;
     if (blocked) throw new NotFoundException('User not found');
+    const partnerPermissions = await trainingPartnerPermissions(
+      this.db,
+      viewerUserId,
+      user.id,
+    );
     const viewerBlocksTarget =
       viewerUserId && !isOwner
         ? (await this.db.userBlock.count({
@@ -436,6 +442,8 @@ export class UsersService {
     const viewerAccess = resolveProfileViewerAccess(privacySettings, {
       isOwner,
       isFollower,
+      partnerProgress: partnerPermissions.progress,
+      partnerRoutines: partnerPermissions.routines,
     });
 
     const [
@@ -510,7 +518,7 @@ export class UsersService {
           : null,
         this.featuredProfileItems?.resolveForProfile(user.id, viewerAccess, {
           isOwner,
-          isFollower,
+          isFollower: isFollower || partnerPermissions.routines,
         }) ?? [],
         viewerAccess.achievements && this.achievementsService
           ? this.achievementsService.forProfile(user.id)

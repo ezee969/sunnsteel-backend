@@ -91,6 +91,9 @@ model User {
   activityReactionsReceived  ActivityEntryReaction[]      @relation("ActivityReactionsReceived")
   activityCommentsMade       ActivityComment[]            @relation("ActivityCommentsMade")
   activityCommentsReceived   ActivityComment[]            @relation("ActivityCommentsReceived")
+  trainingPartnerRequests    TrainingPartnership[]         @relation("TrainingPartnershipRequester")
+  trainingPartnerInvites     TrainingPartnership[]         @relation("TrainingPartnershipRecipient")
+  trainingPartnerGrants      TrainingPartnerGrant[]        @relation("TrainingPartnerGrantor")
   // TRUST-04: the whole authorization model for moderation. There is one
   // moderator, so a flag is the honest shape; a roles table would be a
   // subsystem built for a second moderator who does not exist.
@@ -166,6 +169,48 @@ model UserBlock {
   @@id([blockerId, blockedId])
   @@index([blockerId])
   @@index([blockedId])
+}
+
+enum TrainingPartnershipStatus {
+  PENDING
+  ACTIVE
+}
+
+/// SOC-08: one explicit, mutual relationship. `pairKey` is the two sorted
+/// account ids joined by `:`, so the same pair cannot create a reverse request.
+model TrainingPartnership {
+  id          String                    @id @default(uuid())
+  pairKey     String                    @unique @db.VarChar(73)
+  requesterId String
+  recipientId String
+  status      TrainingPartnershipStatus @default(PENDING)
+  createdAt   DateTime                  @default(now())
+  updatedAt   DateTime                  @updatedAt
+  acceptedAt  DateTime?
+  requester   User                      @relation("TrainingPartnershipRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  recipient   User                      @relation("TrainingPartnershipRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  grants      TrainingPartnerGrant[]
+
+  @@index([requesterId, status, createdAt])
+  @@index([recipientId, status, createdAt])
+}
+
+/// Each active member grants access independently. Missing rows and every
+/// false field deny access; accepting a request creates both rows atomically.
+model TrainingPartnerGrant {
+  partnershipId String
+  grantorId     String
+  schedule      Boolean              @default(false)
+  progress      Boolean              @default(false)
+  activity      Boolean              @default(false)
+  routines      Boolean              @default(false)
+  encouragement Boolean              @default(false)
+  updatedAt     DateTime             @updatedAt
+  partnership   TrainingPartnership  @relation(fields: [partnershipId], references: [id], onDelete: Cascade)
+  grantor       User                 @relation("TrainingPartnerGrantor", fields: [grantorId], references: [id], onDelete: Cascade)
+
+  @@id([partnershipId, grantorId])
+  @@index([grantorId])
 }
 
 /// PROF-10: a recorded report. TRUST-04 owns the queue, the review actions and

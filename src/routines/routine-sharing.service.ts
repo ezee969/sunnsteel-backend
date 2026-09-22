@@ -17,6 +17,7 @@ import {
 } from '@sunsteel/contracts';
 import { DatabaseService } from '../database/database.service';
 import { isHiddenFromViewer } from '../users/member-blocks';
+import { trainingPartnerPermissions } from '../users/training-partner-access';
 import { CreateRoutineDto } from './dto/create-routine.dto';
 import { readCloneSource, setupToClonedRoutine } from './routine-cloning';
 import { ROUTINE_WITH_DAYS_SELECT } from './routine.selects';
@@ -202,12 +203,17 @@ export class RoutineSharingService {
     }
 
     const isOwner = viewerId === ownerId;
-    const isFollower = isOwner
-      ? false
-      : viewerId !== null &&
-        (await this.db.userFollow.count({
-          where: { followerId: viewerId, followingId: ownerId },
-        })) > 0;
+    const [follows, partnerPermissions] = isOwner
+      ? [false, null]
+      : await Promise.all([
+          viewerId !== null
+            ? this.db.userFollow
+                .count({ where: { followerId: viewerId, followingId: ownerId } })
+                .then((count) => count > 0)
+            : Promise.resolve(false),
+          trainingPartnerPermissions(this.db, viewerId, ownerId),
+        ]);
+    const isFollower = follows || partnerPermissions?.routines === true;
 
     const routines = await this.db.routine.findMany({
       where: { userId: ownerId },
@@ -268,12 +274,22 @@ export class RoutineSharingService {
       // PROF-10: indistinguishable from a routine that does not exist.
       throw new NotFoundException('Routine not found');
     }
-    const isFollower = isOwner
-      ? false
-      : viewerId !== null &&
-        (await this.db.userFollow.count({
-          where: { followerId: viewerId, followingId: routine.user.id },
-        })) > 0;
+    const [follows, partnerPermissions] = isOwner
+      ? [false, null]
+      : await Promise.all([
+          viewerId !== null
+            ? this.db.userFollow
+                .count({
+                  where: {
+                    followerId: viewerId,
+                    followingId: routine.user.id,
+                  },
+                })
+                .then((count) => count > 0)
+            : Promise.resolve(false),
+          trainingPartnerPermissions(this.db, viewerId, routine.user.id),
+        ]);
+    const isFollower = follows || partnerPermissions?.routines === true;
 
     if (
       !canViewRoutine(
