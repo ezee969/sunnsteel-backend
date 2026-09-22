@@ -8,7 +8,6 @@ import { DatabaseModule } from './database/database.module';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule } from '@nestjs/config';
 import { UsersModule } from './users/users.module';
-import { TokenModule } from './token/token.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ExercisesModule } from './exercises/exercises.module';
 import { RoutinesModule } from './routines/routines.module';
@@ -48,7 +47,6 @@ import { ModerationModule } from './moderation/moderation.module';
     ]),
     AuthModule,
     UsersModule,
-    TokenModule,
     ScheduleModule.forRoot(),
     ExercisesModule,
     RoutinesModule,

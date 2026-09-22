@@ -25,7 +25,6 @@ model User {
   id                         String                       @id @default(uuid())
   email                      String                       @unique
   username                   String                       @unique @db.VarChar(30)
-  password                   String? // Made optional for Supabase migration
   name                       String
   lastName                   String?
   avatarUrl                  String?
@@ -42,7 +41,6 @@ model User {
   supabaseUserId             String?                      @unique // Link to Supabase user
   createdAt                  DateTime                     @default(now())
   updatedAt                  DateTime                     @updatedAt
-  refreshTokens              RefreshToken[]
   weightUnit                 WeightUnit                   @default(KG)
   bioVisibility              ProfileVisibility            @default(PRIVATE)
   locationVisibility         ProfileVisibility            @default(PRIVATE)
@@ -250,22 +248,6 @@ enum ReportReason {
   UNSAFE_ADVICE
   SEXUAL_CONTENT
   OTHER
-}
-
-model BlacklistedToken {
-  id        String   @id @default(uuid())
-  token     String   @unique
-  issuedAt  DateTime @default(now())
-  expiresAt DateTime
-}
-
-model RefreshToken {
-  id        String   @id @default(uuid())
-  token     String   @unique
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  issuedAt  DateTime @default(now())
-  expiresAt DateTime
 }
 
 // Weight unit preference per user

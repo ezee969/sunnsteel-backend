@@ -1,5 +1,4 @@
 // Utility
-import * as bcrypt from 'bcrypt';
 import {
   BadRequestException,
   ConflictException,
@@ -29,24 +28,13 @@ import {
   UserSearchResponse,
 } from '@sunsteel/contracts';
 import { Prisma } from '@prisma/client';
-import {
-  createInitialUsername,
-  getUsernameValidationError,
-  normalizeUsername,
-} from './username';
+import { getUsernameValidationError, normalizeUsername } from './username';
 import {
   mapProfilePrivacy,
   resolveProfileViewerAccess,
 } from './profile-privacy';
 import { FeaturedProfileItemsService } from './featured-profile-items.service';
 import { AchievementsService } from '../achievements/achievements.service';
-
-// Local input type replacing legacy RegisterDto
-interface CreateUserInput {
-  email: string;
-  password: string;
-  name: string;
-}
 
 const userProfileSelect = {
   timeZone: true,
@@ -184,38 +172,6 @@ export class UsersService {
       select: userProfileSelect,
     });
     if (!user) return null;
-    return this.mapUserProfile(user);
-  }
-
-  // Special method for authentication that includes password
-  async findByEmailWithPassword(email: string) {
-    return this.db.user.findUnique({
-      where: { email },
-      select: {
-        id: true,
-        email: true,
-        password: true,
-        name: true,
-      },
-    });
-  }
-
-  async create({
-    email,
-    password,
-    name,
-  }: CreateUserInput): Promise<UserProfile> {
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const user = await this.db.user.create({
-      data: {
-        email,
-        username: createInitialUsername(name, email),
-        password: hashedPassword,
-        name,
-      },
-      select: userProfileSelect,
-    });
     return this.mapUserProfile(user);
   }
 

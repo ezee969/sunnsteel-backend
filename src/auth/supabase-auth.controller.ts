@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Get,
@@ -9,76 +8,40 @@ import {
   InternalServerErrorException,
   Logger,
   Post,
-  Request,
-  Response,
-  UseGuards,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import {
-  Request as ExpressRequest,
-  Response as ExpressResponse,
-} from 'express';
-import * as bcrypt from 'bcrypt';
-import type {
-  SupabaseAuthResponse,
-  SupabaseMigrationResponse,
-} from '@sunsteel/contracts';
+import type { SupabaseAuthResponse } from '@sunsteel/contracts';
 import { SupabaseService } from './supabase.service';
-import { SupabaseJwtGuard } from './guards/supabase-jwt.guard';
-import { DatabaseService } from '../database/database.service';
-import { SupabaseMigrationDto, SupabaseVerifyTokenDto } from './dto/auth.dto';
+import { SupabaseVerifyTokenDto } from './dto/auth.dto';
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Unknown error';
 }
 
-type SupabaseRequestUser = SupabaseAuthResponse['user'];
-type AuthenticatedSupabaseRequest = ExpressRequest & {
-  user: SupabaseRequestUser;
-};
-
+/**
+ * Supabase is the whole of authentication. What used to sit beside it — a
+ * password migration endpoint, a profile read and a cookie this service set —
+ * was removed in TD-47; see that entry for what each one was and why none of
+ * them was load-bearing.
+ *
+ * The `ss_session` marker the frontend middleware reads is **the frontend's**,
+ * set by its own same-origin `/api/session` route. A cookie in this service's
+ * response is scoped to this service's domain, which is a third party to the
+ * app, so it was never sent back and middleware never saw it. Do not add one
+ * here again.
+ */
 @Controller('auth/supabase')
 export class SupabaseAuthController {
   private readonly logger = new Logger(SupabaseAuthController.name);
 
-  constructor(
-    private readonly supabaseService: SupabaseService,
-    private readonly databaseService: DatabaseService,
-    private readonly configService: ConfigService,
-  ) {}
+  constructor(private readonly supabaseService: SupabaseService) {}
 
   /**
-   * Cookie attributes for the `ss_session` marker cookie.
-   *
-   * In production the frontend (Vercel) and backend (Railway) are on
-   * different registrable domains, so the verify request is cross-site.
-   * Browsers only store cross-site cookies when they are `SameSite=None`
-   * AND `Secure`, so we must use those in production. Locally both run on
-   * `localhost` (same-site over http), where `None` is impossible because
-   * it requires `Secure`, so we fall back to `lax`.
-   *
-   * The same attributes must be used for `clearCookie`, otherwise the
-   * browser will not match and clear the cookie.
-   */
-  private get sessionCookieOptions() {
-    const isProduction =
-      this.configService.get<string>('NODE_ENV') === 'production';
-    return {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: isProduction ? ('none' as const) : ('lax' as const),
-      path: '/',
-    };
-  }
-
-  /**
-   * Verify Supabase token and return user profile.
+   * Verify a Supabase token and return the user, creating them on first sight.
    */
   @Post('verify')
   @HttpCode(HttpStatus.OK)
   async verifyToken(
     @Body() { token }: SupabaseVerifyTokenDto,
-    @Response({ passthrough: true }) res: ExpressResponse,
   ): Promise<SupabaseAuthResponse> {
     const startTime = Date.now();
     let isNewUser = false;
@@ -86,19 +49,13 @@ export class SupabaseAuthController {
     try {
       const supabaseUser = await this.supabaseService.verifyToken(token);
 
-      // Check if user exists before getOrCreate to track new signups
+      // Read before getOrCreate, so the log below can say which path this was.
       const existingUser = await this.supabaseService.getUserBySupabaseId(
         supabaseUser.id,
       );
       isNewUser = !existingUser;
 
       const user = await this.supabaseService.getOrCreateUser(supabaseUser);
-
-      // Set HttpOnly session cookie for middleware detection
-      res.cookie('ss_session', '1', {
-        ...this.sessionCookieOptions,
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-      });
 
       const duration = Date.now() - startTime;
       this.logger.log(
@@ -121,75 +78,12 @@ export class SupabaseAuthController {
         `[Signup Analytics] verification failed in ${duration}ms (${isNewUser ? 'new' : 'existing'} user path): ${getErrorMessage(error)}`,
       );
 
-      // Clear session cookie on verification failure
-      res.clearCookie('ss_session', this.sessionCookieOptions);
-
       if (error instanceof HttpException) {
         throw error;
       }
 
       throw new InternalServerErrorException('Failed to verify token');
     }
-  }
-
-  /**
-   * Get user profile using Supabase JWT.
-   */
-  @Get('profile')
-  @UseGuards(SupabaseJwtGuard)
-  async getProfile(
-    @Request() req: AuthenticatedSupabaseRequest,
-  ): Promise<SupabaseAuthResponse> {
-    const user = req.user;
-
-    return {
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        supabaseUserId: user.supabaseUserId,
-        weightUnit: user.weightUnit,
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt,
-      },
-    };
-  }
-
-  /**
-   * Clear session cookie on logout.
-   */
-  @Post('logout')
-  @HttpCode(HttpStatus.OK)
-  async logout(@Response({ passthrough: true }) res: ExpressResponse) {
-    res.clearCookie('ss_session', this.sessionCookieOptions);
-    return { message: 'Logged out successfully' };
-  }
-
-  /**
-   * Migration endpoint for existing users.
-   */
-  @Post('migrate')
-  async migrateUser(
-    @Body() { email, password }: SupabaseMigrationDto,
-  ): Promise<SupabaseMigrationResponse> {
-    const user = await this.databaseService.user.findUnique({
-      where: { email },
-    });
-
-    if (!user?.password) {
-      throw new BadRequestException('Invalid migration credentials');
-    }
-
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
-      throw new BadRequestException('Invalid migration credentials');
-    }
-
-    return {
-      message: 'User validated for migration',
-      userId: user.id,
-      email: user.email,
-    };
   }
 
   /**

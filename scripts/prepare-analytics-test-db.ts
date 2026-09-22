@@ -255,6 +255,15 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260921140000_activity_comments/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// TD-47: drops the pre-Supabase auth storage. The curated chain
+				// above never created those tables, so only the User.password
+				// drop does anything here -- and it must, because the generated
+				// client no longer knows that column.
+				readFileSync(
+					'prisma/migrations/20260922140000_drop_legacy_auth/migration.sql',
+					'utf8',
 				),
     );
     prisma(

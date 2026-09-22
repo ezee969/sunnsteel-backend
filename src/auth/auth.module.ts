@@ -1,11 +1,9 @@
 import { Global, Module } from '@nestjs/common';
-import { JwtModule } from '@nestjs/jwt';
 import { SupabaseJwtStrategy } from './strategies/supabase-jwt.strategy';
 import { SupabaseService } from './supabase.service';
 import { SupabaseAuthController } from './supabase-auth.controller';
 import { SupabaseJwtGuard } from './guards/supabase-jwt.guard';
 import { UsersModule } from '../users/users.module';
-import { TokenModule } from '../token/token.module';
 import { PassportModule } from '@nestjs/passport';
 import { DatabaseModule } from '../database/database.module';
 
@@ -28,9 +26,7 @@ import { DatabaseModule } from '../database/database.module';
 @Module({
   imports: [
     UsersModule,
-    TokenModule, // Still used by legacy AuthService
     PassportModule,
-    JwtModule.register({}),
     DatabaseModule,
   ],
   controllers: [SupabaseAuthController],
