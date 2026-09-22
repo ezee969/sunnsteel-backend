@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import type { IncomingHttpHeaders } from 'node:http';
+import { clientIp } from './common/client-ip';
 import { APP_GUARD } from '@nestjs/core';
 import { AuthModule } from './auth/auth.module';
 import { DatabaseModule } from './database/database.module';
@@ -32,6 +34,16 @@ import { ModerationModule } from './moderation/moderation.module';
         name: 'long',
         ttl: 60000,
         limit: 100,
+        // TD-46. The default tracker is `req.ip`, which behind Railway is a
+        // rotating internal hop rather than the caller -- see `clientIp`. Left
+        // as the default the limit is configured but not enforced.
+        getTracker: (req: Record<string, any>) =>
+          Promise.resolve(
+            clientIp(
+              (req.headers ?? {}) as IncomingHttpHeaders,
+              req.ip as string | undefined,
+            ),
+          ),
       },
     ]),
     AuthModule,

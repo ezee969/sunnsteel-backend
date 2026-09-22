@@ -1,11 +1,19 @@
-import { Controller, Get, Req, ForbiddenException, Res } from '@nestjs/common';
-import { PrometheusMetricsService } from './prometheus-metrics.service';
-import { Request, Response } from 'express';
+import {
+  Controller,
+  ForbiddenException,
+  Get,
+  Req,
+  Res,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { Request, Response } from 'express';
+import { clientIp, normalizeIp } from '../common/client-ip';
+import { PrometheusMetricsService } from './prometheus-metrics.service';
 
 @Controller('metrics')
 export class MetricsController {
   private readonly allowlist: Set<string>;
+
   constructor(
     private readonly prom: PrometheusMetricsService,
     config: ConfigService,
@@ -14,21 +22,18 @@ export class MetricsController {
     this.allowlist = new Set(
       raw
         .split(',')
-        .map((s) => s.trim())
+        .map((entry: string) => normalizeIp(entry.trim()))
         .filter(Boolean),
     );
   }
 
-  private clientIp(req: Request) {
-    // Respect X-Forwarded-For first element if present (behind proxy)
-    const fwd = req.headers['x-forwarded-for'] as string | undefined;
-    if (fwd) return fwd.split(',')[0].trim();
-    return req.ip || req.socket?.remoteAddress || '';
-  }
-
   @Get()
   async scrape(@Req() req: Request, @Res() res: Response) {
-    const ip = this.clientIp(req);
+    // TD-46. This used to read the first `X-Forwarded-For` entry itself. That
+    // is the value a client controls behind an edge that appends rather than
+    // overwrites, and it is the shape of bug that survives a move to another
+    // host unnoticed. `clientIp` is the one place that question is answered.
+    const ip = clientIp(req.headers, req.ip);
     if (this.allowlist.size && !this.allowlist.has(ip)) {
       throw new ForbiddenException('metrics access denied');
     }
