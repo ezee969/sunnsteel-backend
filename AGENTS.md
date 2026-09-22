@@ -51,13 +51,28 @@ Until 2026-09-20 both ran against a single hosted Neon database; that project is
 
 ### Module layout
 
-Feature modules under `src/` (auth, users, token, exercises, routines, schedule, notifications, activity, workouts, metrics, health, common, database). `DatabaseService extends PrismaClient` (`src/database/database.service.ts`) is exported via `DatabaseModule` and injected everywhere Prisma access is needed. Controllers share the `RequestWithUser` type from `src/common/types/request-with-user.ts` rather than redeclaring it.
+Feature modules under `src/` (auth, users, exercises, routines, schedule, notifications, activity, workouts, metrics, health, common, database). `DatabaseService extends PrismaClient` (`src/database/database.service.ts`) is exported via `DatabaseModule` and injected everywhere Prisma access is needed. Controllers share the `RequestWithUser` type from `src/common/types/request-with-user.ts` rather than redeclaring it.
 
 ### Auth (Supabase)
 
 - Supabase Auth issues JWTs; `SupabaseJwtStrategy`/`SupabaseJwtGuard` (`src/auth/strategies`, `src/auth/guards`) validate bearer tokens and sync the user into the local DB.
 - Protect endpoints with `@UseGuards(SupabaseJwtGuard)`.
-- `POST /auth/supabase/verify` (`src/auth/supabase-auth.controller.ts`) sets an HttpOnly `ss_session=1` cookie that the frontend middleware uses for route protection — it's a marker cookie, not the actual session.
+- `POST /auth/supabase/verify` (`src/auth/supabase-auth.controller.ts`) verifies a token and creates the account on first sight. **It sets no cookie.** The
+  `ss_session=1` marker the frontend middleware reads is the frontend's own,
+  set same-origin by its `/api/session` route: a cookie in this service's
+  response is scoped to this service's domain, which is a third party to the
+  app, so it was never sent back and middleware never saw it. This file said
+  the opposite until 2026-09-22. Do not add one here again.
+- **Supabase is the whole of authentication.** TD-47 retired what sat beside
+  it: `TokenModule`/`TokenService` and `@nestjs/jwt` (no callers, plus a cron
+  clearing a table with no writer), `POST /auth/supabase/migrate` (unguarded,
+  took email and password and returned the account id on a match — a
+  credential-testing oracle), `GET /auth/supabase/profile`, `POST
+  /auth/supabase/logout`, `UsersService.create`, `findByEmailWithPassword`,
+  `bcrypt`, and the `RefreshToken`/`BlacklistedToken` tables with
+  `User.password` (migration `20260922140000_drop_legacy_auth`; production had
+  0 accounts with a password when it ran). There is no password path left —
+  do not reintroduce one without a product decision.
 
 ### Workouts module — service decomposition
 
