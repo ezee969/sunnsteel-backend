@@ -56,16 +56,31 @@ export class MemberReportsService {
     kind: CreateReportRequest['subjectKind'],
     subjectId: string,
   ): Promise<void> {
-    const found =
-      kind === 'MEMBER'
-        ? await this.db.user.count({
-            where: {
-              OR: [{ id: subjectId }, { username: subjectId.toLowerCase() }],
-            },
-          })
-        : kind === 'ROUTINE'
-          ? await this.db.routine.count({ where: { id: subjectId } })
-          : await this.db.sessionShare.count({ where: { token: subjectId } });
+    // A switch rather than a chain of ternaries: the previous shape had an
+    // unnamed final branch, so SOC-06's `COMMENT` silently fell through to the
+    // session-share lookup and every comment report answered 404. A switch
+    // over the union makes the compiler name the next kind that is added.
+    const found = await this.countSubject(kind, subjectId);
     if (!found) throw new NotFoundException('Subject not found');
+  }
+
+  private countSubject(
+    kind: CreateReportRequest['subjectKind'],
+    subjectId: string,
+  ): Promise<number> {
+    switch (kind) {
+      case 'MEMBER':
+        return this.db.user.count({
+          where: {
+            OR: [{ id: subjectId }, { username: subjectId.toLowerCase() }],
+          },
+        });
+      case 'ROUTINE':
+        return this.db.routine.count({ where: { id: subjectId } });
+      case 'SESSION':
+        return this.db.sessionShare.count({ where: { token: subjectId } });
+      case 'COMMENT':
+        return this.db.activityComment.count({ where: { id: subjectId } });
+    }
   }
 }
