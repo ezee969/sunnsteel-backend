@@ -94,6 +94,14 @@ export function toAppNotification(
           isFollowedByMe: followedIds.has(row.actor.id),
         },
       };
+    case 'ACTIVITY_COMMENT': {
+      // SOC-06. No `isFollowedByMe`: a comment is not an invitation to follow
+      // anyone, and the row carries no body, because it outlives the comment
+      // it announces.
+      const entryId = typeof payload.entryId === 'string' ? payload.entryId : '';
+      if (!row.actor || !entryId) return null;
+      return { ...base, kind: 'ACTIVITY_COMMENT', actor: row.actor, entryId };
+    }
     default:
       return null;
   }
@@ -101,7 +109,7 @@ export function toAppNotification(
 
 /**
  * NOTIF-01: the in-app notification center. Reading the list first gathers
- * new notifications from training events and follows of the last
+ * new notifications from training events, follows and SOC-06 comments of the last
  * `NOTIFICATIONS_LOOKBACK_DAYS` (idempotent, keyed by source) and drops those
  * past `NOTIFICATIONS_RETENTION_DAYS`, so no write path elsewhere needs to
  * know notifications exist.
@@ -157,7 +165,7 @@ export class NotificationsService {
 
   private async gather(userId: string, now: Date) {
     const since = lookbackStart(now);
-    const [events, follows] = await Promise.all([
+    const [events, follows, comments] = await Promise.all([
       this.db.trainingEvent.findMany({
         where: {
           userId,
@@ -169,6 +177,23 @@ export class NotificationsService {
       this.db.userFollow.findMany({
         where: { followingId: userId, createdAt: { gte: since } },
         select: { followerId: true, createdAt: true },
+      }),
+      // SOC-06: comments on this member's own activity. A comment they wrote
+      // themselves is not news, and a comment a moderator hid is announced to
+      // nobody -- the notification would be the one place it stayed visible.
+      this.db.activityComment.findMany({
+        where: {
+          authorId: userId,
+          userId: { not: userId },
+          moderationHiddenAt: null,
+          createdAt: { gte: since },
+        },
+        select: {
+          id: true,
+          entryKey: true,
+          userId: true,
+          createdAt: true,
+        },
       }),
     ]);
     const sessionIds = [
@@ -189,6 +214,7 @@ export class NotificationsService {
     const drafts = gatherNotifications({
       events,
       follows,
+      comments,
       sessions: sessions.map((session) => {
         const snapshot = session.snapshot
           ? readSnapshot(session.snapshot.payload)

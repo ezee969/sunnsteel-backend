@@ -1,12 +1,23 @@
 import {
   BadRequestException,
+  HttpException,
+  HttpStatus,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
+  ACTIVITY_COMMENT_MAX_LENGTH,
+  ACTIVITY_COMMENTS_PER_DAY_MAX,
   ACTIVITY_DEFAULT_AUDIENCE,
   ACTIVITY_FEED_FOLLOWED_MAX,
+  type ActivityComment,
+  type ActivityCommentsQuery,
+  type ActivityCommentsResponse,
+  type ActivityCommentSummary,
+  type CreateActivityCommentRequest,
+  type CreateActivityCommentResponse,
+  type DeleteActivityCommentResponse,
   ACTIVITY_PAGE_DEFAULT_LIMIT,
   ACTIVITY_PAGE_MAX_LIMIT,
   ACTIVITY_TYPES,
@@ -74,6 +85,13 @@ import {
   type AuthorActivityPlan,
   type AuthorSharingChoices,
   type EventActivityType,
+  canDeleteComment,
+  commentPageSize,
+  decodeCommentCursor,
+  emptyCommentSummary,
+  encodeCommentCursor,
+  normalizeCommentBody,
+  summarizeComments,
 } from './activity-rules';
 
 const AUTHOR_SELECT = {
@@ -170,6 +188,69 @@ const isEventType = (type: ActivityType): type is EventActivityType =>
  * never through an injected service, so no wiring mistake can make it fail
  * open.
  */
+/** SOC-06: one comment row as every read of it needs. */
+const COMMENT_SELECT = {
+  id: true,
+  entryKey: true,
+  userId: true,
+  authorId: true,
+  body: true,
+  createdAt: true,
+  user: {
+    select: {
+      id: true,
+      username: true,
+      name: true,
+      lastName: true,
+      avatarUrl: true,
+    },
+  },
+} as const;
+
+type CommentRow = {
+  id: string;
+  entryKey: string;
+  userId: string;
+  authorId: string;
+  body: string;
+  createdAt: Date;
+  user: {
+    id: string;
+    username: string | null;
+    name: string;
+    lastName: string | null;
+    avatarUrl: string | null;
+  };
+};
+
+/**
+ * `canDelete` is resolved here rather than in the client, for the reason every
+ * SOC-03 link is: the server decides what a viewer may do, and a control the
+ * server would refuse must never be rendered.
+ */
+function toActivityComment(
+  row: CommentRow,
+  viewer: { viewerId: string; authorId: string },
+): ActivityComment {
+  return {
+    id: row.id,
+    entryId: row.entryKey,
+    author: {
+      id: row.user.id,
+      username: row.user.username ?? '',
+      name: row.user.name,
+      lastName: row.user.lastName,
+      avatarUrl: row.user.avatarUrl,
+    },
+    body: row.body,
+    createdAt: row.createdAt.toISOString(),
+    canDelete: canDeleteComment(
+      { userId: row.userId, authorId: row.authorId },
+      viewer.viewerId,
+    ),
+  };
+}
+
 @Injectable()
 export class ActivityService {
   constructor(private readonly db: DatabaseService) {}
@@ -581,13 +662,16 @@ export class ActivityService {
         ? [{ entry, type: entry.type, userId: event.userId }]
         : [];
     });
-    const reactions = await this.readReactions(
-      entries.map((read) => read.entry.id),
-      viewerId,
-    );
+    const entryIds = entries.map((read) => read.entry.id);
+    const [reactions, comments] = await Promise.all([
+      this.readReactions(entryIds, viewerId),
+      this.readCommentSummaries(entryIds, viewerId),
+    ]);
     for (const read of entries) {
       read.entry.reactions =
         reactions.get(read.entry.id) ?? emptyReactionSummary();
+      read.entry.comments =
+        comments.get(read.entry.id) ?? emptyCommentSummary();
     }
     return {
       entries,
@@ -626,6 +710,222 @@ export class ActivityService {
     return new Map(
       [...byEntry].map(([key, list]) => [key, summarizeReactions(list, viewerId)]),
     );
+  }
+
+  /**
+   * SOC-06. One query for the page, mirroring `readReactions`. Both sides of a
+   * block and every moderator-hidden comment are excluded, so the count always
+   * matches what a read of the list returns for this viewer -- a count that
+   * disagreed would advertise a comment they cannot open.
+   *
+   * The viewer's own budget is read once for the whole page rather than per
+   * entry: it is the same number on every row.
+   */
+  private async readCommentSummaries(
+    entryKeys: string[],
+    viewerId: string,
+  ): Promise<Map<string, ActivityCommentSummary>> {
+    if (entryKeys.length === 0) return new Map();
+    const [rows, hiddenIds, commentsToday] = await Promise.all([
+      this.db.activityComment.findMany({
+        where: { entryKey: { in: entryKeys }, moderationHiddenAt: null },
+        select: { entryKey: true, userId: true },
+      }),
+      hiddenFromViewer(this.db, viewerId),
+      this.commentsToday(viewerId),
+    ]);
+    const hidden = new Set(hiddenIds);
+    const counts = new Map<string, number>();
+    for (const row of rows) {
+      if (hidden.has(row.userId)) continue;
+      counts.set(row.entryKey, (counts.get(row.entryKey) ?? 0) + 1);
+    }
+    return new Map(
+      entryKeys.map((key) => [
+        key,
+        summarizeComments(counts.get(key) ?? 0, { commentsToday }),
+      ]),
+    );
+  }
+
+  /** How many comments this account has written in the last 24 hours. */
+  private async commentsToday(viewerId: string): Promise<number> {
+    return this.db.activityComment.count({
+      where: {
+        userId: viewerId,
+        createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+      },
+    });
+  }
+
+  /**
+   * SOC-06. The entry gate, reused rather than restated: the same resolution a
+   * reaction goes through decides whether this viewer may read or write a
+   * comment. A viewer who may not see the entry gets **404**, never 403, which
+   * would confirm it exists.
+   *
+   * Returns the entry's author id, because every caller needs it: the list
+   * read to resolve `canDelete`, the write to store it beside the comment.
+   *
+   * Unlike a reaction, the owner is allowed through: replying on your own
+   * activity is ordinary, where acknowledging your own work is not.
+   */
+  private async resolveCommentableEntry(
+    viewerId: string,
+    entryId: string,
+  ): Promise<string> {
+    const authorId = await this.resolveEntryAuthor(entryId);
+    if (!authorId) throw new NotFoundException('Activity entry not found');
+    const isOwner = authorId === viewerId;
+    const [row, hidden] = await Promise.all([
+      this.db.user.findUnique({
+        where: { id: authorId },
+        select: AUTHOR_SELECT,
+      }),
+      isOwner
+        ? Promise.resolve(false)
+        : isHiddenFromViewer(this.db, viewerId, authorId),
+    ]);
+    if (!row || hidden) throw new NotFoundException('Activity entry not found');
+    const isFollower =
+      !isOwner &&
+      Boolean(
+        await this.db.userFollow.findUnique({
+          where: {
+            followerId_followingId: {
+              followerId: viewerId,
+              followingId: authorId,
+            },
+          },
+          select: { followerId: true },
+        }),
+      );
+    const [author] = await this.loadAuthors([
+      { row, context: { isOwner, isFollower } },
+    ]);
+    const visible = await this.isEntryVisible(author, entryId);
+    if (!visible) throw new NotFoundException('Activity entry not found');
+    return authorId;
+  }
+
+  /** One entry's comments, oldest first. Paged by `(createdAt, id)`. */
+  async listComments(
+    viewerId: string,
+    query: ActivityCommentsQuery,
+  ): Promise<ActivityCommentsResponse> {
+    const authorId = await this.resolveCommentableEntry(viewerId, query.entryId);
+    const take = commentPageSize(query.limit);
+    const cursor = decodeCommentCursor(query.cursor);
+    const hiddenIds = await hiddenFromViewer(this.db, viewerId);
+
+    const rows = await this.db.activityComment.findMany({
+      where: {
+        entryKey: query.entryId,
+        ...(hiddenIds.length ? { userId: { notIn: hiddenIds } } : {}),
+        AND: [
+          // A moderator-hidden comment is gone for everyone but the member who
+          // wrote it, the same narrowing TRUST-04 applies to a routine.
+          { OR: [{ moderationHiddenAt: null }, { userId: viewerId }] },
+          ...(cursor
+            ? [
+                {
+                  OR: [
+                    { createdAt: { gt: cursor.at } },
+                    { createdAt: cursor.at, id: { gt: cursor.id } },
+                  ],
+                },
+              ]
+            : []),
+        ],
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: take + 1,
+      select: COMMENT_SELECT,
+    });
+
+    const page = rows.slice(0, take);
+    const last = page.at(-1);
+    const summaries = await this.readCommentSummaries([query.entryId], viewerId);
+    return {
+      entryId: query.entryId,
+      comments: page.map((row) => toActivityComment(row, { viewerId, authorId })),
+      nextCursor:
+        rows.length > take && last
+          ? encodeCommentCursor({ at: last.createdAt, id: last.id })
+          : null,
+      summary: summaries.get(query.entryId) ?? emptyCommentSummary(),
+    };
+  }
+
+  /**
+   * SOC-06. Anyone who may read the entry may comment on it: there is no
+   * second permission, because a separate rule is a second answer to "may this
+   * viewer see this entry", and the one that drifts is the one nobody looks at.
+   */
+  async createComment(
+    viewerId: string,
+    request: CreateActivityCommentRequest,
+  ): Promise<CreateActivityCommentResponse> {
+    const authorId = await this.resolveCommentableEntry(
+      viewerId,
+      request.entryId,
+    );
+    const body = normalizeCommentBody(request.body);
+    if (!body) {
+      throw new BadRequestException(
+        `A comment must not be empty and may be at most ${ACTIVITY_COMMENT_MAX_LENGTH} characters.`,
+      );
+    }
+    if ((await this.commentsToday(viewerId)) >= ACTIVITY_COMMENTS_PER_DAY_MAX) {
+      throw new HttpException(
+        `You can write at most ${ACTIVITY_COMMENTS_PER_DAY_MAX} comments a day.`,
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    const created = await this.db.activityComment.create({
+      data: { entryKey: request.entryId, userId: viewerId, authorId, body },
+      select: COMMENT_SELECT,
+    });
+    const summaries = await this.readCommentSummaries(
+      [request.entryId],
+      viewerId,
+    );
+    return {
+      comment: toActivityComment(created, { viewerId, authorId }),
+      summary: summaries.get(request.entryId) ?? emptyCommentSummary(),
+    };
+  }
+
+  /**
+   * Two people may delete a comment: its author, and the owner of the activity
+   * it hangs from. A moderator is not one of them -- `TRUST-04` hides rather
+   * than deletes, so the enforcement record stays the only account of what a
+   * moderator did and nothing they touch is destroyed.
+   *
+   * A comment this viewer may not delete answers 404 rather than 403, so the
+   * refusal cannot be used to learn that it exists.
+   */
+  async deleteComment(
+    viewerId: string,
+    commentId: string,
+  ): Promise<DeleteActivityCommentResponse> {
+    const comment = await this.db.activityComment.findUnique({
+      where: { id: commentId },
+      select: { id: true, entryKey: true, userId: true, authorId: true },
+    });
+    if (!comment || !canDeleteComment(comment, viewerId)) {
+      throw new NotFoundException('Comment not found');
+    }
+    await this.db.activityComment.delete({ where: { id: comment.id } });
+    const summaries = await this.readCommentSummaries(
+      [comment.entryKey],
+      viewerId,
+    );
+    return {
+      entryId: comment.entryKey,
+      summary: summaries.get(comment.entryKey) ?? emptyCommentSummary(),
+    };
   }
 
   private async readEvents(

@@ -172,6 +172,9 @@ function fakeDb(rows: Row[], follows: any[] = []) {
       findMany: async (query: any) =>
         query.where.followingId === 'u1' ? follows : [],
     },
+    // SOC-06: stated explicitly rather than defaulted, so a comment source
+    // that should announce something can never pass by being absent here.
+    activityComment: { findMany: async () => [] },
     notification: {
       createMany: async (query: any) => {
         let count = 0;

@@ -21,6 +21,7 @@ import {
 } from '@sunsteel/contracts';
 import { DatabaseService } from '../database/database.service';
 import { canViewRoutine } from '../routines/routine-visibility';
+import { isHiddenFromViewer } from '../users/member-blocks';
 import {
   clampPageSize,
   decodeQueueCursor,
@@ -321,6 +322,13 @@ export class ModerationService {
       });
       return;
     }
+    if (kind === 'COMMENT') {
+      await tx.activityComment.update({
+        where: { id: subjectId },
+        data: { moderationHiddenAt: hiddenAt },
+      });
+      return;
+    }
     const { count } = await tx.sessionShare.updateMany({
       where: { token: subjectId },
       data: { moderationHiddenAt: hiddenAt },
@@ -448,6 +456,42 @@ export class ModerationService {
           { isOwner, isFollower },
           routine,
         ),
+      };
+    }
+
+    if (kind === 'COMMENT') {
+      const comment = await this.db.activityComment.findUnique({
+        where: { id: reportedId },
+        select: {
+          id: true,
+          body: true,
+          moderationHiddenAt: true,
+          user: { select: MEMBER_SELECT },
+        },
+      });
+      if (!comment) return missing;
+      const isOwner = comment.user.id === moderatorId;
+      // SOC-06. A comment is readable to a reviewer when they could reach it
+      // where it lives, which is the activity entry behind it -- and that
+      // read is `ActivityService`'s, not this module's. Rather than build a
+      // second answer to the same question here, the reviewer is shown the
+      // comment only when nothing has hidden it: its own hide, or a block
+      // either way with the member who wrote it. The entry's own audience is
+      // settled where the reviewer opens it.
+      const blocked = isOwner
+        ? false
+        : await isHiddenFromViewer(this.db, moderatorId, comment.user.id);
+      const readable = isOwner || (!comment.moderationHiddenAt && !blocked);
+      return {
+        kind,
+        resolvedId: comment.id,
+        ownerId: comment.user.id,
+        // The body is the content, so it is the title: a moderator reviewing
+        // a reported comment needs to read the words to decide anything.
+        title: comment.body,
+        isHidden: comment.moderationHiddenAt !== null,
+        owner: comment.user,
+        readable,
       };
     }
 

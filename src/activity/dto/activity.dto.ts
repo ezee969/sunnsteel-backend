@@ -12,12 +12,16 @@ import {
   ValidateIf,
 } from 'class-validator';
 import {
+  ACTIVITY_COMMENT_MAX_LENGTH,
+  ACTIVITY_COMMENTS_PAGE_SIZE,
   ACTIVITY_ENTRY_ID_MAX_LENGTH,
   ACTIVITY_PAGE_MAX_LIMIT,
   ACTIVITY_PREVIEW_AUDIENCES,
   ACTIVITY_REACTIONS,
   PROFILE_VISIBILITY_VALUES,
   type ActivityAudience,
+  type ActivityCommentsQuery,
+  type CreateActivityCommentRequest,
   type ActivityPageQuery,
   type ActivityPreviewAudience,
   type ActivityPreviewQuery,
@@ -83,4 +87,41 @@ export class SetActivityReactionDto implements SetActivityReactionRequest {
   @ValidateIf((_, value) => value !== null)
   @IsIn(ACTIVITY_REACTIONS as unknown as string[])
   reaction!: ActivityReaction | null;
+}
+
+/** SOC-06: one entry's comments, paged. */
+export class ActivityCommentsQueryDto implements ActivityCommentsQuery {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(ACTIVITY_ENTRY_ID_MAX_LENGTH)
+  entryId!: string;
+
+  @IsOptional()
+  @IsString()
+  cursor?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(ACTIVITY_COMMENTS_PAGE_SIZE)
+  limit?: number;
+}
+
+/**
+ * The length cap is checked here and again in `normalizeCommentBody`, which
+ * trims first: a body of only whitespace passes `MinLength(1)` and is still
+ * nothing to store, and one that is exactly at the cap before trimming is
+ * within it after.
+ */
+export class CreateActivityCommentDto implements CreateActivityCommentRequest {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(ACTIVITY_ENTRY_ID_MAX_LENGTH)
+  entryId!: string;
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(ACTIVITY_COMMENT_MAX_LENGTH)
+  body!: string;
 }

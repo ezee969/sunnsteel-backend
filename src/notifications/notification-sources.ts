@@ -25,6 +25,22 @@ export interface SourceFollow {
   createdAt: Date;
 }
 
+/**
+ * SOC-06. Unlike every other source this is a row rather than a training
+ * event, and the first one another member causes on purpose.
+ *
+ * The body is deliberately absent. A notification row outlives what it
+ * describes -- the comment can be deleted by its author, by the recipient, or
+ * hidden by a moderator -- so quoting the text would leave a copy none of the
+ * three could withdraw. The row names who wrote it and which entry.
+ */
+export interface SourceComment {
+  id: string;
+  entryKey: string;
+  userId: string;
+  createdAt: Date;
+}
+
 export interface SourceSession {
   id: string;
   status: string;
@@ -61,10 +77,12 @@ export function gatherNotifications({
   events,
   follows,
   sessions,
+  comments = [],
 }: {
   events: SourceEvent[];
   follows: SourceFollow[];
   sessions: SourceSession[];
+  comments?: SourceComment[];
 }): NotificationDraft[] {
   const drafts: NotificationDraft[] = [];
   const progress = new Map<string, { records: number; progressions: number }>();
@@ -132,6 +150,20 @@ export function gatherNotifications({
       actorId: follow.followerId,
       sessionId: null,
       payload: {},
+    });
+  }
+
+  for (const comment of comments) {
+    // Keyed by the comment's own id, so one comment is announced once and a
+    // deleted-then-rewritten comment is a new row rather than a silent repeat
+    // of the old key.
+    drafts.push({
+      kind: 'ACTIVITY_COMMENT',
+      sourceKey: `comment:${comment.id}`,
+      createdAt: comment.createdAt,
+      actorId: comment.userId,
+      sessionId: null,
+      payload: { entryId: comment.entryKey },
     });
   }
   return drafts;

@@ -1,8 +1,11 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
+  ParseUUIDPipe,
+  Post,
   Put,
   Query,
   Request,
@@ -12,8 +15,10 @@ import { SupabaseJwtGuard } from '../auth/guards/supabase-jwt.guard';
 import type { RequestWithUser } from '../common/types/request-with-user';
 import { ActivityService } from './activity.service';
 import {
+  ActivityCommentsQueryDto,
   ActivityPageQueryDto,
   ActivityPreviewQueryDto,
+  CreateActivityCommentDto,
   SetActivityEntryAudienceDto,
   SetActivityReactionDto,
   UpdateActivitySharingDto,
@@ -83,5 +88,33 @@ export class ActivityController {
     @Body() dto: SetActivityEntryAudienceDto,
   ) {
     return this.activity.setEntryAudience(req.user.id, dto);
+  }
+
+  /**
+   * SOC-06. All three go through the same entry resolution a reaction does, so
+   * an entry the viewer may not see answers 404 from every one of them.
+   */
+  @Get('entries/comments')
+  listComments(
+    @Request() req: RequestWithUser,
+    @Query() query: ActivityCommentsQueryDto,
+  ) {
+    return this.activity.listComments(req.user.id, query);
+  }
+
+  @Post('entries/comments')
+  createComment(
+    @Request() req: RequestWithUser,
+    @Body() dto: CreateActivityCommentDto,
+  ) {
+    return this.activity.createComment(req.user.id, dto);
+  }
+
+  @Delete('entries/comments/:id')
+  deleteComment(
+    @Request() req: RequestWithUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.activity.deleteComment(req.user.id, id);
   }
 }
