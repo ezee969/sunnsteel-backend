@@ -19,7 +19,7 @@ NestJS + Prisma backend for Sunnsteel (workout/routine tracking). Runs on Window
 - Seed DB / load exercises: `npm run db:seed` (alias `npm run db:add-exercises`) — both run `prisma/add-exercises.ts`, the idempotent exercise-catalog loader. This is also the `prisma migrate reset`/`migrate dev` seed hook.
 - Get a Supabase token for manual API testing: `npm run token:supabase`
 
-`npm test` runs the Node test runner via the existing ts-node dependency. It currently covers 321 tests across forty-one script files, including dashboard statistics, projected progress, strength trends, exercise-performance history, muscle-group heatmaps, volume trends, session comparison, progress timelines, measurable personal goals, milestone achievements, comeback recognition, session recap/recovery, live records, progression, profile privacy/discovery, profile achievement ledgers and featured accomplishments, relationship lists/suggestions, session sharing, exercise substitutions, routine versions, schedule overrides, notifications, push delivery and rest alerts, notification controls, training-reminder planning and streak-at-risk evidence, routine-sharing visibility rules, routine cloning and lineage, routine discovery facets and filters, activity visibility, links, tie-safe pagination and themed reactions, member blocks, moderation review state and the shared member-visibility helpers, activity-comment rules and their notification source, the exercise catalog and training locations; it is included in `npm run verify`.
+`npm test` runs the Node test runner via the existing ts-node dependency. It currently covers 331 tests across forty-two script files, including dashboard statistics, projected progress, strength trends, exercise-performance history, muscle-group heatmaps, volume trends, session comparison, progress timelines, measurable personal goals, milestone achievements, comeback recognition, session recap/recovery, live records, progression, profile privacy/discovery, profile achievement ledgers and featured accomplishments, relationship lists/suggestions, session sharing, exercise substitutions, routine versions, schedule overrides, notifications, push delivery and rest alerts, notification controls, training-reminder planning and streak-at-risk evidence, routine-sharing visibility rules, routine cloning and lineage, routine discovery facets and filters, activity visibility, links, tie-safe pagination and themed reactions, member blocks, moderation review state and the shared member-visibility helpers, activity-comment rules and their notification source, caller-address derivation behind the proxy, the exercise catalog and training locations; it is included in `npm run verify`.
 
 ## Database
 
@@ -155,8 +155,23 @@ DTOs/enums are sourced from the published `@sunsteel/contracts` package rather t
 - `src/main.ts` polyfills `globalThis.crypto` via Node's `webcrypto` — this must stay as the very first thing in the file (before other imports run).
 - Global route prefix is `api`; CORS origin comes from `FRONTEND_URL` env var (fallback `http://localhost:3000`).
 - Global `ValidationPipe` has `transform: true` + implicit conversion, `whitelist: true`, `forbidNonWhitelisted: true` — DTO property types matter, and unknown request fields are rejected rather than ignored.
-- Global rate limiting via `ThrottlerGuard` (`src/app.module.ts`).
-- Built-in endpoints: `GET /health`, `GET /metrics` (Prometheus, IP-allowlisted).
+- Global rate limiting via `ThrottlerGuard` (`src/app.module.ts`), keyed on
+  the caller through `clientIp` ([src/common/client-ip.ts](src/common/client-ip.ts)) rather than the
+  default `req.ip`. **Anything that needs the caller's address asks that
+  function.** Behind Railway's edge `req.ip` is an internal hop that *rotates*
+  between requests (measured 2026-09-22: `100.64.0.2` through `100.64.0.8` for
+  one client), so keying on it spread a single caller across buckets and the
+  limit was never reached. `clientIp` reads `X-Real-IP`, which that edge sets
+  per request and **overwrites rather than appends**, so a client cannot supply
+  it; off Railway the header is absent and the connection address is used.
+  That trust is a property of Railway's edge, not of the header -- on a host
+  that appends, the value becomes client-controlled. Do not reintroduce
+  hand-parsing of `X-Forwarded-For`, and do not swap this for a `trust proxy`
+  hop count: a count is a guess about topology that fails silently when a hop
+  is added or removed (TD-46).
+- Built-in endpoints: `GET /health`, `GET /metrics` (Prometheus, IP-allowlisted
+  through the same `clientIp`; `METRICS_IP_ALLOWLIST` is unset in production, so
+  the list is `127.0.0.1,::1` and no external caller can match it).
 
 ## Closing a slice
 
