@@ -31,7 +31,7 @@
     "test": "node -r ts-node/register --test scripts/workout-stats.test.ts scripts/workout-progress.test.ts scripts/workout-previous-performance.test.ts scripts/workout-session-recovery.test.ts scripts/live-personal-records.test.ts scripts/progression-changes.test.ts scripts/session-recap.test.ts scripts/analytics-logic.test.ts scripts/analytics-read.test.ts scripts/strength-trends.test.ts scripts/exercise-performance-history.test.ts scripts/muscle-group-heatmap.test.ts scripts/volume-trends.test.ts scripts/session-comparison.test.ts scripts/progress-timeline.test.ts scripts/measurable-goals.test.ts scripts/plateaus.test.ts scripts/routine-schedule.test.ts scripts/achievements.test.ts scripts/training-location-preferences.test.ts scripts/usernames.test.ts scripts/profile-privacy.test.ts scripts/featured-profile-items.test.ts scripts/relationship-lists.test.ts scripts/session-shares.test.ts scripts/exercise-catalog.test.ts scripts/exercise-stars.test.ts scripts/session-substitutions.test.ts scripts/routine-versions.test.ts scripts/schedule-overrides.test.ts scripts/notifications.test.ts scripts/push-delivery.test.ts scripts/training-reminders.test.ts scripts/routine-sharing.test.ts scripts/routine-cloning.test.ts scripts/member-blocks.test.ts scripts/routine-lineage.test.ts scripts/routine-discovery.test.ts scripts/activity.test.ts scripts/activity-comments.test.ts scripts/training-partners.test.ts scripts/moderation.test.ts scripts/client-ip.test.ts scripts/supabase-auth.test.ts scripts/account-deletion.test.ts",
     "verify": "npm run lint && npm run typecheck && npm test && npm run build && npm run test:build",
     "verify:security": "npm audit --omit=dev",
-    "test:analytics:integration": "node -r ts-node/register --test scripts/analytics-integration.test.ts && node -r ts-node/register --test scripts/account-deletion.integration.test.ts",
+    "test:analytics:integration": "node -r ts-node/register --test scripts/analytics-integration.test.ts && node -r ts-node/register --test --test-concurrency=1 scripts/account-deletion.integration.test.ts scripts/account-export.integration.test.ts",
     "analytics": "node -r ts-node/register scripts/workout-analytics.ts",
     "test:analytics:prepare": "node -r ts-node/register scripts/prepare-analytics-test-db.ts",
     "test:build": "node scripts/check-build.cjs"
@@ -46,7 +46,7 @@
     "@nestjs/schedule": "^5.0.1",
     "@nestjs/throttler": "^6.4.0",
     "@prisma/client": "^6.0.0",
-    "@sunsteel/contracts": "^0.60.0",
+    "@sunsteel/contracts": "^0.61.0",
     "@supabase/supabase-js": "^2.39.8",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",

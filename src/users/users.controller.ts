@@ -1,4 +1,5 @@
-import { Put } from '@nestjs/common';
+import { Header, Put } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AnalyticsService } from '../workouts/analytics/analytics.service';
 import { SetAccountTimeZoneDto } from './dto/set-account-time-zone.dto';
 // Utility
@@ -41,6 +42,7 @@ import { UpdateTrainingPartnerPermissionsDto } from './dto/update-training-partn
 import { TrainingPartnersService } from './training-partners.service';
 import { SendTrainingPartnerEncouragementDto } from './dto/send-training-partner-encouragement.dto';
 import { AccountDeletionService } from './account-deletion.service';
+import { AccountExportService } from './account-export.service';
 import { DeleteAccountDto } from './dto/delete-account.dto';
 
 @UseGuards(SupabaseJwtGuard)
@@ -58,7 +60,20 @@ export class UsersController {
     private readonly blocks: MemberBlocksService,
     private readonly trainingPartners: TrainingPartnersService,
     private readonly accountDeletion: AccountDeletionService,
+    private readonly accountExport: AccountExportService,
   ) {}
+
+  /**
+   * EXPORT-01: everything the caller owns, as one JSON document. It reads
+   * the whole account, so it is limited to five a ten-minute window; the file
+   * carries personal data, so nothing may cache it.
+   */
+  @Get('me/export')
+  @Throttle({ long: { limit: 5, ttl: 600_000 } })
+  @Header('Cache-Control', 'no-store')
+  exportAccount(@Request() req: RequestWithUser) {
+    return this.accountExport.exportAccount(req.user.id);
+  }
 
   /** TRUST-01: delete the caller's account, immediately and completely. */
   @Delete('me')

@@ -17,6 +17,7 @@ import { RoutinesModule } from '../routines/routines.module';
 import { TrainingPartnersService } from './training-partners.service';
 
 import { AccountDeletionService } from './account-deletion.service';
+import { AccountExportService } from './account-export.service';
 @Module({
   imports: [
     AnalyticsModule,
@@ -36,6 +37,7 @@ import { AccountDeletionService } from './account-deletion.service';
     MemberReportsService,
     TrainingPartnersService,
     AccountDeletionService,
+    AccountExportService,
     DatabaseService,
   ],
   exports: [UsersService],
