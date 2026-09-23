@@ -14,6 +14,7 @@ import { DatabaseService } from '../src/database/database.service'
 import { UserRelationshipsService } from '../src/users/user-relationships.service'
 import { FeaturedProfileItemsService } from '../src/users/featured-profile-items.service'
 import { UsersService } from '../src/users/users.service'
+import { ActivityService } from '../src/activity/activity.service'
 import {
 	SeedSession,
 	rebuildAnalytics,
@@ -636,6 +637,10 @@ async function seedPeerProfile(
 			referenceId: exerciseIdByName.get(name)!,
 		})),
 	)
+	// Through the real service too, which validates each kind and audience.
+	await new ActivityService(prisma).updateSharing(peerId, {
+		defaults: profile.activity,
+	})
 
 	return { sessions, setLogs }
 }
@@ -746,6 +751,15 @@ async function verify(ownerId: string): Promise<void> {
 		if (!member.personalRecords?.length)
 			problems.push(`${peer.handle} shows no personal records to the owner`)
 	}
+
+	// SOC-03/DASH-08: the owner's feed, read as the owner would read it.
+	const feed = await new ActivityService(prisma).feed(ownerId, {})
+	const authors = new Set(feed.entries.map((entry) => entry.author.username))
+	console.log(
+		`
+Activity feed : ${feed.entries.length} entries from ${[...authors].join(', ') || '(nobody)'}`,
+	)
+	if (!feed.entries.length) problems.push('the owner activity feed is empty')
 
 	if (problems.length) {
 		throw new Error(`Verification failed:\n  - ${problems.join('\n  - ')}`)

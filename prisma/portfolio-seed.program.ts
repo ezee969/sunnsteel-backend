@@ -1,4 +1,5 @@
 import {
+	ActivityType,
 	PreferredTrainingStyle,
 	ProfileVisibility,
 	ProgressionScheme,
@@ -433,6 +434,12 @@ export interface PeerProfileSpec {
 	strength: number
 	/** Exercise names whose records the peer features on their profile. */
 	featuredRecords: string[]
+	/**
+	 * SOC-04 defaults. Every kind starts at Only me, so without these the
+	 * Activity feed and the dashboard preview (DASH-08) are empty. The profile
+	 * section still caps each one.
+	 */
+	activity: Partial<Record<ActivityType, ProfileVisibility>>
 }
 
 export interface PeerSpec {
@@ -473,6 +480,11 @@ export const PEERS: PeerSpec[] = [
 			dows: [2, 5],
 			strength: 0.8,
 			featuredRecords: ['Deadlift', 'Squat'],
+			activity: {
+				SESSION_COMPLETED: PUBLIC,
+				PERSONAL_RECORD: PUBLIC,
+				PROGRESSION_CHANGED: FOLLOWERS,
+			},
 		},
 	},
 	{
@@ -502,6 +514,7 @@ export const PEERS: PeerSpec[] = [
 			dows: [1, 4],
 			strength: 1.05,
 			featuredRecords: ['Bench Press'],
+			activity: { SESSION_COMPLETED: FOLLOWERS, PERSONAL_RECORD: FOLLOWERS },
 		},
 	},
 	{
@@ -531,6 +544,9 @@ export const PEERS: PeerSpec[] = [
 			dows: [3, 6],
 			strength: 0.65,
 			featuredRecords: ['Front Squat'],
+			// Records only: her sessions stay private, so the feed shows a record
+			// without the workout it came from.
+			activity: { PERSONAL_RECORD: PUBLIC },
 		},
 	},
 	{ handle: 'ken-watanabe', name: 'Ken', lastName: 'Watanabe' },
