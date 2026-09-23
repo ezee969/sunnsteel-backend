@@ -6,14 +6,15 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
-  createClient,
-  SupabaseClient,
-  User as SupabaseUser,
-} from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Prisma } from '@prisma/client';
 import { DatabaseService } from '../database/database.service';
 import { createInitialUsername } from '../users/username';
+import {
+  identityFromClaims,
+  SupabaseIdentity,
+  supabaseIssuer,
+} from './access-token-claims';
 
 function isUniqueEmailViolation(error: unknown): boolean {
   return (
@@ -28,6 +29,7 @@ function isUniqueEmailViolation(error: unknown): boolean {
 export class SupabaseService {
   private readonly logger = new Logger(SupabaseService.name);
   private readonly supabase: SupabaseClient;
+  private readonly issuer: string;
 
   constructor(
     private readonly databaseService: DatabaseService,
@@ -43,32 +45,55 @@ export class SupabaseService {
     }
 
     this.supabase = createClient(supabaseUrl, supabaseServiceKey);
+    this.issuer = supabaseIssuer(supabaseUrl);
   }
 
   /**
-   * Verify a Supabase JWT token and return the user info.
+   * Verify a Supabase access token locally and return who it belongs to.
+   *
+   * TD-43: this runs on every protected request, so it must not call Supabase
+   * Auth. `getClaims` checks the signature against the project's JWKS, which
+   * supabase-js fetches once and keeps for ten minutes (a token with a key id
+   * it has not seen refetches it, so a rotated key keeps working). Only a
+   * symmetric (HS*) token, which this project no longer issues, still falls
+   * back to the remote `getUser` inside `getClaims`.
+   *
+   * The trade-off, accepted with TD-43: a token stays usable until its `exp`
+   * (an hour) after the session behind it ends, where `getUser` refused it at
+   * once. Nothing here relies on immediate revocation: no product control
+   * suspends a member through Supabase.
    */
-  async verifyToken(token: string): Promise<SupabaseUser> {
+  async verifyToken(token: string): Promise<SupabaseIdentity> {
     try {
-      const { data, error } = await this.supabase.auth.getUser(token);
+      const { data, error } = await this.supabase.auth.getClaims(token);
 
-      if (error || !data.user) {
+      if (error || !data) {
         throw new UnauthorizedException('Invalid token');
       }
 
-      return data.user;
+      return identityFromClaims(data.claims, this.issuer);
     } catch {
+      // Malformed and expired tokens throw from inside getClaims rather than
+      // returning an error; every failure is the same 401.
       throw new UnauthorizedException('Token verification failed');
     }
   }
 
   /**
    * Get or create user in our database based on Supabase user.
+   *
+   * The steady state is one indexed lookup by `supabaseUserId`. The email is
+   * the one in the token, so a changed address reaches this row when the
+   * client next refreshes its token rather than on the next request.
    */
-  async getOrCreateUser(supabaseUser: SupabaseUser) {
+  async getOrCreateUser(supabaseUser: SupabaseIdentity) {
+    const metadataName = (key: string) => {
+      const value = supabaseUser.user_metadata[key];
+      return typeof value === 'string' ? value : undefined;
+    };
     const userName =
-      supabaseUser.user_metadata?.name ||
-      supabaseUser.user_metadata?.full_name ||
+      metadataName('name') ||
+      metadataName('full_name') ||
       supabaseUser.email?.split('@')[0] ||
       'User';
 
