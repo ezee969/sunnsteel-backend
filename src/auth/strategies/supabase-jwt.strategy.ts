@@ -22,7 +22,7 @@ export class SupabaseJwtStrategy extends PassportStrategy(
       }
 
       const supabaseUser = await this.supabaseService.verifyToken(token);
-      return this.supabaseService.getOrCreateUser(supabaseUser);
+      return this.supabaseService.getOrCreateUser(supabaseUser, token);
     } catch (error) {
       this.logger.warn(`Token validation failed: ${error instanceof Error ? error.message : 'unknown error'}`);
       throw new UnauthorizedException('Token validation failed');

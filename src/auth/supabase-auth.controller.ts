@@ -55,7 +55,7 @@ export class SupabaseAuthController {
       );
       isNewUser = !existingUser;
 
-      const user = await this.supabaseService.getOrCreateUser(supabaseUser);
+      const user = await this.supabaseService.getOrCreateUser(supabaseUser, token);
 
       const duration = Date.now() - startTime;
       this.logger.log(

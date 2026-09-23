@@ -16,6 +16,7 @@ import { AchievementsModule } from '../achievements/achievements.module';
 import { RoutinesModule } from '../routines/routines.module';
 import { TrainingPartnersService } from './training-partners.service';
 
+import { AccountDeletionService } from './account-deletion.service';
 @Module({
   imports: [
     AnalyticsModule,
@@ -34,6 +35,7 @@ import { TrainingPartnersService } from './training-partners.service';
     MemberBlocksService,
     MemberReportsService,
     TrainingPartnersService,
+    AccountDeletionService,
     DatabaseService,
   ],
   exports: [UsersService],

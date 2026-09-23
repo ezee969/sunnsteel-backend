@@ -61,6 +61,22 @@ function sign(
 let server: Server;
 let url: string;
 const calls = { jwks: 0, user: 0 };
+/**
+ * TRUST-01: the sign-ins Supabase Auth still has, by token subject, and the
+ * user id it answers with. Empty by default, so a token nobody registered is
+ * refused exactly as a deleted member's would be.
+ */
+const liveSignIns = new Map<string, string>();
+
+function bearerSubject(header: string | undefined): string | undefined {
+  const token = header?.replace(/^Bearer /, '');
+  try {
+    return JSON.parse(Buffer.from(token!.split('.')[1], 'base64url').toString())
+      .sub;
+  } catch {
+    return undefined;
+  }
+}
 
 before(async () => {
   server = createServer((req, res) => {
@@ -73,8 +89,13 @@ before(async () => {
     }
     if (req.url?.startsWith('/auth/v1/user')) {
       calls.user += 1;
-      res.statusCode = 403;
       res.setHeader('content-type', 'application/json');
+      const live = liveSignIns.get(bearerSubject(req.headers.authorization) ?? '');
+      if (live) {
+        res.end(JSON.stringify({ id: live, aud: 'authenticated' }));
+        return;
+      }
+      res.statusCode = 403;
       res.end(JSON.stringify({ code: 403, msg: 'invalid JWT' }));
       return;
     }
@@ -90,6 +111,7 @@ after(() => new Promise<void>((resolve) => server.close(() => resolve())));
 beforeEach(() => {
   calls.jwks = 0;
   calls.user = 0;
+  liveSignIns.clear();
 });
 
 const now = () => Math.floor(Date.now() / 1000);
@@ -286,6 +308,9 @@ describe('TD-43 verifyToken through getClaims', () => {
 });
 
 describe('TD-43 getOrCreateUser from token claims', () => {
+  /** A token for the Supabase user `identity()` names. */
+  const token = () => sign(claims({ sub: 'supabase-1' }));
+  const live = () => liveSignIns.set('supabase-1', 'supabase-1');
   const identity = (overrides: Partial<{ id: string; email: string }> = {}) => ({
     id: 'supabase-1',
     email: 'member@example.com',
@@ -303,55 +328,85 @@ describe('TD-43 getOrCreateUser from token claims', () => {
 
   it('resolves an existing member with one indexed lookup and no write', async () => {
     const fake = fakeDatabase([row()]);
-    const user = await service(fake.db).getOrCreateUser(identity());
+    const user = await service(fake.db).getOrCreateUser(identity(), token());
     assert.equal(user.id, 'local-1');
     assert.deepEqual(fake.counts, { findUnique: 1, update: 0, create: 0 });
+    assert.equal(calls.user, 0);
   });
 
   it('follows the email the token carries', async () => {
     const fake = fakeDatabase([row({ email: 'old@example.com' })]);
-    const user = await service(fake.db).getOrCreateUser(identity());
+    const user = await service(fake.db).getOrCreateUser(identity(), token());
     assert.equal(user.email, 'member@example.com');
     assert.equal(fake.counts.update, 1);
   });
 
   it('links a legacy account that has the email and no Supabase id', async () => {
+    live();
     const fake = fakeDatabase([row({ supabaseUserId: null })]);
-    const user = await service(fake.db).getOrCreateUser(identity());
+    const user = await service(fake.db).getOrCreateUser(identity(), token());
     assert.equal(user.id, 'local-1');
     assert.equal(user.supabaseUserId, 'supabase-1');
+    assert.equal(calls.user, 1);
   });
 
   it('refuses an email already linked to another Supabase user', async () => {
+    live();
     const fake = fakeDatabase([row({ supabaseUserId: 'supabase-other' })]);
     await assert.rejects(
-      service(fake.db).getOrCreateUser(identity()),
+      service(fake.db).getOrCreateUser(identity(), token()),
       ConflictException,
     );
     assert.equal(fake.counts.update, 0);
   });
 
-  it('creates a new member, named from the token metadata', async () => {
+  it('creates a new member, named from the token metadata, after one check with Supabase', async () => {
+    live();
     const fake = fakeDatabase();
-    const user = await service(fake.db).getOrCreateUser(identity());
+    const user = await service(fake.db).getOrCreateUser(identity(), token());
     assert.equal(user.name, 'Member');
     assert.equal(user.supabaseUserId, 'supabase-1');
     assert.equal(fake.counts.create, 1);
+    assert.equal(calls.user, 1);
+  });
+
+  it('never recreates an account for a sign-in Supabase no longer has', async () => {
+    // TRUST-01: a deleted member's token stays valid until exp, and with
+    // local verification nothing else would notice the account is gone.
+    const fake = fakeDatabase();
+    await assert.rejects(
+      service(fake.db).getOrCreateUser(identity(), token()),
+      UnauthorizedException,
+    );
+    assert.deepEqual(fake.counts, { findUnique: 1, update: 0, create: 0 });
+    assert.equal(calls.user, 1);
+  });
+
+  it('refuses when Supabase answers for a different user than the claims name', async () => {
+    liveSignIns.set('supabase-1', 'supabase-someone-else');
+    const fake = fakeDatabase();
+    await assert.rejects(
+      service(fake.db).getOrCreateUser(identity(), token()),
+      UnauthorizedException,
+    );
+    assert.equal(fake.counts.create, 0);
   });
 
   it('falls back to the email name when the metadata carries none', async () => {
+    live();
     const fake = fakeDatabase();
-    const user = await service(fake.db).getOrCreateUser({
-      ...identity(),
-      user_metadata: { name: 42 },
-    });
+    const user = await service(fake.db).getOrCreateUser(
+      { ...identity(), user_metadata: { name: 42 } },
+      token(),
+    );
     assert.equal(user.name, 'member');
   });
 
   it('settles on the account a concurrent first request created', async () => {
+    live();
     const fake = fakeDatabase();
     fake.racedBy(row({ supabaseUserId: null }));
-    const user = await service(fake.db).getOrCreateUser(identity());
+    const user = await service(fake.db).getOrCreateUser(identity(), token());
     assert.equal(user.id, 'local-1');
     assert.equal(user.supabaseUserId, 'supabase-1');
   });
@@ -359,12 +414,17 @@ describe('TD-43 getOrCreateUser from token claims', () => {
   it('provisions the account on a first protected request, before /auth/supabase/verify', async () => {
     // The frontend does not wait for verify before its data reads, so the
     // guard alone must be able to create the member.
+    liveSignIns.set(claims().sub, claims().sub);
     const fake = fakeDatabase();
     const strategy = new SupabaseJwtStrategy(service(fake.db));
     const user = await strategy.validate(sign(claims()));
     assert.equal(user.supabaseUserId, claims().sub);
     assert.equal(fake.counts.create, 1);
-    assert.equal(calls.user, 0);
+    // One confirmation, for the account that did not exist yet; the next
+    // request finds the row and asks Supabase nothing.
+    assert.equal(calls.user, 1);
+    await strategy.validate(sign(claims()));
+    assert.equal(calls.user, 1);
   });
 
   it('answers 401 from the strategy for a token that fails verification', async () => {

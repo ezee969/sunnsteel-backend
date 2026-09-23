@@ -3,6 +3,7 @@ import {
   Injectable,
   InternalServerErrorException,
   Logger,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -15,6 +16,17 @@ import {
   SupabaseIdentity,
   supabaseIssuer,
 } from './access-token-claims';
+
+/** Where the Settings avatar upload writes; see `removeStoredAvatars`. */
+export const AVATAR_BUCKET = 'avatars';
+
+function isMissing(error: { status?: number; statusCode?: string; message?: string }) {
+  return (
+    error.status === 404 ||
+    error.statusCode === '404' ||
+    /not found/i.test(error.message ?? '')
+  );
+}
 
 function isUniqueEmailViolation(error: unknown): boolean {
   return (
@@ -85,8 +97,13 @@ export class SupabaseService {
    * The steady state is one indexed lookup by `supabaseUserId`. The email is
    * the one in the token, so a changed address reaches this row when the
    * client next refreshes its token rather than on the next request.
+   *
+   * TRUST-01: only when that lookup misses -- a first sign-in, or an account
+   * deleted while its token is still unexpired -- is Supabase Auth asked
+   * whether the sign-in still exists. Without it, a deleted member's token
+   * would quietly create a new, empty account on its next request.
    */
-  async getOrCreateUser(supabaseUser: SupabaseIdentity) {
+  async getOrCreateUser(supabaseUser: SupabaseIdentity, token: string) {
     const metadataName = (key: string) => {
       const value = supabaseUser.user_metadata[key];
       return typeof value === 'string' ? value : undefined;
@@ -110,6 +127,8 @@ export class SupabaseService {
       }
       return existingBySupabaseId;
     }
+
+    await this.confirmSignInExists(token, supabaseUser.id);
 
     const existingByEmail = await this.databaseService.user.findUnique({
       where: { email: supabaseUser.email },
@@ -168,6 +187,75 @@ export class SupabaseService {
       );
       throw new InternalServerErrorException('Failed to synchronize user account');
     }
+  }
+
+  /**
+   * The remote check `getOrCreateUser` makes before linking or creating an
+   * account: the token must still belong to a live Supabase user, and to the
+   * one its claims name.
+   */
+  private async confirmSignInExists(token: string, supabaseUserId: string) {
+    let userId: string | undefined;
+    try {
+      const { data, error } = await this.supabase.auth.getUser(token);
+      userId = error ? undefined : data.user?.id;
+    } catch {
+      userId = undefined;
+    }
+    if (userId !== supabaseUserId) {
+      throw new UnauthorizedException('This sign-in no longer exists');
+    }
+  }
+
+  /**
+   * TRUST-01: remove a member's Supabase sign-in. One that is already gone
+   * counts as removed, so a deletion that failed after this step can be
+   * retried to completion.
+   */
+  async deleteAuthUser(supabaseUserId: string): Promise<void> {
+    const { error } = await this.supabase.auth.admin.deleteUser(supabaseUserId);
+    if (error && !isMissing(error)) {
+      this.logger.error(`Failed to delete a Supabase user: ${error.message}`);
+      throw new ServiceUnavailableException(
+        'Your account could not be deleted right now. Nothing was removed; try again shortly.',
+      );
+    }
+  }
+
+  /**
+   * TRUST-01: remove every stored avatar whose name starts with one of
+   * `prefixes`. The Settings upload names a file `<user id>-<random>.<ext>`
+   * at the bucket root and never deletes the previous one, so a member can
+   * own several. A missing bucket holds nothing to remove.
+   */
+  async removeStoredAvatars(prefixes: string[]): Promise<number> {
+    const bucket = this.supabase.storage.from(AVATAR_BUCKET);
+    const names = new Set<string>();
+    for (const prefix of prefixes) {
+      const { data, error } = await bucket.list('', {
+        search: prefix,
+        limit: 1000,
+      });
+      if (error) {
+        if (isMissing(error)) return 0;
+        this.logger.error(`Failed to list stored avatars: ${error.message}`);
+        throw new ServiceUnavailableException(
+          'Your account could not be deleted right now. Nothing was removed; try again shortly.',
+        );
+      }
+      for (const object of data ?? []) {
+        if (object.name.startsWith(prefix)) names.add(object.name);
+      }
+    }
+    if (names.size === 0) return 0;
+    const { error } = await bucket.remove([...names]);
+    if (error) {
+      this.logger.error(`Failed to remove stored avatars: ${error.message}`);
+      throw new ServiceUnavailableException(
+        'Your account could not be deleted right now. Nothing was removed; try again shortly.',
+      );
+    }
+    return names.size;
   }
 
   /**

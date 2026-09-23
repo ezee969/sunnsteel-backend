@@ -40,6 +40,8 @@ import { ReplaceFeaturedProfileItemsDto } from './dto/replace-featured-profile-i
 import { UpdateTrainingPartnerPermissionsDto } from './dto/update-training-partner-permissions.dto';
 import { TrainingPartnersService } from './training-partners.service';
 import { SendTrainingPartnerEncouragementDto } from './dto/send-training-partner-encouragement.dto';
+import { AccountDeletionService } from './account-deletion.service';
+import { DeleteAccountDto } from './dto/delete-account.dto';
 
 @UseGuards(SupabaseJwtGuard)
 @Controller('users')
@@ -55,7 +57,17 @@ export class UsersController {
     private readonly featuredProfileItems: FeaturedProfileItemsService,
     private readonly blocks: MemberBlocksService,
     private readonly trainingPartners: TrainingPartnersService,
+    private readonly accountDeletion: AccountDeletionService,
   ) {}
+
+  /** TRUST-01: delete the caller's account, immediately and completely. */
+  @Delete('me')
+  deleteAccount(
+    @Request() req: RequestWithUser,
+    @Body() dto: DeleteAccountDto,
+  ) {
+    return this.accountDeletion.deleteAccount(req.user.id, dto.confirmUsername);
+  }
 
   @Get('time-zone')
   analyticsStatus(@Request() req: RequestWithUser) {
