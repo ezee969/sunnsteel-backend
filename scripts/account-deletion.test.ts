@@ -12,10 +12,7 @@ import { ConfigService } from '@nestjs/config';
 import { matchesDeletionConfirmation } from '@sunsteel/contracts';
 import { SupabaseService } from '../src/auth/supabase.service';
 import { DatabaseService } from '../src/database/database.service';
-import {
-  AccountDeletionService,
-  avatarPrefixes,
-} from '../src/users/account-deletion.service';
+import { AccountDeletionService } from '../src/users/account-deletion.service';
 
 /**
  * TRUST-01. The deletion runs against a stand-in Supabase on localhost that
@@ -58,7 +55,7 @@ before(async () => {
       req.url === '/storage/v1/object/list/avatars' &&
       req.method === 'POST'
     ) {
-      log.push(`list ${body.search}`);
+      log.push(`list ${body.prefix}`);
       if (behaviour.bucket === 'missing') {
         return json(400, {
           statusCode: '404',
@@ -73,11 +70,14 @@ before(async () => {
           message: 'storage is down',
         });
       }
-      // Supabase's search is looser than a prefix; the service must filter.
+      // Storage lists one folder: the objects directly inside it, by bare name.
+      const folder = `${body.prefix}/`;
       return json(
         200,
         behaviour.objects
-          .filter((name) => name.includes(body.search))
+          .filter((path) => path.startsWith(folder))
+          .map((path) => path.slice(folder.length))
+          .filter((name) => !name.includes('/'))
           .map((name) => ({ name, id: name })),
       );
     }
@@ -187,26 +187,23 @@ describe('TRUST-01 matchesDeletionConfirmation', () => {
 describe('TRUST-01 deleteAccount', () => {
   it('removes the avatars, then deletes the local account and the Supabase sign-in in one transaction', async () => {
     behaviour.objects = [
-      `${LOCAL_ID}-0.1.jpeg`,
-      `${LOCAL_ID}-0.2.png`,
-      `${SUPABASE_ID}-0.3.jpeg`,
-      // Someone else's file that merely contains the id must survive.
-      `other-${LOCAL_ID}-0.4.jpeg`,
-      '33333333-3333-4333-8333-333333333333-0.5.jpeg',
+      `${SUPABASE_ID}/1790000000000.jpg`,
+      `${SUPABASE_ID}/1790000000001.jpg`,
+      // Another member's folder, and a file that merely names the id, survive.
+      '33333333-3333-4333-8333-333333333333/1790000000002.jpg',
+      `${SUPABASE_ID}-legacy.jpeg`,
     ];
     const { db, state } = fakeDatabase(member());
     const response = await deletion(db).deleteAccount(LOCAL_ID, '@Athena');
 
     assert.ok(Date.parse(response.deletedAt));
     assert.deepEqual(removed.sort(), [
-      `${LOCAL_ID}-0.1.jpeg`,
-      `${LOCAL_ID}-0.2.png`,
-      `${SUPABASE_ID}-0.3.jpeg`,
+      `${SUPABASE_ID}/1790000000000.jpg`,
+      `${SUPABASE_ID}/1790000000001.jpg`,
     ]);
     assert.deepEqual(log, [
-      `list ${LOCAL_ID}-`,
-      `list ${SUPABASE_ID}-`,
-      'remove 3',
+      `list ${SUPABASE_ID}`,
+      'remove 2',
       'local delete',
       'admin delete',
     ]);
@@ -276,8 +273,7 @@ describe('TRUST-01 deleteAccount', () => {
     await deletion(db).deleteAccount(LOCAL_ID, 'athena');
     assert.equal(state.committed, true);
     assert.ok(!log.includes('admin delete'));
-    assert.deepEqual(avatarPrefixes(member({ supabaseUserId: null })), [
-      `${LOCAL_ID}-`,
-    ]);
+    // No sign-in means no folder the upload could have written to.
+    assert.ok(!log.some((line) => line.startsWith('list')));
   });
 });

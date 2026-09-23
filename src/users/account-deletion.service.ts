@@ -5,7 +5,6 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import type { User } from '@prisma/client';
 import {
   matchesDeletionConfirmation,
   type DeleteAccountResponse,
@@ -19,22 +18,6 @@ import { DatabaseService } from '../database/database.service';
  * milliseconds; past this Prisma rolls back and nothing is deleted.
  */
 const DELETION_TRANSACTION_TIMEOUT_MS = 30_000;
-
-type DeletableAccount = Pick<
-  User,
-  'id' | 'username' | 'isModerator' | 'supabaseUserId'
->;
-
-/**
- * The stored-avatar name prefixes an account can own. The Settings upload
- * names files after `user.id` as the client saw it; both ids are covered so
- * nothing depends on which one that was.
- */
-export function avatarPrefixes(account: DeletableAccount): string[] {
-  return [account.id, account.supabaseUserId]
-    .filter((id): id is string => Boolean(id))
-    .map((id) => `${id}-`);
-}
 
 /**
  * TRUST-01. Deleting an account is immediate and complete.
@@ -92,7 +75,7 @@ export class AccountDeletionService {
       );
     }
 
-    await this.supabase.removeStoredAvatars(avatarPrefixes(account));
+    await this.supabase.removeStoredAvatars(account.supabaseUserId);
 
     await this.db.$transaction(
       async (tx) => {

@@ -197,8 +197,8 @@ test(
 
       const supabaseCalls: string[] = [];
       const supabase = {
-        async removeStoredAvatars(prefixes: string[]) {
-          supabaseCalls.push(`avatars ${prefixes.length}`);
+        async removeStoredAvatars(supabaseUserId: string | null) {
+          supabaseCalls.push(`avatars ${supabaseUserId}`);
           return 0;
         },
         async deleteAuthUser(id: string) {
@@ -217,7 +217,7 @@ test(
       );
 
       assert.deepEqual(supabaseCalls, [
-        'avatars 2',
+        `avatars ${owner.supabaseUserId}`,
         `auth ${owner.supabaseUserId} visible-outside=1`,
       ]);
 
