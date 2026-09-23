@@ -18,6 +18,11 @@ export function buildWorkoutSessionSelect(includeLogs = false) {
     lastActivityAt: true,
     exerciseSubstitutions: true,
     exerciseNotes: true,
+    // ROUT-15: the block this session trained, if any.
+    trainingBlockId: true,
+    trainingBlockSeriesId: true,
+    trainingBlockRevision: true,
+    trainingBlockName: true,
     createdAt: true,
     updatedAt: true,
     routine: {
@@ -111,6 +116,7 @@ export const WORKOUT_SESSION_LIST_SELECT = {
   endedAt: true,
   durationSec: true,
   notes: true,
+  trainingBlockName: true,
   routine: { select: { id: true, name: true } },
   routineDay: { select: { dayOfWeek: true, name: true, order: true } },
 } as const;

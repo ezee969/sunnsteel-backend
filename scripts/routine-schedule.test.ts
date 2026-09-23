@@ -13,7 +13,11 @@ import {
 import { RoutinesService } from '../src/routines/routines.service';
 
 const day = (
-  extra: { dayOfWeek?: number | null; name?: string | null; order?: number } = {},
+  extra: {
+    dayOfWeek?: number | null;
+    name?: string | null;
+    order?: number;
+  } = {},
 ) => ({
   exercises: [],
   ...extra,
@@ -45,7 +49,9 @@ test('weekly days keep distinct weekdays and trimmed names', () => {
   );
   assert.throws(
     () =>
-      normalizeRoutineDays('WEEKLY', [day({ dayOfWeek: 2, name: 'x'.repeat(41) })]),
+      normalizeRoutineDays('WEEKLY', [
+        day({ dayOfWeek: 2, name: 'x'.repeat(41) }),
+      ]),
     /at most 40/,
   );
   assert.throws(
@@ -90,13 +96,22 @@ test('the next rotation day follows the last completed session and wraps', () =>
   assert.equal(nextRotationDayId(days, { routineDayId: 'c', order: 2 }), 'a');
   // The day was replaced by an edit: continue from the order it had.
   assert.equal(nextRotationDayId(days, { routineDayId: null, order: 1 }), 'c');
-  assert.equal(nextRotationDayId(days, { routineDayId: 'gone', order: 4 }), 'a');
-  assert.equal(nextRotationDayId(days, { routineDayId: null, order: null }), 'a');
+  assert.equal(
+    nextRotationDayId(days, { routineDayId: 'gone', order: 4 }),
+    'a',
+  );
+  assert.equal(
+    nextRotationDayId(days, { routineDayId: null, order: null }),
+    'a',
+  );
 });
 
 test('a day is named by its name, else its weekday, else its rotation letter', () => {
   assert.equal(routineDayLabel({ name: ' Upper A ', dayOfWeek: 1 }), 'Upper A');
-  assert.equal(routineDayLabel({ name: null, dayOfWeek: 4, order: 0 }), 'Thursday');
+  assert.equal(
+    routineDayLabel({ name: null, dayOfWeek: 4, order: 0 }),
+    'Thursday',
+  );
   assert.equal(routineDayLabel({ dayOfWeek: null, order: 1 }), 'Day B');
   assert.equal(routineDayLabel({}), '');
 });
@@ -119,6 +134,7 @@ const entity = (
   createdAt: new Date('2026-09-01T10:00:00.000Z'),
   updatedAt: new Date('2026-09-01T10:00:00.000Z'),
   days: days.map((d) => ({ ...d, name: null, exercises: [] })),
+  trainingBlocks: [],
 });
 
 test('routine reads report the next rotation day from the last completed session', async () => {
@@ -152,8 +168,74 @@ test('routine reads report the next rotation day from the last completed session
   assert.deepEqual(lookups[0].where, {
     userId: 'user-1',
     routineId: 'ppl',
+    // ROUT-15: the baseline continues from baseline sessions only.
+    trainingBlockSeriesId: null,
     status: 'COMPLETED',
   });
+});
+
+test('a rotation block continues from its own sessions and starts on its first day (ROUT-15)', async () => {
+  const lookups: any[] = [];
+  const blockDay = (id: string, order: number) => ({
+    id,
+    order,
+    dayOfWeek: null,
+    name: null,
+    exercises: [],
+  });
+  const db = {
+    routine: {
+      findMany: async () => [
+        {
+          ...entity('split', 'WEEKLY', [{ id: 'mon', order: 0, dayOfWeek: 1 }]),
+          trainingBlocks: [
+            {
+              id: 'revision-1',
+              seriesId: 'series-1',
+              revision: 1,
+              name: 'Peaking',
+              startDate: '2026-10-01',
+              endDate: '2026-10-28',
+              setup: {
+                name: 'Peaking',
+                description: null,
+                scheduleMode: 'ROTATION',
+                restDays: [],
+                rotationWeekdays: [1, 3, 5],
+                days: [],
+              },
+              days: [blockDay('a', 0), blockDay('b', 1)],
+            },
+          ],
+        },
+      ],
+    },
+    workoutSession: {
+      findFirst: async (query: any) => {
+        lookups.push(query.where);
+        return null;
+      },
+    },
+  } as unknown as DatabaseService;
+  const [routine] = await new RoutinesService(db).findAll('user-1');
+  // The weekly baseline needs no lookup; the rotation block needs its own.
+  assert.deepEqual(lookups, [
+    {
+      userId: 'user-1',
+      routineId: 'split',
+      trainingBlockSeriesId: 'series-1',
+      status: 'COMPLETED',
+    },
+  ]);
+  assert.equal(routine.nextRotationDayId, null);
+  const [block] = routine.trainingBlocks!;
+  assert.equal(block.scheduleMode, 'ROTATION');
+  assert.deepEqual(block.rotationWeekdays, [1, 3, 5]);
+  assert.equal(block.nextRotationDayId, 'a');
+  assert.deepEqual(
+    block.days.map((day) => day.id),
+    ['a', 'b'],
+  );
 });
 
 test('creating a rotation routine stores null weekdays and the mode', async () => {

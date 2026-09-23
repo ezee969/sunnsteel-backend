@@ -11,11 +11,12 @@ import { DatabaseService } from '../database/database.service';
 import { CreateRoutineDto } from './dto/create-routine.dto';
 import { resolveRoutineLineage } from './routine-lineage';
 import { UpdateRoutineDto } from './dto/update-routine.dto';
+import { ROUTINE_OWNER_SELECT, ROUTINE_TOGGLE_SELECT } from './routine.selects';
 import {
-  ROUTINE_TOGGLE_SELECT,
-  ROUTINE_WITH_DAYS_SELECT,
-} from './routine.selects';
-import { RoutineWithDaysEntity, toRoutineResponse } from './routine.mapper';
+  RoutineOwnerEntity,
+  toRoutineResponse,
+  toTrainingBlockPlan,
+} from './routine.mapper';
 import {
   nextRotationDayId,
   normalizeRestDays,
@@ -132,13 +133,13 @@ export class RoutinesService {
    */
   private async toResponses(
     userId: string,
-    routines: RoutineWithDaysEntity[],
+    routines: RoutineOwnerEntity[],
     db: Prisma.TransactionClient = this.db,
   ): Promise<Routine[]> {
     // ROUT-06: these are the owner's own routines, so no follow or block can
     // stand between them and a source they cloned; only the source routine's
     // own rules apply, which `resolveRoutineLineage` reads.
-    const lineageFor = (routine: RoutineWithDaysEntity) =>
+    const lineageFor = (routine: RoutineOwnerEntity) =>
       resolveRoutineLineage(
         {
           routineId: routine.clonedFromRoutine?.id ?? null,
@@ -165,31 +166,65 @@ export class RoutinesService {
         },
       );
 
+    // ROUT-11/ROUT-15: a rotation continues from the last completed session of
+    // the same plan -- the baseline counts only baseline sessions and each
+    // block only its own series -- so a block starts on its first day and the
+    // baseline resumes where it left off once the block ends.
+    const nextDayAfterLast = async (
+      routineId: string,
+      trainingBlockSeriesId: string | null,
+      days: ReadonlyArray<{ id: string; order: number }>,
+    ) => {
+      const last = await db.workoutSession.findFirst({
+        where: {
+          userId,
+          routineId,
+          trainingBlockSeriesId,
+          status: 'COMPLETED',
+        },
+        orderBy: [{ endedAt: 'desc' }, { id: 'desc' }],
+        select: {
+          routineDayId: true,
+          snapshot: { select: { payload: true } },
+        },
+      });
+      return nextRotationDayId(
+        days,
+        last
+          ? {
+              routineDayId: last.routineDayId,
+              order: snapshotDayOrder(last.snapshot?.payload),
+            }
+          : null,
+      );
+    };
+
     return Promise.all(
       routines.map(async (routine) => {
-        if (routine.scheduleMode !== 'ROTATION') {
-          return toRoutineResponse(routine, null, lineageFor(routine));
-        }
-        const last = await db.workoutSession.findFirst({
-          where: { userId, routineId: routine.id, status: 'COMPLETED' },
-          orderBy: [{ endedAt: 'desc' }, { id: 'desc' }],
-          select: {
-            routineDayId: true,
-            snapshot: { select: { payload: true } },
-          },
-        });
+        const trainingBlocks = await Promise.all(
+          routine.trainingBlocks.map(async (block) => {
+            const plan = toTrainingBlockPlan(block);
+            return plan.scheduleMode === 'ROTATION'
+              ? {
+                  ...plan,
+                  nextRotationDayId: await nextDayAfterLast(
+                    routine.id,
+                    block.seriesId,
+                    block.days,
+                  ),
+                }
+              : plan;
+          }),
+        );
+        const next =
+          routine.scheduleMode === 'ROTATION'
+            ? await nextDayAfterLast(routine.id, null, routine.days)
+            : null;
         return toRoutineResponse(
           routine,
-          nextRotationDayId(
-            routine.days,
-            last
-              ? {
-                  routineDayId: last.routineDayId,
-                  order: snapshotDayOrder(last.snapshot?.payload),
-                }
-              : null,
-          ),
+          next,
           lineageFor(routine),
+          trainingBlocks,
         );
       }),
     );
@@ -197,7 +232,7 @@ export class RoutinesService {
 
   private async toResponse(
     userId: string,
-    routine: RoutineWithDaysEntity,
+    routine: RoutineOwnerEntity,
     db: Prisma.TransactionClient = this.db,
   ): Promise<Routine> {
     const [response] = await this.toResponses(userId, [routine], db);
@@ -230,7 +265,7 @@ export class RoutinesService {
           create: days.map((day) => this.mapRoutineDayForCreate(day)),
         },
       },
-      select: ROUTINE_WITH_DAYS_SELECT,
+      select: ROUTINE_OWNER_SELECT,
     });
     return this.toResponse(userId, routine);
   }
@@ -249,7 +284,7 @@ export class RoutinesService {
 
     const routines = await this.db.routine.findMany({
       where,
-      select: ROUTINE_WITH_DAYS_SELECT,
+      select: ROUTINE_OWNER_SELECT,
       orderBy: { createdAt: 'desc' },
     });
 
@@ -259,7 +294,7 @@ export class RoutinesService {
   async findOne(userId: string, id: string): Promise<Routine> {
     const routine = await this.db.routine.findFirst({
       where: { id, userId },
-      select: ROUTINE_WITH_DAYS_SELECT,
+      select: ROUTINE_OWNER_SELECT,
     });
 
     if (!routine) {
@@ -292,7 +327,10 @@ export class RoutinesService {
         scheduleMode: true,
         restDays: true,
         rotationWeekdays: true,
-        days: { select: { dayOfWeek: true } },
+        days: {
+          where: { trainingBlockId: null },
+          select: { dayOfWeek: true },
+        },
       },
     });
 
@@ -328,7 +366,10 @@ export class RoutinesService {
     // Remove current days (cascade removes exercises and sets)
     // Only delete and recreate days if days array is provided in the update
     if (dto.days) {
-      await tx.routineDay.deleteMany({ where: { routineId: id } });
+      // ROUT-15: the baseline only; a block's working copy is not the routine's.
+      await tx.routineDay.deleteMany({
+        where: { routineId: id, trainingBlockId: null },
+      });
     }
 
     const updated = await tx.routine.update({
@@ -352,7 +393,7 @@ export class RoutinesService {
           },
         }),
       },
-      select: ROUTINE_WITH_DAYS_SELECT,
+      select: ROUTINE_OWNER_SELECT,
     });
 
     return this.toResponse(userId, updated, tx);
@@ -435,7 +476,7 @@ export class RoutinesService {
   async findCompleted(userId: string): Promise<Routine[]> {
     const routines = await this.db.routine.findMany({
       where: { userId, isCompleted: true },
-      select: ROUTINE_WITH_DAYS_SELECT,
+      select: ROUTINE_OWNER_SELECT,
       orderBy: { createdAt: 'desc' },
     });
     return this.toResponses(userId, routines);
@@ -444,7 +485,7 @@ export class RoutinesService {
   async findFavorites(userId: string): Promise<Routine[]> {
     const routines = await this.db.routine.findMany({
       where: { userId, isFavorite: true },
-      select: ROUTINE_WITH_DAYS_SELECT,
+      select: ROUTINE_OWNER_SELECT,
       orderBy: { createdAt: 'desc' },
     });
     return this.toResponses(userId, routines);

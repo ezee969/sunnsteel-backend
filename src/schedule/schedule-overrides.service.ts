@@ -1,3 +1,9 @@
+import { resolveRoutinePlan } from '@sunsteel/contracts';
+import {
+  BASELINE_DAY_WEEKDAYS_SELECT,
+  PLAN_BLOCKS_SELECT,
+  toPlanBlocks,
+} from '../routines/routine-plan';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
@@ -76,7 +82,18 @@ export class ScheduleOverridesService {
   ): Promise<ScheduleOverride> {
     return this.db.$transaction(async (tx) => {
       await lockTrainingAccount(tx, userId);
-      const routine = await this.occurrenceRoutine(tx, userId, dto.routineId);
+      const routine = await this.occurrenceRoutine(
+        tx,
+        userId,
+        dto.routineId,
+        dto.date,
+      );
+      const targetRoutine = await this.occurrenceRoutine(
+        tx,
+        userId,
+        dto.routineId,
+        dto.toDate,
+      );
       const others = await tx.scheduleOverride.findMany({
         where: { routineId: dto.routineId, NOT: { date: dto.date } },
         select: { date: true, kind: true, toDate: true },
@@ -86,6 +103,7 @@ export class ScheduleOverridesService {
         toDate: dto.toDate,
         now,
         routine,
+        targetRoutine,
         others,
       });
       return this.upsert(tx, userId, dto.routineId, dto.date, {
@@ -102,7 +120,12 @@ export class ScheduleOverridesService {
   ): Promise<ScheduleOverride> {
     return this.db.$transaction(async (tx) => {
       await lockTrainingAccount(tx, userId);
-      const routine = await this.occurrenceRoutine(tx, userId, dto.routineId);
+      const routine = await this.occurrenceRoutine(
+        tx,
+        userId,
+        dto.routineId,
+        dto.date,
+      );
       assertSkippable({ date: dto.date, now, routine });
       return this.upsert(tx, userId, dto.routineId, dto.date, {
         kind: 'SKIP',
@@ -118,19 +141,34 @@ export class ScheduleOverridesService {
     if (count === 0) throw new NotFoundException('Override not found');
   }
 
+  /**
+   * ROUT-15: the routine as planned on `date` -- its active training block's
+   * schedule while one covers the date, its baseline otherwise.
+   */
   private async occurrenceRoutine(
     tx: Prisma.TransactionClient,
     userId: string,
     routineId: string,
+    date: string,
   ) {
     const routine = await tx.routine.findFirst({
       where: { id: routineId, userId },
-      select: { scheduleMode: true, days: { select: { dayOfWeek: true } } },
+      select: {
+        scheduleMode: true,
+        restDays: true,
+        rotationWeekdays: true,
+        days: BASELINE_DAY_WEEKDAYS_SELECT,
+        trainingBlocks: PLAN_BLOCKS_SELECT,
+      },
     });
     if (!routine) throw new NotFoundException('Routine not found');
+    const plan = resolveRoutinePlan(
+      { ...routine, trainingBlocks: toPlanBlocks(routine.trainingBlocks) },
+      date,
+    );
     return {
-      scheduleMode: routine.scheduleMode,
-      trainingWeekdays: routine.days
+      scheduleMode: plan.scheduleMode,
+      trainingWeekdays: plan.days
         .map((day) => day.dayOfWeek)
         .filter((weekday): weekday is number => weekday !== null),
     };
@@ -141,7 +179,10 @@ export class ScheduleOverridesService {
     userId: string,
     routineId: string,
     date: string,
-    change: Pick<Prisma.ScheduleOverrideUncheckedCreateInput, 'kind' | 'toDate'>,
+    change: Pick<
+      Prisma.ScheduleOverrideUncheckedCreateInput,
+      'kind' | 'toDate'
+    >,
   ): Promise<ScheduleOverride> {
     const row = await tx.scheduleOverride.upsert({
       where: { routineId_date: { routineId, date } },

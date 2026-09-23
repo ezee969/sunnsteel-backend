@@ -294,6 +294,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260923190000_session_exercise_notes/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// ROUT-15: block working-copy days and the block a session trained.
+				readFileSync(
+					'prisma/migrations/20260923210000_training_block_execution/migration.sql',
+					'utf8',
 				),
     );
     prisma(

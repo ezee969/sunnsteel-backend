@@ -130,7 +130,10 @@ const ROUTINE_SELECT = {
   sharedAt: true,
   visibility: true,
   moderationHiddenAt: true,
-  days: { select: { _count: { select: { exercises: true } } } },
+  days: {
+    where: { trainingBlockId: null },
+    select: { _count: { select: { exercises: true } } },
+  },
 } as const;
 
 /**
@@ -1017,7 +1020,7 @@ export class ActivityService {
         sharedAt: { not: null, ...(cursor ? { lte: cursor.at } : {}) },
         // A routine with nothing programmed is not a programme anyone can
         // follow, so sharing one is not news, as `ROUT-07` decided.
-        days: { some: { exercises: { some: {} } } },
+        days: { some: { trainingBlockId: null, exercises: { some: {} } } },
       },
       orderBy: [{ sharedAt: 'desc' }, { id: 'desc' }],
       take: sourceTake(limit, cursor),
@@ -1234,7 +1237,7 @@ export class ActivityService {
         where: {
           id: entryId.slice('routine:'.length),
           sharedAt: { not: null },
-          days: { some: { exercises: { some: {} } } },
+          days: { some: { trainingBlockId: null, exercises: { some: {} } } },
         },
         select: { userId: true },
       });

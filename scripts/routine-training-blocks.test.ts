@@ -88,10 +88,38 @@ function fakeDb() {
         scheduleMode: "WEEKLY",
         restDays: [],
         rotationWeekdays: [],
-        days: [],
+        days: [
+          {
+            dayOfWeek: 1,
+            name: "Heavy",
+            order: 0,
+            exercises: [
+              {
+                exercise: { id: "exercise-squat", name: "Back Squat" },
+                order: 0,
+                restSeconds: 180,
+                note: null,
+                progressionScheme: "DOUBLE_PROGRESSION",
+                minWeightIncrement: 2.5,
+                sets: [
+                  {
+                    setNumber: 1,
+                    repType: "FIXED",
+                    reps: 5,
+                    minReps: null,
+                    maxReps: null,
+                    weight: 140,
+                    rir: 2,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
       },
     },
   ];
+  let liveSessionSeriesId: string | null = null;
   const routine = {
     id: "routine-1",
     userId: "user-1",
@@ -128,6 +156,13 @@ function fakeDb() {
   };
   const tx = {
     $queryRaw: async () => [],
+    workoutSession: {
+      findFirst: async ({ where }: any) =>
+        where.status === "IN_PROGRESS" &&
+        where.trainingBlockSeriesId === liveSessionSeriesId
+          ? { id: "session-1" }
+          : null,
+    },
     routine: {
       findFirst: async ({ where }: any) =>
         where.id === routine.id && where.userId === routine.userId
@@ -182,8 +217,57 @@ function fakeDb() {
     service: new RoutineTrainingBlocksService(db),
     blocks,
     versions,
+    trainLive: (seriesId: string) => {
+      liveSessionSeriesId = seriesId;
+    },
   };
 }
+
+test("each revision gets its own working copy of its setup (ROUT-15)", async () => {
+  const { service, blocks } = fakeDb();
+  await service.create("user-1", "routine-1", {
+    name: "Strength",
+    startDate: "2099-05-01",
+    endDate: "2099-05-31",
+    sourceVersionId: "version-1",
+  });
+  const days = (blocks[0] as unknown as { days: { create: any[] } }).days
+    .create;
+  assert.equal(days.length, 1);
+  assert.deepEqual(days[0].routine, { connect: { id: "routine-1" } });
+  assert.equal(days[0].dayOfWeek, 1);
+  assert.equal(days[0].name, "Heavy");
+  const exercise = days[0].exercises.create[0];
+  assert.deepEqual(exercise.exercise, { connect: { id: "exercise-squat" } });
+  assert.equal(exercise.progressionScheme, "DOUBLE_PROGRESSION");
+  assert.deepEqual(exercise.sets.create[0], {
+    setNumber: 1,
+    repType: "FIXED",
+    reps: 5,
+    minReps: null,
+    maxReps: null,
+    weight: 140,
+    rir: 2,
+  });
+});
+
+test("a block with a live session cannot be revised (ROUT-15)", async () => {
+  const { service, trainLive } = fakeDb();
+  const block = await service.create("user-1", "routine-1", {
+    name: "Strength",
+    startDate: "2099-06-01",
+    endDate: "2099-06-30",
+  });
+  trainLive(block.seriesId);
+  await assert.rejects(
+    service.update("user-1", "routine-1", block.id, {
+      name: "Strength v2",
+      startDate: "2099-06-01",
+      endDate: "2099-06-30",
+    }),
+    ConflictException,
+  );
+});
 
 test("updates append an immutable revision and preserve saved-version provenance", async () => {
   const { service, blocks, versions } = fakeDb();

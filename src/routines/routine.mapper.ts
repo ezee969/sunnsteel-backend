@@ -5,8 +5,13 @@ import {
   RoutineExercise,
   RoutineLineage,
   RoutineSet,
+  RoutineTrainingBlockPlan,
 } from '@sunsteel/contracts';
-import { ROUTINE_WITH_DAYS_SELECT } from './routine.selects';
+import {
+  ROUTINE_OWNER_SELECT,
+  ROUTINE_WITH_DAYS_SELECT,
+} from './routine.selects';
+import { readRoutineSetup } from './routine-versions';
 
 /**
  * Maps the Prisma result of `ROUTINE_WITH_DAYS_SELECT` to the shared
@@ -17,6 +22,11 @@ import { ROUTINE_WITH_DAYS_SELECT } from './routine.selects';
 export type RoutineWithDaysEntity = Prisma.RoutineGetPayload<{
   select: typeof ROUTINE_WITH_DAYS_SELECT;
 }>;
+
+export type RoutineOwnerEntity = Prisma.RoutineGetPayload<{
+  select: typeof ROUTINE_OWNER_SELECT;
+}>;
+type TrainingBlockPlanEntity = RoutineOwnerEntity['trainingBlocks'][number];
 
 type RoutineDayEntity = RoutineWithDaysEntity['days'][number];
 type RoutineExerciseEntity = RoutineDayEntity['exercises'][number];
@@ -47,13 +57,40 @@ function toRoutineExercise(e: RoutineExerciseEntity): RoutineExercise {
   };
 }
 
-function toRoutineDay(d: RoutineDayEntity): RoutineDay {
+export function toRoutineDay(d: RoutineDayEntity): RoutineDay {
   return {
     id: d.id,
     dayOfWeek: d.dayOfWeek,
     name: d.name,
     order: d.order,
     exercises: d.exercises.map(toRoutineExercise),
+  };
+}
+
+/**
+ * ROUT-15: a current block revision as a plan. Its schedule comes from the
+ * authored setup, normalized the way a restore normalizes it; its days are the
+ * working copy. `nextRotationDayId` is resolved by the caller, like the
+ * baseline's, and is null on a weekly block.
+ */
+export function toTrainingBlockPlan(
+  block: TrainingBlockPlanEntity,
+  nextRotationDayId: string | null = null,
+): RoutineTrainingBlockPlan {
+  const setup = readRoutineSetup(block.setup);
+  const rotation = setup.scheduleMode === 'ROTATION';
+  return {
+    id: block.id,
+    seriesId: block.seriesId,
+    revision: block.revision,
+    name: block.name,
+    startDate: block.startDate,
+    endDate: block.endDate,
+    scheduleMode: setup.scheduleMode,
+    restDays: rotation ? [] : [...setup.restDays],
+    rotationWeekdays: rotation ? [...(setup.rotationWeekdays ?? [])] : [],
+    nextRotationDayId: rotation ? nextRotationDayId : null,
+    days: block.days.map(toRoutineDay),
   };
 }
 
@@ -65,6 +102,7 @@ export function toRoutineResponse(
   r: RoutineWithDaysEntity,
   nextRotationDayId: string | null = null,
   lineage: RoutineLineage | null = null,
+  trainingBlocks?: RoutineTrainingBlockPlan[],
 ): Routine {
   return {
     id: r.id,
@@ -86,6 +124,7 @@ export function toRoutineResponse(
     experienceLevel: r.experienceLevel,
     ...(lineage ? { lineage } : {}),
     days: r.days.map(toRoutineDay),
+    ...(trainingBlocks ? { trainingBlocks } : {}),
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
   };

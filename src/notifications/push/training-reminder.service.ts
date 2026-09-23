@@ -1,3 +1,8 @@
+import {
+  BASELINE_DAY_WEEKDAYS_SELECT,
+  PLAN_BLOCKS_SELECT,
+  toPlanBlocks,
+} from '../../routines/routine-plan';
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import type {
@@ -205,7 +210,8 @@ export class TrainingReminderService {
           createdAt: true,
           restDays: true,
           rotationWeekdays: true,
-          days: { select: { dayOfWeek: true } },
+          days: BASELINE_DAY_WEEKDAYS_SELECT,
+          trainingBlocks: PLAN_BLOCKS_SELECT,
         },
       }),
       this.db.scheduleOverride.findMany({
@@ -226,6 +232,7 @@ export class TrainingReminderService {
       routines: routines.map((routine) => ({
         ...routine,
         scheduleMode: routine.scheduleMode as 'WEEKLY' | 'ROTATION',
+        trainingBlocks: toPlanBlocks(routine.trainingBlocks),
       })),
       overrides: overrides.map((override) => ({
         routineId: override.routineId,

@@ -595,6 +595,9 @@ model RoutineTrainingBlock {
   sourceVersionName     String?                        @db.VarChar(60)
   supersededAt          DateTime?
   createdAt             DateTime                       @default(now())
+  // ROUT-15: the revision's working copy, which its sessions log against and
+  // progression advances. Superseded revisions keep theirs for history.
+  days                  RoutineDay[]
 
   @@unique([seriesId, revision])
   @@index([routineId, supersededAt, startDate])
@@ -647,8 +650,16 @@ model RoutineDay {
   order           Int               @default(0)
   exercises       RoutineExercise[]
   workoutSessions WorkoutSession[]
+  // ROUT-15: set on a training block's working copy of its setup, null on the
+  // routine's baseline days. Every baseline read filters on null; weekday
+  // uniqueness is two partial unique indexes (baseline per routine, block
+  // per block) created in 20260923210000_training_block_execution, because
+  // Prisma cannot declare a partial index.
+  trainingBlockId String?
+  trainingBlock   RoutineTrainingBlock? @relation(fields: [trainingBlockId], references: [id], onDelete: Cascade)
 
-  @@unique([routineId, dayOfWeek])
+  @@index([routineId, trainingBlockId])
+  @@index([trainingBlockId])
 }
 
 // One exercise entry in a routine day
@@ -732,6 +743,13 @@ model WorkoutSession {
   // LIVE-16: SessionExerciseNote[] -- the owner's note per exercise slot for
   // this workout. The routine's own exercise note is never written from here.
   exerciseNotes         Json                    @default("[]")
+  // ROUT-15: the training block this session trained, copied at start so a
+  // later revision, the block's end or its deletion never rewrites it. All
+  // null when the session trained the routine's baseline.
+  trainingBlockId       String?
+  trainingBlockSeriesId String?
+  trainingBlockRevision Int?
+  trainingBlockName     String?                 @db.VarChar(60)
 
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
@@ -747,6 +765,7 @@ model WorkoutSession {
   @@index([userId, status, endedAt, id], map: "workout_analytics_cursor_status")
   @@index([userId, sourceRoutineDayId, status, endedAt(sort: Desc), id(sort: Desc)], map: "workout_previous_performance")
   @@index([lastActivityAt])
+  @@index([routineId, trainingBlockSeriesId, status, endedAt])
 }
 
 // SOC-07: an owner-created, revocable public link to selected parts of one

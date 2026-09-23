@@ -6,6 +6,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { WorkoutSessionStatus } from '@prisma/client';
+import { resolveActiveTrainingBlock } from '@sunsteel/contracts';
+import { localClock } from '../../notifications/push/local-time';
+import {
+  assertDayInPlan,
+  trainingBlockColumns,
+} from '../session-training-block';
 import { DatabaseService } from '../../database/database.service';
 import { StartWorkoutDto } from '../dto/start-workout.dto';
 import { StartWorkoutResponseDto } from '../dto/start-workout-response.dto';
@@ -93,13 +99,44 @@ export class WorkoutSessionStartService {
             id: dto.routineDayId,
             routine: { id: dto.routineId, userId },
           },
-          select: { id: true, dayOfWeek: true },
+          select: {
+            id: true,
+            dayOfWeek: true,
+            trainingBlockId: true,
+            routine: {
+              select: {
+                user: { select: { timeZone: true } },
+                trainingBlocks: {
+                  where: { supersededAt: null },
+                  select: {
+                    id: true,
+                    seriesId: true,
+                    revision: true,
+                    name: true,
+                    startDate: true,
+                    endDate: true,
+                  },
+                },
+              },
+            },
+          },
         });
         if (!routineDay) {
           throw new NotFoundException(
             'Routine day not found for this user/routine',
           );
         }
+        // ROUT-15: the plan in force on the owner's local date decides which
+        // days may start, and the session records the block it trains.
+        const today = localClock(
+          new Date(),
+          routineDay.routine.user.timeZone ?? 'UTC',
+        ).date;
+        const active = resolveActiveTrainingBlock(
+          routineDay.routine.trainingBlocks,
+          today,
+        );
+        assertDayInPlan(routineDay, active);
 
         const result = await tx.workoutSession.create({
           data: {
@@ -110,6 +147,16 @@ export class WorkoutSessionStartService {
             routineDayId: dto.routineDayId,
             status: WorkoutSessionStatus.IN_PROGRESS,
             notes: dto.notes,
+            ...trainingBlockColumns(
+              active
+                ? {
+                    id: active.id,
+                    seriesId: active.seriesId,
+                    revision: active.revision,
+                    name: active.name,
+                  }
+                : null,
+            ),
           },
           select: buildWorkoutSessionSelect(),
         });

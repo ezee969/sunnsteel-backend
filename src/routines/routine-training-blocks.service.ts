@@ -9,6 +9,7 @@ import { Prisma } from "@prisma/client";
 import {
   ROUTINE_TRAINING_BLOCK_REVISIONS_MAX,
   ROUTINE_TRAINING_BLOCKS_MAX,
+  type RoutineVersionSetup,
   type RoutineTrainingBlock,
   type RoutineTrainingBlockRevision,
   type RoutineTrainingBlockRevisionsResponse,
@@ -93,9 +94,48 @@ const BLOCKS_FULL_MESSAGE =
 const REVISIONS_FULL_MESSAGE = `A training block keeps at most ${ROUTINE_TRAINING_BLOCK_REVISIONS_MAX} revisions`;
 
 /**
- * ROUT-09: authored date ranges whose setup is copied at write time. They are
- * planning records only; schedule and workout-session reads intentionally do
- * not consume them until ROUT-15.
+ * ROUT-15: a revision's working copy -- real days, exercises and sets marked
+ * with the revision, created from its authored setup in the same write. A
+ * session of a block day logs against these rows and progression advances
+ * them, so the routine's baseline is never touched by training a block. A new
+ * revision starts again from its own setup.
+ */
+function workingCopyDays(routineId: string, setup: RoutineVersionSetup) {
+  return {
+    create: setup.days.map((day) => ({
+      routine: { connect: { id: routineId } },
+      dayOfWeek: day.dayOfWeek,
+      name: day.name,
+      order: day.order,
+      exercises: {
+        create: day.exercises.map((exercise) => ({
+          exercise: { connect: { id: exercise.exercise.id } },
+          order: exercise.order,
+          restSeconds: exercise.restSeconds,
+          note: exercise.note,
+          progressionScheme: exercise.progressionScheme,
+          minWeightIncrement: exercise.minWeightIncrement,
+          sets: {
+            create: exercise.sets.map((set) => ({
+              setNumber: set.setNumber,
+              repType: set.repType,
+              reps: set.reps ?? null,
+              minReps: set.minReps ?? null,
+              maxReps: set.maxReps ?? null,
+              weight: set.weight ?? null,
+              rir: set.rir ?? null,
+            })),
+          },
+        })),
+      },
+    })),
+  };
+}
+
+/**
+ * ROUT-09: authored date ranges whose setup is copied at write time. ROUT-15
+ * executes them: `resolveRoutinePlan` decides which one a date trains, and a
+ * session of one of its days trains its working copy.
  */
 @Injectable()
 export class RoutineTrainingBlocksService {
@@ -157,6 +197,10 @@ export class RoutineTrainingBlocksService {
           startDate: normalized.startDate,
           endDate: normalized.endDate,
           ...source,
+          days: workingCopyDays(
+            routineId,
+            source.setup as unknown as RoutineVersionSetup,
+          ),
         },
         select: BLOCK_SELECT,
       });
@@ -199,6 +243,24 @@ export class RoutineTrainingBlocksService {
         );
       }
 
+      // ROUT-15: a live session of this block trains the current revision's
+      // working copy; replacing it mid-workout would leave that session
+      // finishing onto rows no plan reads any more.
+      if (
+        await tx.workoutSession.findFirst({
+          where: {
+            userId,
+            status: "IN_PROGRESS",
+            trainingBlockSeriesId: block.seriesId,
+          },
+          select: { id: true },
+        })
+      ) {
+        throw new ConflictException(
+          "Finish the active session of this training block before revising it",
+        );
+      }
+
       const others = await tx.routineTrainingBlock.findMany({
         where: {
           routineId,
@@ -231,6 +293,10 @@ export class RoutineTrainingBlocksService {
           startDate: normalized.startDate,
           endDate: normalized.endDate,
           ...source,
+          days: workingCopyDays(
+            routineId,
+            source.setup as unknown as RoutineVersionSetup,
+          ),
         },
         select: BLOCK_SELECT,
       });

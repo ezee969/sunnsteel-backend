@@ -14,7 +14,11 @@ export const ROUTINE_SUMMARY_SELECT = {
   visibility: true,
   moderationHiddenAt: true,
   updatedAt: true,
-  days: { select: { _count: { select: { exercises: true } } } },
+  // ROUT-15: the baseline, never a training block's working copy.
+  days: {
+    where: { trainingBlockId: null },
+    select: { _count: { select: { exercises: true } } },
+  },
 } as const;
 
 export interface RoutineSummaryEntity {

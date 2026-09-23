@@ -117,6 +117,9 @@ function fakeDb(rows: Row[]) {
           ? {
               scheduleMode: 'WEEKLY',
               days: [{ dayOfWeek: 1 }, { dayOfWeek: 3 }, { dayOfWeek: 5 }],
+              restDays: [],
+              rotationWeekdays: [],
+              trainingBlocks: [],
             }
           : null,
     },

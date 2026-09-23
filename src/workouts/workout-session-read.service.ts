@@ -173,6 +173,8 @@ export class WorkoutSessionReadService {
           id: snapshot?.sourceRoutineId ?? session.routine!.id,
           name: snapshot?.routine.name ?? session.routine!.name,
           dayName: routineDayName(snapshot?.routineDay ?? session.routineDay),
+          trainingBlockName:
+            snapshot?.trainingBlock?.name ?? session.trainingBlockName,
         },
       };
     });

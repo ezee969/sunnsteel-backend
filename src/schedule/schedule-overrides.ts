@@ -34,7 +34,8 @@ export const addCalendarDays = (date: string, days: number) =>
 /** Checks a read range: both ends dates, in order, and a bounded span. */
 export function assertOverrideRange(from: string, to: string) {
   const span = daysBetween(from, to);
-  if (span < 0) throw new BadRequestException('The range ends before it starts');
+  if (span < 0)
+    throw new BadRequestException('The range ends before it starts');
   if (span > SCHEDULE_OVERRIDES_MAX_RANGE_DAYS) {
     throw new BadRequestException(
       `Read at most ${SCHEDULE_OVERRIDES_MAX_RANGE_DAYS} days of overrides at once`,
@@ -73,6 +74,8 @@ export interface MoveInput {
   toDate: string;
   now: Date;
   routine: OccurrenceRoutine;
+  /** ROUT-15: the plan on `toDate`, when a block boundary makes it differ. */
+  targetRoutine?: OccurrenceRoutine;
   /** The routine's other overrides (not the one for `date`). */
   others: readonly OtherOverride[];
 }
@@ -85,7 +88,14 @@ export interface MoveInput {
  * device's time zone, so "past" allows one day of slack; the app applies the
  * exact local rule.
  */
-export function assertMovable({ date, toDate, now, routine, others }: MoveInput) {
+export function assertMovable({
+  date,
+  toDate,
+  now,
+  routine,
+  targetRoutine,
+  others,
+}: MoveInput) {
   assertOccurrence(date, routine);
   const distance = daysBetween(date, toDate);
   if (distance === 0) {
@@ -103,7 +113,12 @@ export function assertMovable({ date, toDate, now, routine, others }: MoveInput)
   const freed = others.some(
     (o) => o.date === toDate && (o.kind === 'SKIP' || o.toDate),
   );
-  if (routine.trainingWeekdays.includes(weekdayOf(toDate)) && !freed) {
+  // ROUT-15: the target is judged by the plan in force on the target date,
+  // which a training block boundary can make different from the source's.
+  if (
+    (targetRoutine ?? routine).trainingWeekdays.includes(weekdayOf(toDate)) &&
+    !freed
+  ) {
     throw new ConflictException(
       'That date already has a workout of this routine',
     );

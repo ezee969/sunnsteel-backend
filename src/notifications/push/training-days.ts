@@ -1,3 +1,6 @@
+import { resolveRoutinePlan } from '@sunsteel/contracts';
+import type { PlanBlock } from '../../routines/routine-plan';
+
 /**
  * NOTIF-04: which routines an account is planned to train on one local date.
  *
@@ -24,6 +27,11 @@ export interface ReminderRoutine {
   days: ReminderRoutineDay[];
   restDays: number[];
   rotationWeekdays: number[];
+  /**
+   * ROUT-15: current training blocks. While one covers the date, its own
+   * schedule decides, through the same resolver the frontend schedule uses.
+   */
+  trainingBlocks?: PlanBlock[];
 }
 
 export interface ReminderOverride {
@@ -71,7 +79,9 @@ export function routinesPlannedOn({
     if (trained.has(routine.id)) continue;
     if (!isOnOrAfterCreation(routine, date)) continue;
 
-    const routineOverrides = overrides.filter((o) => o.routineId === routine.id);
+    const routineOverrides = overrides.filter(
+      (o) => o.routineId === routine.id,
+    );
     // A workout moved onto this date counts even when the weekday does not,
     // and it is checked first so it survives a rest day on the target.
     const movedHere = routineOverrides.some(
@@ -91,10 +101,11 @@ export function routinesPlannedOn({
     }
     if (movedAway || skipped) continue;
 
-    if (routine.scheduleMode === 'WEEKLY') {
+    const plan = resolveRoutinePlan(routine, date);
+    if (plan.scheduleMode === 'WEEKLY') {
       // A rest day is a plan not to train, never an unlogged workout.
-      if (routine.restDays.includes(weekday)) continue;
-      if (routine.days.some((day) => day.dayOfWeek === weekday)) {
+      if (plan.restDays.includes(weekday)) continue;
+      if (plan.days.some((day) => day.dayOfWeek === weekday)) {
         planned.push(routine.name);
       }
       continue;
@@ -103,7 +114,7 @@ export function routinesPlannedOn({
     // A rotation without training weekdays has no dates at all — the Schedule
     // page shows its next day as an undated note, so there is nothing to
     // remind about and guessing a date would be an invention.
-    if (routine.rotationWeekdays.includes(weekday)) {
+    if (plan.rotationWeekdays.includes(weekday)) {
       planned.push(routine.name);
     }
   }

@@ -22,7 +22,7 @@ const ROUTINE_EXERCISE_SELECT = {
   },
 } as const;
 
-const ROUTINE_DAY_SELECT = {
+export const ROUTINE_DAY_SELECT = {
   id: true,
   dayOfWeek: true,
   name: true,
@@ -72,9 +72,39 @@ export const ROUTINE_WITH_DAYS_SELECT = {
   },
   createdAt: true,
   updatedAt: true,
+  // ROUT-15: the baseline only. A training block's working-copy days share
+  // the table and are read through `ROUTINE_OWNER_SELECT`'s `trainingBlocks`.
   days: {
+    where: { trainingBlockId: null },
     select: ROUTINE_DAY_SELECT,
     orderBy: { order: 'asc' },
+  },
+} as const;
+
+/**
+ * ROUT-15: the owner's own read, which also carries every current block
+ * revision with its working-copy days, so the frontend resolves what a date
+ * trains with `resolveRoutinePlan` from the routine it already has.
+ */
+export const ROUTINE_OWNER_SELECT = {
+  ...ROUTINE_WITH_DAYS_SELECT,
+  trainingBlocks: {
+    where: { supersededAt: null },
+    // Blocks of one routine never overlap, so the start date orders them.
+    orderBy: { startDate: 'asc' },
+    select: {
+      id: true,
+      seriesId: true,
+      revision: true,
+      name: true,
+      startDate: true,
+      endDate: true,
+      setup: true,
+      days: {
+        select: ROUTINE_DAY_SELECT,
+        orderBy: { order: 'asc' },
+      },
+    },
   },
 } as const;
 
