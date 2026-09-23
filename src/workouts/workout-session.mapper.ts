@@ -1,6 +1,7 @@
 import { readSnapshot } from './analytics/session-snapshot';
 import { Prisma } from '@prisma/client';
 import { SetLog, WorkoutSession } from '@sunsteel/contracts';
+import { readExerciseNotes } from './session-notes';
 import { readSubstitutions } from './session-substitutions';
 import { buildWorkoutSessionSelect } from './workout-session.selects';
 
@@ -97,5 +98,6 @@ export function toWorkoutSessionResponse(
       ? session.setLogs.map((log) => toSetLogResponse(session.id, log))
       : undefined,
     exerciseSubstitutions: readSubstitutions(session.exerciseSubstitutions),
+    exerciseNotes: readExerciseNotes(session.exerciseNotes),
   };
 }

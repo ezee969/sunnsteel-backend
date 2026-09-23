@@ -74,7 +74,9 @@ export function projectSharedRecap(
     ...(has('progression')
       ? { progressionChanges: recap.progressionChanges }
       : {}),
-    ...(has('notes') ? { notes: recap.notes ?? null } : {}),
+    ...(has('notes')
+      ? { notes: recap.notes ?? null, exerciseNotes: recap.exerciseNotes ?? [] }
+      : {}),
   };
 }
 

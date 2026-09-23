@@ -729,6 +729,9 @@ model WorkoutSession {
   // LIVE-11: SessionExerciseSubstitution[] — exercises performed in place of
   // routine slots. The snapshot keeps the prescription; this keeps the swap.
   exerciseSubstitutions Json                    @default("[]")
+  // LIVE-16: SessionExerciseNote[] -- the owner's note per exercise slot for
+  // this workout. The routine's own exercise note is never written from here.
+  exerciseNotes         Json                    @default("[]")
 
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt

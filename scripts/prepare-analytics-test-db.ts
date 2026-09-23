@@ -288,6 +288,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260923160000_session_corrections/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// LIVE-16: the generated client selects the exercise-notes column.
+				readFileSync(
+					'prisma/migrations/20260923190000_session_exercise_notes/migration.sql',
+					'utf8',
 				),
     );
     prisma(

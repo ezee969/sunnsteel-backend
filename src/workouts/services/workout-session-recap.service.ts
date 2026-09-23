@@ -12,6 +12,8 @@ import { DatabaseService } from '../../database/database.service';
 import { readProgressionEvents } from '../analytics/progression-events';
 import { readSnapshot } from '../analytics/session-snapshot';
 import { buildSessionRecapRecords, summarizeRecapSets } from '../session-recap';
+import { readExerciseNotes, recapExerciseNotes } from '../session-notes';
+import { readSubstitutions } from '../session-substitutions';
 import { routineDayName } from '../workout-session.selects';
 
 @Injectable()
@@ -33,6 +35,8 @@ export class WorkoutSessionRecapService {
         totalVolumeKg: true,
         completedSets: true,
         notes: true,
+        exerciseNotes: true,
+        exerciseSubstitutions: true,
         sourceRoutineDayId: true,
         routineDayId: true,
         snapshot: { select: { payload: true } },
@@ -178,6 +182,13 @@ export class WorkoutSessionRecapService {
       totalVolumeKg,
       completedSets,
       notes: session.notes,
+      exerciseNotes: snapshot
+        ? recapExerciseNotes(
+            readExerciseNotes(session.exerciseNotes),
+            snapshot.routineDay.exercises,
+            readSubstitutions(session.exerciseSubstitutions),
+          )
+        : [],
       records,
       progressionChanges,
       previousSession: previous,

@@ -20,7 +20,11 @@ import { StartWorkoutResponseDto } from "./dto/start-workout-response.dto";
 import { FinishWorkoutDto } from "./dto/finish-workout.dto";
 import { UpsertSetLogDto } from "./dto/upsert-set-log.dto";
 import { CorrectSessionDto } from "./dto/correct-session.dto";
-import { WorkoutSessionCorrectionService } from "./services";
+import { UpdateSessionNotesDto } from "./dto/update-session-notes.dto";
+import {
+  WorkoutSessionCorrectionService,
+  WorkoutSessionNotesService,
+} from "./services";
 import { SubstituteSessionExerciseDto } from "./dto/substitute-session-exercise.dto";
 import { ListSessionsDto } from "./dto/list-sessions.dto";
 import { WorkoutStatsQueryDto } from "./dto/workout-stats.dto";
@@ -42,6 +46,7 @@ export class WorkoutsController {
     private readonly workoutsService: WorkoutsService,
     private readonly restAlerts: RestAlertService,
     private readonly corrections: WorkoutSessionCorrectionService,
+    private readonly notes: WorkoutSessionNotesService,
   ) {}
 
   @Post("sessions/start")
@@ -98,6 +103,16 @@ export class WorkoutsController {
     @Body() dto: CorrectSessionDto,
   ) {
     return this.corrections.correctSession(req.user.id, id, dto);
+  }
+
+  // LIVE-16: the owner's notes about this workout, during it or after it.
+  @Put("sessions/:id/notes")
+  async updateNotes(
+    @Req() req: RequestWithUser,
+    @Param("id") id: string,
+    @Body() dto: UpdateSessionNotesDto,
+  ) {
+    return this.notes.updateNotes(req.user.id, id, dto);
   }
 
   @Get("sessions/:id/recap")
