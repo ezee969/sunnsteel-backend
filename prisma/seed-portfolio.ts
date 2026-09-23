@@ -15,6 +15,7 @@ import { UserRelationshipsService } from '../src/users/user-relationships.servic
 import { FeaturedProfileItemsService } from '../src/users/featured-profile-items.service'
 import { UsersService } from '../src/users/users.service'
 import { ActivityService } from '../src/activity/activity.service'
+import { RoutineTrainingBlocksService } from '../src/routines/routine-training-blocks.service'
 import {
 	SeedSession,
 	rebuildAnalytics,
@@ -666,6 +667,12 @@ async function verify(ownerId: string): Promise<void> {
 			`routine days without exercises: ${emptyDays.map((day) => day.name).join(', ')}`,
 		)
 
+	const trainingBlocks = await prisma.routineTrainingBlock.count({
+		where: { routineId: ROUTINE_IDS.active, supersededAt: null },
+	})
+	if (trainingBlocks < 2)
+		problems.push(`expected 2 active-routine training blocks, found ${trainingBlocks}`)
+
 	const unsummarized = await prisma.workoutSession.count({
 		where: {
 			userId: ownerId,
@@ -929,6 +936,20 @@ async function main() {
 	await persistFinalPrescriptions(legacyRoutine)
 	await persistFinalPrescriptions(activeRoutine)
 
+	// ROUT-09: one current and one future authored setup make the routine-detail
+	// portfolio target show the timeline without ROUT-15 changing execution.
+	const trainingBlocks = new RoutineTrainingBlocksService(prisma)
+	await trainingBlocks.create(owner.id, activeRoutine.id, {
+		name: 'Autumn accumulation',
+		startDate: addDays(today, -14).toISOString().slice(0, 10),
+		endDate: addDays(today, 20).toISOString().slice(0, 10),
+	})
+	await trainingBlocks.create(owner.id, activeRoutine.id, {
+		name: 'Strength intensification',
+		startDate: addDays(today, 21).toISOString().slice(0, 10),
+		endDate: addDays(today, 48).toISOString().slice(0, 10),
+	})
+
 	// --- peers and follow graph ------------------------------------------------
 	const peerIds = PEERS.map((peer) => seedId('user', peer.handle))
 	await prisma.user.createMany({
@@ -1071,6 +1092,7 @@ async function main() {
 		follows: follows.length,
 		trainingPartnerships: 1,
 		partnerEncouragements: 1,
+		trainingBlocks: 2,
 		reports: reports.length,
 	}
 

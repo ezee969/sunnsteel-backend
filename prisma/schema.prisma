@@ -529,6 +529,7 @@ model Routine {
   days                RoutineDay[]
   workoutSessions     WorkoutSession[]
   versions            RoutineVersion[]
+  trainingBlocks      RoutineTrainingBlock[]
   shares              RoutineShare[]
   scheduleOverrides   ScheduleOverride[]
 
@@ -569,8 +570,39 @@ model RoutineVersion {
   restoredVersionNumber Int?
   setup                 Json
   createdAt             DateTime           @default(now())
+  trainingBlockRevisions RoutineTrainingBlock[]
 
   @@unique([routineId, number])
+}
+
+// ROUT-09: immutable revisions of a named, dated routine setup. Exactly one
+// row per series has supersededAt = null; older rows remain durable history.
+model RoutineTrainingBlock {
+  id                    String                         @id @default(uuid())
+  routineId             String
+  routine               Routine                        @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  seriesId              String
+  revision              Int
+  name                  String                         @db.VarChar(60)
+  startDate             String                         @db.VarChar(10)
+  endDate               String                         @db.VarChar(10)
+  setup                 Json
+  sourceKind            RoutineTrainingBlockSourceKind
+  sourceVersionId       String?
+  sourceVersion         RoutineVersion?                @relation(fields: [sourceVersionId], references: [id], onDelete: SetNull)
+  sourceVersionNumber   Int?
+  sourceVersionName     String?                        @db.VarChar(60)
+  supersededAt          DateTime?
+  createdAt             DateTime                       @default(now())
+
+  @@unique([seriesId, revision])
+  @@index([routineId, supersededAt, startDate])
+  @@index([sourceVersionId])
+}
+
+enum RoutineTrainingBlockSourceKind {
+  CURRENT_ROUTINE
+  SAVED_VERSION
 }
 
 enum RoutineVersionKind {

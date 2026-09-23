@@ -10,18 +10,22 @@ import {
 } from './routine-shares.controller';
 import { RoutineSharingService } from './routine-sharing.service';
 import { RoutineDiscoveryService } from './routine-discovery.service';
+import { RoutineTrainingBlocksController } from './routine-training-blocks.controller';
+import { RoutineTrainingBlocksService } from './routine-training-blocks.service';
 
 @Module({
   imports: [DatabaseModule],
   controllers: [
     RoutinesController,
     RoutineVersionsController,
+    RoutineTrainingBlocksController,
     RoutineSharesController,
     SharedRoutinesController,
   ],
   providers: [
     RoutinesService,
     RoutineVersionsService,
+    RoutineTrainingBlocksService,
     RoutineSharingService,
     RoutineDiscoveryService,
   ],

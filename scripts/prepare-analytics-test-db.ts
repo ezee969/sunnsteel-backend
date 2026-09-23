@@ -276,6 +276,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260922180000_partner_encouragement/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// ROUT-09: immutable, dated routine-setup revisions.
+				readFileSync(
+					'prisma/migrations/20260923120000_routine_training_blocks/migration.sql',
+					'utf8',
 				),
     );
     prisma(
