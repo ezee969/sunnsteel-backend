@@ -913,6 +913,8 @@ enum NotificationKind {
   NEW_FOLLOWER
   /// SOC-06: the first kind another member causes on purpose.
   ACTIVITY_COMMENT
+  /// SOC-09: one of four fixed prompts from an allowed training partner.
+  TRAINING_PARTNER_ENCOURAGEMENT
 }
 
 /// NOTIF-08: one subscribed browser on one device. The endpoint is the

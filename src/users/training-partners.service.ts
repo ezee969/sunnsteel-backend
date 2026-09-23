@@ -1,13 +1,19 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
+  HttpStatus,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
 import {
   TRAINING_PARTNER_REQUESTS_PER_DAY_MAX,
+  TRAINING_PARTNER_ENCOURAGEMENTS_PER_24_HOURS_MAX,
   TRAINING_PARTNERS_MAX,
+  type SendTrainingPartnerEncouragementResponse,
+  type TrainingPartnerEncouragementKind,
   type TrainingPartnerPermissions,
   type TrainingPartnerScheduleResponse,
   type TrainingPartnership,
@@ -97,6 +103,9 @@ const addUtcDays = (date: string, days: number): string => {
   value.setUTCDate(value.getUTCDate() + days);
   return value.toISOString().slice(0, 10);
 };
+
+const ENCOURAGEMENT_WINDOW_MS = 24 * 60 * 60 * 1000;
+const SERIALIZABLE_RETRIES = 3;
 
 @Injectable()
 export class TrainingPartnersService {
@@ -341,6 +350,99 @@ export class TrainingPartnersService {
         trained: trainedDates.has(date),
       })),
     };
+  }
+
+  /**
+   * SOC-09: the notification row is the prompt and the rate-limit evidence.
+   * There is deliberately no message or conversation model beside it.
+   */
+  async encourage(
+    viewerId: string,
+    partnershipId: string,
+    kind: TrainingPartnerEncouragementKind,
+    now = new Date(),
+  ): Promise<SendTrainingPartnerEncouragementResponse> {
+    for (let attempt = 0; attempt < SERIALIZABLE_RETRIES; attempt += 1) {
+      try {
+        return await this.db.$transaction(
+          async (tx) => {
+            const partnership = await tx.trainingPartnership.findFirst({
+              where: {
+                id: partnershipId,
+                status: 'ACTIVE',
+                OR: [{ requesterId: viewerId }, { recipientId: viewerId }],
+              },
+              select: {
+                requesterId: true,
+                recipientId: true,
+                grants: {
+                  where: { encouragement: true },
+                  select: { grantorId: true },
+                },
+              },
+            });
+            if (!partnership) {
+              throw new NotFoundException('Training partnership not found');
+            }
+            const recipientId =
+              partnership.requesterId === viewerId
+                ? partnership.recipientId
+                : partnership.requesterId;
+            if (
+              !partnership.grants.some(
+                (grant) => grant.grantorId === recipientId,
+              ) ||
+              (await isHiddenFromViewer(tx, viewerId, recipientId))
+            ) {
+              throw new NotFoundException('Training partnership not found');
+            }
+
+            const since = new Date(now.getTime() - ENCOURAGEMENT_WINDOW_MS);
+            const sent = await tx.notification.count({
+              where: {
+                userId: recipientId,
+                actorId: viewerId,
+                kind: 'TRAINING_PARTNER_ENCOURAGEMENT',
+                createdAt: { gte: since },
+              },
+            });
+            if (sent >= TRAINING_PARTNER_ENCOURAGEMENTS_PER_24_HOURS_MAX) {
+              throw new HttpException(
+                `You can send this partner at most ${TRAINING_PARTNER_ENCOURAGEMENTS_PER_24_HOURS_MAX} encouragements in 24 hours.`,
+                HttpStatus.TOO_MANY_REQUESTS,
+              );
+            }
+
+            const notification = await tx.notification.create({
+              data: {
+                userId: recipientId,
+                actorId: viewerId,
+                kind: 'TRAINING_PARTNER_ENCOURAGEMENT',
+                sourceKey: `encouragement:${randomUUID()}`,
+                payload: { encouragementKind: kind },
+                createdAt: now,
+              },
+              select: { id: true, createdAt: true },
+            });
+            return {
+              notificationId: notification.id,
+              sentAt: notification.createdAt.toISOString(),
+            };
+          },
+          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+        );
+      } catch (error) {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2034'
+        ) {
+          if (attempt + 1 < SERIALIZABLE_RETRIES) continue;
+          throw new ConflictException('Please retry the encouragement.');
+        }
+        throw error;
+      }
+    }
+    throw new ConflictException('Please retry the encouragement.');
   }
 
   private async getForViewer(

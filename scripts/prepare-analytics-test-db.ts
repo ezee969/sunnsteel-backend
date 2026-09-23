@@ -270,6 +270,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260922140000_drop_legacy_auth/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// SOC-09: fixed training-partner encouragement notifications.
+				readFileSync(
+					'prisma/migrations/20260922180000_partner_encouragement/migration.sql',
+					'utf8',
 				),
     );
     prisma(

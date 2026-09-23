@@ -39,6 +39,7 @@ import { MemberBlocksService } from './member-blocks.service';
 import { ReplaceFeaturedProfileItemsDto } from './dto/replace-featured-profile-items.dto';
 import { UpdateTrainingPartnerPermissionsDto } from './dto/update-training-partner-permissions.dto';
 import { TrainingPartnersService } from './training-partners.service';
+import { SendTrainingPartnerEncouragementDto } from './dto/send-training-partner-encouragement.dto';
 
 @UseGuards(SupabaseJwtGuard)
 @Controller('users')
@@ -204,6 +205,19 @@ export class UsersController {
     @Param('partnershipId') partnershipId: string,
   ) {
     return this.trainingPartners.schedule(req.user.id, partnershipId);
+  }
+
+  @Post('me/training-partners/:partnershipId/encouragements')
+  sendTrainingPartnerEncouragement(
+    @Request() req: RequestWithUser,
+    @Param('partnershipId') partnershipId: string,
+    @Body() dto: SendTrainingPartnerEncouragementDto,
+  ) {
+    return this.trainingPartners.encourage(
+      req.user.id,
+      partnershipId,
+      dto.kind,
+    );
   }
 
   @Delete('me/training-partners/:partnershipId')

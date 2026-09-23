@@ -8,6 +8,7 @@ import {
   retentionStart,
 } from '../src/notifications/notification-sources';
 import { NotificationsService } from '../src/notifications/notifications.service';
+import { toAppNotification } from '../src/notifications/notifications.service';
 
 const NOW = new Date('2026-09-15T12:00:00.000Z');
 const at = (iso: string) => new Date(iso);
@@ -112,6 +113,30 @@ test('every follow is its own note, keyed by its time', () => {
   assert.notEqual(drafts[0].sourceKey, drafts[1].sourceKey);
   assert.equal(lookbackStart(NOW).toISOString(), '2026-08-16T12:00:00.000Z');
   assert.equal(retentionStart(NOW).toISOString(), '2026-06-17T12:00:00.000Z');
+});
+
+test('partner encouragement maps its fixed prompt and actor', () => {
+  const notification = toAppNotification(
+    {
+      id: 'encouragement',
+      kind: 'TRAINING_PARTNER_ENCOURAGEMENT',
+      payload: { encouragementKind: 'STRONG_SESSION' },
+      createdAt: NOW,
+      readAt: null,
+      sessionId: null,
+      actor: {
+        id: 'u2',
+        username: 'marta',
+        name: 'Marta',
+        lastName: null,
+        avatarUrl: null,
+      },
+    },
+    new Set(),
+  );
+  assert.ok(notification?.kind === 'TRAINING_PARTNER_ENCOURAGEMENT');
+  assert.equal(notification.encouragement.kind, 'STRONG_SESSION');
+  assert.equal(notification.actor.username, 'marta');
 });
 
 type Row = {

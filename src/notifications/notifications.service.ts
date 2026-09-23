@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import {
   NOTIFICATIONS_LIST_LIMIT,
+  TRAINING_PARTNER_ENCOURAGEMENT_KINDS,
   type AppNotification,
   type MarkNotificationsReadResponse,
   type NotificationsResponse,
@@ -101,6 +102,26 @@ export function toAppNotification(
       const entryId = typeof payload.entryId === 'string' ? payload.entryId : '';
       if (!row.actor || !entryId) return null;
       return { ...base, kind: 'ACTIVITY_COMMENT', actor: row.actor, entryId };
+    }
+    case 'TRAINING_PARTNER_ENCOURAGEMENT': {
+      const encouragementKind = payload.encouragementKind;
+      if (
+        !row.actor ||
+        typeof encouragementKind !== 'string' ||
+        !TRAINING_PARTNER_ENCOURAGEMENT_KINDS.includes(
+          encouragementKind as (typeof TRAINING_PARTNER_ENCOURAGEMENT_KINDS)[number],
+        )
+      ) {
+        return null;
+      }
+      return {
+        ...base,
+        kind: 'TRAINING_PARTNER_ENCOURAGEMENT',
+        actor: row.actor,
+        encouragement: {
+          kind: encouragementKind as (typeof TRAINING_PARTNER_ENCOURAGEMENT_KINDS)[number],
+        },
+      };
     }
     default:
       return null;

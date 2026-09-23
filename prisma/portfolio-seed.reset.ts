@@ -121,6 +121,14 @@ export async function resetPortfolioSeed(
 			})
 		: { count: 0 }
 
+	// Notifications addressed to the real owner do not cascade through their
+	// recipient. Remove peer-authored portfolio rows before deleting the peers.
+	const peerNotifications = peerIds.length
+		? await prisma.notification.deleteMany({
+				where: { actorId: { in: peerIds } },
+			})
+		: { count: 0 }
+
 	const users = peerIds.length
 		? await prisma.user.deleteMany({ where: { id: { in: peerIds } } })
 		: { count: 0 }
@@ -130,6 +138,7 @@ export async function resetPortfolioSeed(
 		workoutSessions: workoutSessions.count,
 		routines: routines.count,
 		...analytics,
+		notifications: analytics.notifications + peerNotifications.count,
 		follows: follows.count,
 		reports: reports.count,
 		users: users.count,

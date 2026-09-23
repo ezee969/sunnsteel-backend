@@ -964,6 +964,39 @@ async function main() {
 	]
 	await prisma.userFollow.createMany({ data: follows, skipDuplicates: true })
 
+	// SOC-08/SOC-09: one real active partnership and one private prompt make
+	// the profile action and notification-centre row visible in the portfolio.
+	// Ken grants encouragement to the owner; the owner's independent grant stays
+	// off, so the fixture also demonstrates that access is directional.
+	const partnerId = peerIds[3]
+	await prisma.trainingPartnership.create({
+		data: {
+			id: seedId('training-partnership', owner.id, partnerId),
+			pairKey: [owner.id, partnerId].sort().join(':'),
+			requesterId: owner.id,
+			recipientId: partnerId,
+			status: 'ACTIVE',
+			acceptedAt: new Date(),
+			grants: {
+				create: [
+					{ grantorId: owner.id },
+					{ grantorId: partnerId, encouragement: true },
+				],
+			},
+		},
+	})
+	await prisma.notification.create({
+		data: {
+			id: seedId('notification', 'partner-encouragement', owner.id),
+			userId: owner.id,
+			actorId: partnerId,
+			kind: 'TRAINING_PARTNER_ENCOURAGEMENT',
+			sourceKey: `portfolio:partner-encouragement:${partnerId}`,
+			payload: { encouragementKind: 'GOOD_WORK' },
+			createdAt: new Date(),
+		},
+	})
+
 	// --- moderation queue (TRUST-04) -------------------------------------------
 	// A few open reports so `/moderation` photographs the feature rather than
 	// its empty state. Every one is **peer about peer**: a portfolio frame must
@@ -1022,6 +1055,8 @@ async function main() {
 		peerSessions,
 		peerSetLogs,
 		follows: follows.length,
+		trainingPartnerships: 1,
+		partnerEncouragements: 1,
 		reports: reports.length,
 	}
 

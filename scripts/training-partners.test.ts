@@ -2,12 +2,17 @@ import 'reflect-metadata';
 import * as assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { ProfilePrivacySettings } from '@sunsteel/contracts';
+import { TRAINING_PARTNER_ENCOURAGEMENTS_PER_24_HOURS_MAX } from '@sunsteel/contracts';
+import { DatabaseService } from '../src/database/database.service';
 import { resolveProfileViewerAccess } from '../src/users/profile-privacy';
 import {
   NO_TRAINING_PARTNER_PERMISSIONS,
   trainingPartnerPairKey,
 } from '../src/users/training-partner-access';
-import { mapTrainingPartnership } from '../src/users/training-partners.service';
+import {
+  mapTrainingPartnership,
+  TrainingPartnersService,
+} from '../src/users/training-partners.service';
 
 describe('SOC-08 training partnership rules', () => {
   it('uses one canonical key for a pair in either direction', () => {
@@ -115,5 +120,87 @@ describe('SOC-08 training partnership rules', () => {
     assert.equal(recipient.requestedByMe, false);
     assert.equal(recipient.permissionsGrantedByMe.schedule, true);
     assert.equal(recipient.permissionsGrantedToMe.progress, true);
+  });
+});
+
+const encouragementDb = ({
+  allowed = true,
+  sent = 0,
+}: {
+  allowed?: boolean;
+  sent?: number;
+}) => {
+  const writes: any[] = [];
+  const tx = {
+    trainingPartnership: {
+      findFirst: async () => ({
+        requesterId: 'sender',
+        recipientId: 'recipient',
+        grants: allowed ? [{ grantorId: 'recipient' }] : [],
+      }),
+    },
+    userBlock: { count: async () => 0 },
+    user: { count: async () => 0 },
+    notification: {
+      count: async () => sent,
+      create: async ({ data }: any) => {
+        writes.push(data);
+        return { id: 'notification', createdAt: data.createdAt };
+      },
+    },
+  };
+  const db = {
+    $transaction: async (run: (client: typeof tx) => Promise<unknown>) =>
+      run(tx),
+  } as unknown as DatabaseService;
+  return { service: new TrainingPartnersService(db), writes };
+};
+
+describe('SOC-09 partner encouragement', () => {
+  const now = new Date('2026-09-22T18:00:00.000Z');
+
+  it('writes one fixed prompt to the recipient notification centre', async () => {
+    const { service, writes } = encouragementDb({});
+    assert.deepEqual(
+      await service.encourage('sender', 'partnership', 'GOOD_WORK', now),
+      {
+        notificationId: 'notification',
+        sentAt: now.toISOString(),
+      },
+    );
+    assert.equal(writes.length, 1);
+    assert.deepEqual(
+      {
+        userId: writes[0].userId,
+        actorId: writes[0].actorId,
+        kind: writes[0].kind,
+        payload: writes[0].payload,
+      },
+      {
+        userId: 'recipient',
+        actorId: 'sender',
+        kind: 'TRAINING_PARTNER_ENCOURAGEMENT',
+        payload: { encouragementKind: 'GOOD_WORK' },
+      },
+    );
+  });
+
+  it('answers not found when the recipient did not grant encouragement', async () => {
+    const { service } = encouragementDb({ allowed: false });
+    await assert.rejects(
+      service.encourage('sender', 'partnership', 'KEEP_GOING', now),
+      (error: any) => error?.status === 404,
+    );
+  });
+
+  it('enforces the rolling per-pair budget before writing', async () => {
+    const { service, writes } = encouragementDb({
+      sent: TRAINING_PARTNER_ENCOURAGEMENTS_PER_24_HOURS_MAX,
+    });
+    await assert.rejects(
+      service.encourage('sender', 'partnership', 'READY_TO_TRAIN', now),
+      (error: any) => error?.status === 429,
+    );
+    assert.equal(writes.length, 0);
   });
 });
