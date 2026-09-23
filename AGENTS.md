@@ -75,18 +75,27 @@ Feature modules under `src/` (auth, users, exercises, routines, schedule, notifi
 
 ### Workouts module — service decomposition
 
-`workouts.service.ts` is a thin facade; behavior lives in single-purpose services under `src/workouts/services/` (barrel-exported via `services/index.ts`) plus a few top-level files in `src/workouts/`:
+`workouts.service.ts` is a thin facade over single-purpose services. The session lifecycle lives under `src/workouts/services/`, barrel-exported via `services/index.ts`:
 
 - `workout-session-start.service.ts` — starting or resuming a session; reuse refreshes `lastActivityAt`
 - `workout-session-log.service.ts` — logging sets during a session
 - `workout-session-finish.service.ts` — finishing a session (applies weight progression)
+- `workout-session-recap.service.ts` — the reconstructible recap of one finished session
+- `workout-session-substitution.service.ts` — LIVE-11 in-session exercise swaps, refused once the slot has a completed set
+
+The reads, the Progress endpoints and session sharing are top-level files in `src/workouts/`, imported directly rather than through the barrel:
+
 - `workout-session-read.service.ts` — reads/listing
+- `workout-progress.service.ts` — the dashboard progress summary, read from the active timezone-matched analytics projection (`503` until it is ready)
 - `workout-strength-trend.service.ts` — bounded best-set/e1RM record-frontier series from indexed `PERSONAL_RECORD` events
 - `workout-exercise-performance.service.ts` — paginated terminal-session history with completed sets, snapshot context, notes and progression events
 - `workout-muscle-heatmap.service.ts` — bounded 4–12-week muscle distribution from the active timezone-matched analytics projection
 - `workout-volume-trend.service.ts` — bounded weekly volume and completed-set comparisons across the total, muscles, historical routines and exercises
+- `workout-session-comparison.service.ts` — the latest two completed snapshots of one stable routine-day identity
 - `workout-progress-timeline.service.ts` — cursor-paginated `PERSONAL_RECORD`/`PROGRESSION_CHANGED` feed; the optional `exerciseId` (EXER-01) filters on the top-level payload id both event families carry, so it walks the same owner-scoped index, and a cursor from another exercise's feed is rejected
+- `workout-personal-goals.service.ts` — PROG-08 private measurable goals evaluated from bounded rollups, the streak projection and persisted records
 - `workout-plateaus.service.ts` — PROG-09 plateau watch: one query over the owner's `PersonalRecord` rows and the completed loaded sets of terminal sessions in an 8-week window, evaluated by the pure `evaluatePlateaus` against the `PLATEAU_*` contract thresholds and the account's `User.plateauMinSessions` (PREF-05: default 4, a 3–8 check constraint in migration `20260914210000_plateau_min_sessions`, also applied by `scripts/prepare-analytics-test-db.ts`, and saved through `PUT /users/preferences/plateaus` in `src/users/plateau-preferences.service.ts`); a lift whose estimated 1RM rose is never flagged
+- `workout-session-share.service.ts` — SOC-07 revocable, field-scoped session share links
 
 Active workout sessions are recoverable user data. Do not restore a timer that
 silently marks stale sessions `ABORTED`: LIVE-10 deliberately leaves them active
