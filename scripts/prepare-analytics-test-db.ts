@@ -282,6 +282,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260923120000_routine_training_blocks/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// LIVE-17: saved corrections of finished workouts.
+				readFileSync(
+					'prisma/migrations/20260923160000_session_corrections/migration.sql',
+					'utf8',
 				),
     );
     prisma(

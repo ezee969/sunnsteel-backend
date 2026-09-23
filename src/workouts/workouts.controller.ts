@@ -19,6 +19,8 @@ import { StartWorkoutDto } from "./dto/start-workout.dto";
 import { StartWorkoutResponseDto } from "./dto/start-workout-response.dto";
 import { FinishWorkoutDto } from "./dto/finish-workout.dto";
 import { UpsertSetLogDto } from "./dto/upsert-set-log.dto";
+import { CorrectSessionDto } from "./dto/correct-session.dto";
+import { WorkoutSessionCorrectionService } from "./services";
 import { SubstituteSessionExerciseDto } from "./dto/substitute-session-exercise.dto";
 import { ListSessionsDto } from "./dto/list-sessions.dto";
 import { WorkoutStatsQueryDto } from "./dto/workout-stats.dto";
@@ -39,6 +41,7 @@ export class WorkoutsController {
   constructor(
     private readonly workoutsService: WorkoutsService,
     private readonly restAlerts: RestAlertService,
+    private readonly corrections: WorkoutSessionCorrectionService,
   ) {}
 
   @Post("sessions/start")
@@ -79,6 +82,22 @@ export class WorkoutsController {
     @Param("id") id: string,
   ) {
     return this.workoutsService.getPreviousPerformance(req.user.id, id);
+  }
+
+  // LIVE-17: whether the workout can still be corrected, and every saved
+  // correction with its before and after values.
+  @Get("sessions/:id/corrections")
+  async getCorrections(@Req() req: RequestWithUser, @Param("id") id: string) {
+    return this.corrections.getCorrections(req.user.id, id);
+  }
+
+  @Post("sessions/:id/corrections")
+  async correct(
+    @Req() req: RequestWithUser,
+    @Param("id") id: string,
+    @Body() dto: CorrectSessionDto,
+  ) {
+    return this.corrections.correctSession(req.user.id, id, dto);
   }
 
   @Get("sessions/:id/recap")

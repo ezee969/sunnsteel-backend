@@ -68,6 +68,7 @@ model User {
   favoriteExercises          UserFavoriteExercise[]
   starredExercises           StarredExercise[]
   sessionShares              SessionShare[]
+  sessionCorrections         SessionCorrection[]
   routineShares              RoutineShare[]
   measurableGoals            MeasurableGoal[]
   scheduleOverrides          ScheduleOverride[]
@@ -733,6 +734,7 @@ model WorkoutSession {
   updatedAt       DateTime        @updatedAt
   shares          SessionShare[]
   notifications   Notification[]
+  corrections     SessionCorrection[]
   /// At most one in practice: the `rest:<sessionId>` dedupe key enforces it.
   /// The relation is one-to-many because `sessionId` is no longer unique.
   scheduledPushes ScheduledPush[]
@@ -779,6 +781,23 @@ model SessionShare {
   moderationHiddenAt DateTime?
 
   @@index([sessionId, revokedAt])
+  @@index([userId])
+}
+
+/// LIVE-17: one saved correction of a finished workout's set logs. Written
+/// once and never updated or deleted -- the before and after values in
+/// `changes` (contracts `SessionSetCorrection[]`) are the audit trail, so a
+/// second correction appends another row rather than editing this one.
+model SessionCorrection {
+  id        String         @id @default(uuid())
+  sessionId String
+  session   WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  changes   Json
+  createdAt DateTime       @default(now())
+
+  @@index([sessionId, createdAt])
   @@index([userId])
 }
 

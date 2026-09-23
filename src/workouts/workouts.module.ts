@@ -3,6 +3,7 @@ import { WorkoutsController } from "./workouts.controller";
 import { DatabaseModule } from "../database/database.module";
 import { WorkoutsService } from "./workouts.service";
 import {
+  WorkoutSessionCorrectionService,
   WorkoutSessionFinishService,
   WorkoutSessionLogService,
   WorkoutSessionRecapService,
@@ -38,6 +39,7 @@ import { PushModule } from "../notifications/push/push.module";
     WorkoutsService,
     WorkoutSessionStartService,
     WorkoutSessionFinishService,
+    WorkoutSessionCorrectionService,
     WorkoutSessionLogService,
     WorkoutSessionRecapService,
     WorkoutSessionSubstitutionService,

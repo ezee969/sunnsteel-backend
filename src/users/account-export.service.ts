@@ -4,6 +4,7 @@ import {
   ACCOUNT_EXPORT_VERSION,
   type AccountExportMember,
   type AccountExportV1,
+  type SessionSetCorrection,
 } from '@sunsteel/contracts';
 import { DatabaseService } from '../database/database.service';
 import { ROUTINE_WITH_DAYS_SELECT } from '../routines/routine.selects';
@@ -83,6 +84,7 @@ export class AccountExportService {
       reports,
       sharingDefaults,
       entryOverrides,
+      corrections,
     ] = await Promise.all([
       this.db.routine.findMany({
         where: { userId },
@@ -209,6 +211,11 @@ export class AccountExportService {
         select: { entryKey: true, audience: true },
         orderBy: { entryKey: 'asc' },
       }),
+      // LIVE-17: the trail of corrections, so the file says what was changed.
+      this.db.sessionCorrection.findMany({
+        where: { userId },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      }),
     ]);
 
     const member = (m: {
@@ -262,6 +269,12 @@ export class AccountExportService {
         })),
       })),
       workouts: sessions.map((session) => toWorkoutSessionResponse(session)),
+      workoutCorrections: corrections.map((correction) => ({
+        id: correction.id,
+        sessionId: correction.sessionId,
+        createdAt: correction.createdAt.toISOString(),
+        changes: correction.changes as unknown as SessionSetCorrection[],
+      })),
       personalRecords: records.map((record) => ({
         exerciseId: record.exerciseId,
         exerciseName: record.exerciseName,
