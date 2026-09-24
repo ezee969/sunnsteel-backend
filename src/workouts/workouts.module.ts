@@ -29,6 +29,8 @@ import { WorkoutPersonalGoalsService } from "./workout-personal-goals.service";
 import { WorkoutPlateausService } from "./workout-plateaus.service";
 import { WorkoutTrainingSignalsService } from "./workout-training-signals.service";
 import { WorkoutDeloadSuggestionService } from "./workout-deload-suggestion.service";
+import { WorkoutBlockComparisonService } from "./workout-block-comparison.service";
+import { TrainingBlockComparisonController } from "./training-block-comparison.controller";
 import { PushModule } from "../notifications/push/push.module";
 
 @Module({
@@ -37,6 +39,7 @@ import { PushModule } from "../notifications/push/push.module";
     WorkoutsController,
     SessionSharesController,
     SharedSessionsController,
+    TrainingBlockComparisonController,
   ],
   providers: [
     WorkoutsService,
@@ -60,6 +63,7 @@ import { PushModule } from "../notifications/push/push.module";
     WorkoutPlateausService,
     WorkoutTrainingSignalsService,
     WorkoutDeloadSuggestionService,
+    WorkoutBlockComparisonService,
   ],
   exports: [WorkoutsService],
 })

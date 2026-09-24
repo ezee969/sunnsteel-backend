@@ -47,11 +47,12 @@ export interface TrainingSignalSetRow {
 /** Rep-target floors per session, keyed by `slotId:setNumber`. */
 export type RepTargetFloors = ReadonlyMap<string, ReadonlyMap<string, number>>;
 
-type Half = "recent" | "previous";
+/** Which of the two compared periods a row falls in (PROG-10 halves, PROG-11 periods). */
+export type Half = "recent" | "previous";
 
 const round1 = (value: number) => Math.round(value * 10) / 10;
 const round3 = (value: number) => Math.round(value * 1000) / 1000;
-const estimated1rm = (weight: number, reps: number) =>
+export const estimated1rm = (weight: number, reps: number) =>
   recordValues({ isCompleted: true, weight, reps }).ESTIMATED_1RM ?? 0;
 const floorKey = (slotId: string, setNumber: number) =>
   `${slotId}:${setNumber}`;
@@ -127,7 +128,8 @@ export function evaluateTrainingSignals(
   };
 }
 
-function effortSignal(
+/** Shared with PROG-11, which compares two arbitrary periods the same way. */
+export function effortSignal(
   rows: readonly TrainingSignalSetRow[],
   halfOf: (endedAt: Date) => Half | null,
 ): TrainingSignalsResponse["effort"] {
@@ -180,7 +182,7 @@ function effortSignal(
   };
 }
 
-function repTargetSignal(
+export function repTargetSignal(
   rows: readonly TrainingSignalSetRow[],
   floors: RepTargetFloors,
   halfOf: (endedAt: Date) => Half | null,
@@ -368,6 +370,8 @@ export class WorkoutTrainingSignalsService {
     userId: string,
     from: Date,
     to: Date,
+    /** PROG-11 reads one routine's workouts only. */
+    routineId?: string,
   ): Promise<{ rows: TrainingSignalSetRow[]; floors: RepTargetFloors }> {
     const rows = await this.db.$queryRaw<TrainingSignalSetRow[]>(Prisma.sql`
       SELECT
@@ -392,6 +396,7 @@ export class WorkoutTrainingSignalsService {
         AND sessions."endedAt" IS NOT NULL
         AND sessions."endedAt" > ${from}
         AND sessions."endedAt" <= ${to}
+        ${routineId ? Prisma.sql`AND sessions."routineId" = ${routineId}` : Prisma.empty}
         AND logs."isCompleted"`);
 
     const sessionIds = [...new Set(rows.map((row) => row.sessionId))];
