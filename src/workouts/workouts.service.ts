@@ -39,6 +39,7 @@ import { WorkoutProgressTimelineService } from "./workout-progress-timeline.serv
 import { ProgressTimelineQueryDto } from "./dto/progress-timeline.dto";
 import { WorkoutPersonalGoalsService } from "./workout-personal-goals.service";
 import { WorkoutPlateausService } from "./workout-plateaus.service";
+import { WorkoutTrainingSignalsService } from "./workout-training-signals.service";
 
 @Injectable()
 export class WorkoutsService {
@@ -57,6 +58,7 @@ export class WorkoutsService {
     private readonly workoutProgressTimeline: WorkoutProgressTimelineService,
     private readonly workoutPersonalGoals: WorkoutPersonalGoalsService,
     private readonly workoutPlateaus: WorkoutPlateausService,
+    private readonly workoutTrainingSignals: WorkoutTrainingSignalsService,
     private readonly workoutSessionSubstitution: WorkoutSessionSubstitutionService,
   ) {}
 
@@ -109,6 +111,10 @@ export class WorkoutsService {
 
   getPlateaus(userId: string) {
     return this.workoutPlateaus.getPlateaus(userId);
+  }
+
+  getTrainingSignals(userId: string) {
+    return this.workoutTrainingSignals.getTrainingSignals(userId);
   }
 
   async getSessionById(userId: string, id: string): Promise<WorkoutSession> {
