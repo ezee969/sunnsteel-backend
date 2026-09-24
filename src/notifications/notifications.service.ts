@@ -16,6 +16,7 @@ import {
   lookbackStart,
   retentionStart,
 } from './notification-sources';
+import { PartnerActivityAlertsService } from './partner-activity-alerts.service';
 
 const json = (value: unknown) =>
   JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
@@ -99,7 +100,8 @@ export function toAppNotification(
       // SOC-06. No `isFollowedByMe`: a comment is not an invitation to follow
       // anyone, and the row carries no body, because it outlives the comment
       // it announces.
-      const entryId = typeof payload.entryId === 'string' ? payload.entryId : '';
+      const entryId =
+        typeof payload.entryId === 'string' ? payload.entryId : '';
       if (!row.actor || !entryId) return null;
       return { ...base, kind: 'ACTIVITY_COMMENT', actor: row.actor, entryId };
     }
@@ -123,6 +125,39 @@ export function toAppNotification(
         },
       };
     }
+    case 'TRAINING_PARTNER_SESSION': {
+      const entryId =
+        typeof payload.entryId === 'string' ? payload.entryId : '';
+      if (!row.actor || !row.sessionId || !entryId) return null;
+      return {
+        ...base,
+        kind: 'TRAINING_PARTNER_SESSION',
+        actor: row.actor,
+        entryId,
+        session: {
+          id: row.sessionId,
+          routineName: String(payload.routineName ?? 'Workout'),
+          dayName: typeof payload.dayName === 'string' ? payload.dayName : null,
+        },
+      };
+    }
+    case 'TRAINING_PARTNER_ACHIEVEMENT': {
+      const entryId =
+        typeof payload.entryId === 'string' ? payload.entryId : '';
+      const achievementId =
+        typeof payload.achievementId === 'string' ? payload.achievementId : '';
+      if (!row.actor || !entryId || !achievementId) return null;
+      return {
+        ...base,
+        kind: 'TRAINING_PARTNER_ACHIEVEMENT',
+        actor: row.actor,
+        entryId,
+        achievement: {
+          id: achievementId,
+          title: String(payload.title ?? 'Achievement'),
+        },
+      };
+    }
     default:
       return null;
   }
@@ -137,13 +172,17 @@ export function toAppNotification(
  */
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(
+    private readonly db: DatabaseService,
+    private readonly partnerAlerts: PartnerActivityAlertsService,
+  ) {}
 
   async list(userId: string, now = new Date()): Promise<NotificationsResponse> {
+    await this.partnerAlerts.syncUser(userId, now);
     await this.gather(userId, now);
     const [rows, unreadCount] = await Promise.all([
       this.db.notification.findMany({
-        where: { userId },
+        where: { userId, revokedAt: null },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: NOTIFICATIONS_LIST_LIMIT,
         select: NOTIFICATION_SELECT,
@@ -174,14 +213,21 @@ export class NotificationsService {
     now = new Date(),
   ): Promise<MarkNotificationsReadResponse> {
     await this.db.notification.updateMany({
-      where: { userId, readAt: null, ...(ids ? { id: { in: ids } } : {}) },
+      where: {
+        userId,
+        readAt: null,
+        revokedAt: null,
+        ...(ids ? { id: { in: ids } } : {}),
+      },
       data: { readAt: now },
     });
     return { unreadCount: await this.unreadCount(userId) };
   }
 
   private unreadCount(userId: string) {
-    return this.db.notification.count({ where: { userId, readAt: null } });
+    return this.db.notification.count({
+      where: { userId, readAt: null, revokedAt: null },
+    });
   }
 
   private async gather(userId: string, now: Date) {
@@ -193,7 +239,12 @@ export class NotificationsService {
           occurredAt: { gte: since },
           type: { in: [...NOTIFICATION_EVENT_TYPES] },
         },
-        select: { type: true, sessionId: true, occurredAt: true, payload: true },
+        select: {
+          type: true,
+          sessionId: true,
+          occurredAt: true,
+          payload: true,
+        },
       }),
       this.db.userFollow.findMany({
         where: { followingId: userId, createdAt: { gte: since } },

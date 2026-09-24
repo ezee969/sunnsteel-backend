@@ -56,6 +56,8 @@ export class AccountExportService {
         notifyRestAlert: true,
         notifyTrainingReminder: true,
         notifyStreakAtRisk: true,
+        notifyPartnerSession: true,
+        notifyPartnerAchievement: true,
         quietHoursStartMinute: true,
         quietHoursEndMinute: true,
         reminderMinuteOfDay: true,
@@ -243,6 +245,8 @@ export class AccountExportService {
           restAlert: user.notifyRestAlert,
           trainingReminder: user.notifyTrainingReminder,
           streakAtRisk: user.notifyStreakAtRisk,
+          partnerSession: user.notifyPartnerSession,
+          partnerAchievement: user.notifyPartnerAchievement,
           quietHours:
             user.quietHoursStartMinute !== null &&
             user.quietHoursEndMinute !== null

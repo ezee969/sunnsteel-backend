@@ -306,6 +306,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260924090000_deload_overrides/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// NOTIF-07: partner activity opt-ins and durable push claims.
+				readFileSync(
+					'prisma/migrations/20260924100000_partner_activity_alerts/migration.sql',
+					'utf8',
 				),
     );
     prisma(

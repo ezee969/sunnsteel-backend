@@ -9,6 +9,7 @@ import {
 } from '../src/notifications/notification-sources';
 import { NotificationsService } from '../src/notifications/notifications.service';
 import { toAppNotification } from '../src/notifications/notifications.service';
+import { PartnerActivityAlertsService } from '../src/notifications/partner-activity-alerts.service';
 
 const NOW = new Date('2026-09-15T12:00:00.000Z');
 const at = (iso: string) => new Date(iso);
@@ -139,6 +140,54 @@ test('partner encouragement maps its fixed prompt and actor', () => {
   assert.equal(notification.actor.username, 'marta');
 });
 
+test('selected partner activity maps without exposing unrelated training data', () => {
+  const actor = {
+    id: 'u2',
+    username: 'marta',
+    name: 'Marta',
+    lastName: null,
+    avatarUrl: null,
+  };
+  const session = toAppNotification(
+    {
+      id: 'partner-session',
+      kind: 'TRAINING_PARTNER_SESSION',
+      payload: {
+        entryId: 'session:s1:completed:v1',
+        routineName: 'Upper / Lower',
+        dayName: 'Upper',
+      },
+      createdAt: NOW,
+      readAt: null,
+      sessionId: 's1',
+      actor,
+    },
+    new Set(),
+  );
+  assert.ok(session?.kind === 'TRAINING_PARTNER_SESSION');
+  assert.equal(session.session.routineName, 'Upper / Lower');
+  assert.equal(session.entryId, 'session:s1:completed:v1');
+
+  const achievement = toAppNotification(
+    {
+      id: 'partner-achievement',
+      kind: 'TRAINING_PARTNER_ACHIEVEMENT',
+      payload: {
+        entryId: 'achievement:u2:sessions-10:v1',
+        achievementId: 'sessions-10',
+        title: 'Ten sessions',
+      },
+      createdAt: NOW,
+      readAt: null,
+      sessionId: null,
+      actor,
+    },
+    new Set(),
+  );
+  assert.ok(achievement?.kind === 'TRAINING_PARTNER_ACHIEVEMENT');
+  assert.equal(achievement.achievement.id, 'sessions-10');
+});
+
 type Row = {
   id: string;
   userId: string;
@@ -240,7 +289,10 @@ function fakeDb(rows: Row[], follows: any[] = []) {
       },
     },
   } as unknown as DatabaseService;
-  return { service: new NotificationsService(db), reads };
+  const partnerAlerts = {
+    syncUser: async () => undefined,
+  } as unknown as PartnerActivityAlertsService;
+  return { service: new NotificationsService(db, partnerAlerts), reads };
 }
 
 test('reading gathers once, keeps read state and drops old notifications', async () => {
@@ -266,7 +318,10 @@ test('reading gathers once, keeps read state and drops old notifications', async
     ['ACHIEVEMENT', 'SESSION_PROGRESS', 'NEW_FOLLOWER'],
   );
   assert.equal(first.unreadCount, 3);
-  assert.equal(reads.events[0].where.occurredAt.gte.toISOString(), '2026-08-16T12:00:00.000Z');
+  assert.equal(
+    reads.events[0].where.occurredAt.gte.toISOString(),
+    '2026-08-16T12:00:00.000Z',
+  );
   const progress = first.notifications[1];
   assert.ok(progress.kind === 'SESSION_PROGRESS');
   assert.deepEqual(progress.session, {

@@ -16,6 +16,8 @@ const PREFERENCE_SELECT = {
   notifyRestAlert: true,
   notifyTrainingReminder: true,
   notifyStreakAtRisk: true,
+  notifyPartnerSession: true,
+  notifyPartnerAchievement: true,
   quietHoursStartMinute: true,
   quietHoursEndMinute: true,
   reminderMinuteOfDay: true,
@@ -26,6 +28,8 @@ type PreferenceRow = {
   notifyRestAlert: boolean;
   notifyTrainingReminder: boolean;
   notifyStreakAtRisk: boolean;
+  notifyPartnerSession: boolean;
+  notifyPartnerAchievement: boolean;
   quietHoursStartMinute: number | null;
   quietHoursEndMinute: number | null;
   reminderMinuteOfDay: number | null;
@@ -46,6 +50,8 @@ export function mapPreferences(row: PreferenceRow): NotificationPreferences {
       REST_ALERT: row.notifyRestAlert,
       TRAINING_REMINDER: row.notifyTrainingReminder,
       STREAK_AT_RISK: row.notifyStreakAtRisk,
+      TRAINING_PARTNER_SESSION: row.notifyPartnerSession,
+      TRAINING_PARTNER_ACHIEVEMENT: row.notifyPartnerAchievement,
     },
     quietHours,
     reminder: { minuteOfDay: row.reminderMinuteOfDay },
@@ -88,8 +94,23 @@ export class NotificationPreferencesService {
   async update(
     userId: string,
     input: UpdateNotificationPreferencesRequest,
+    now = new Date(),
   ): Promise<NotificationPreferencesResponse> {
     const data: Record<string, unknown> = {};
+    const changesPartnerSession =
+      input.categories?.TRAINING_PARTNER_SESSION !== undefined;
+    const changesPartnerAchievement =
+      input.categories?.TRAINING_PARTNER_ACHIEVEMENT !== undefined;
+    const current =
+      changesPartnerSession || changesPartnerAchievement
+        ? await this.db.user.findUniqueOrThrow({
+            where: { id: userId },
+            select: {
+              notifyPartnerSession: true,
+              notifyPartnerAchievement: true,
+            },
+          })
+        : null;
 
     if (input.categories?.REST_ALERT !== undefined) {
       data.notifyRestAlert = input.categories.REST_ALERT;
@@ -99,6 +120,22 @@ export class NotificationPreferencesService {
     }
     if (input.categories?.STREAK_AT_RISK !== undefined) {
       data.notifyStreakAtRisk = input.categories.STREAK_AT_RISK;
+    }
+    if (changesPartnerSession && current) {
+      const enabled = input.categories!.TRAINING_PARTNER_SESSION!;
+      data.notifyPartnerSession = enabled;
+      if (!enabled) data.partnerSessionAlertsEnabledAt = null;
+      else if (!current.notifyPartnerSession) {
+        data.partnerSessionAlertsEnabledAt = now;
+      }
+    }
+    if (changesPartnerAchievement && current) {
+      const enabled = input.categories!.TRAINING_PARTNER_ACHIEVEMENT!;
+      data.notifyPartnerAchievement = enabled;
+      if (!enabled) data.partnerAchievementAlertsEnabledAt = null;
+      else if (!current.notifyPartnerAchievement) {
+        data.partnerAchievementAlertsEnabledAt = now;
+      }
     }
     // Omitting quiet hours leaves the stored window alone; sending null clears
     // it. The two are different intents and must not collapse into one.
@@ -117,9 +154,32 @@ export class NotificationPreferencesService {
     // Turning a category off must not leave an already-scheduled push waiting
     // to fire: the owner's next notification would arrive after they switched
     // it off, which reads as the control not working.
-    await this.dropSuppressedPending(userId, input);
+    await Promise.all([
+      this.dropSuppressedPending(userId, input),
+      this.dropDisabledPartnerNotifications(userId, input),
+    ]);
 
     return this.read(userId);
+  }
+
+  private async dropDisabledPartnerNotifications(
+    userId: string,
+    input: UpdateNotificationPreferencesRequest,
+  ): Promise<void> {
+    const kinds: (
+      | 'TRAINING_PARTNER_SESSION'
+      | 'TRAINING_PARTNER_ACHIEVEMENT'
+    )[] = [];
+    if (input.categories?.TRAINING_PARTNER_SESSION === false) {
+      kinds.push('TRAINING_PARTNER_SESSION');
+    }
+    if (input.categories?.TRAINING_PARTNER_ACHIEVEMENT === false) {
+      kinds.push('TRAINING_PARTNER_ACHIEVEMENT');
+    }
+    if (kinds.length === 0) return;
+    await this.db.notification.deleteMany({
+      where: { userId, kind: { in: kinds } },
+    });
   }
 
   private async dropSuppressedPending(
@@ -140,7 +200,10 @@ export class NotificationPreferencesService {
     if (prefixes.length === 0) return;
 
     await this.db.scheduledPush.deleteMany({
-      where: { userId, OR: prefixes.map((prefix) => ({ dedupeKey: { startsWith: prefix } })) },
+      where: {
+        userId,
+        OR: prefixes.map((prefix) => ({ dedupeKey: { startsWith: prefix } })),
+      },
     });
   }
 

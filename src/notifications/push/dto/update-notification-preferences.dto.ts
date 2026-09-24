@@ -14,9 +14,9 @@ import {
   ValidateNested,
 } from 'class-validator';
 
-class NotificationCategoriesDto
-  implements Partial<Record<NotificationCategory, boolean>>
-{
+class NotificationCategoriesDto implements Partial<
+  Record<NotificationCategory, boolean>
+> {
   @IsOptional()
   @IsBoolean()
   REST_ALERT?: boolean;
@@ -28,6 +28,14 @@ class NotificationCategoriesDto
   @IsOptional()
   @IsBoolean()
   STREAK_AT_RISK?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  TRAINING_PARTNER_SESSION?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  TRAINING_PARTNER_ACHIEVEMENT?: boolean;
 }
 
 class QuietHoursDto implements QuietHours {
@@ -51,9 +59,7 @@ class TrainingReminderDto {
   minuteOfDay!: number | null;
 }
 
-export class UpdateNotificationPreferencesDto
-  implements UpdateNotificationPreferencesRequest
-{
+export class UpdateNotificationPreferencesDto implements UpdateNotificationPreferencesRequest {
   @IsOptional()
   @ValidateNested()
   @Type(() => NotificationCategoriesDto)

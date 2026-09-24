@@ -78,10 +78,16 @@ model User {
   // NOTIF-05: per-category delivery switches, a local quiet window and the
   // NOTIF-04 reminder time, all evaluated in `timeZone`. A null reminder
   // minute means reminders are off; choosing a time is what opts in.
-  notifyRestAlert            Boolean                      @default(true)
-  notifyTrainingReminder     Boolean                      @default(true)
-  notifyStreakAtRisk         Boolean                      @default(true)
-  quietHoursStartMinute      Int?
+  notifyRestAlert                   Boolean                      @default(true)
+  notifyTrainingReminder            Boolean                      @default(true)
+  notifyStreakAtRisk                Boolean                      @default(true)
+  // NOTIF-07 is opt-in: enabling a category records its boundary so activity
+  // from before that choice is never replayed as a new alert.
+  notifyPartnerSession              Boolean                      @default(false)
+  notifyPartnerAchievement          Boolean                      @default(false)
+  partnerSessionAlertsEnabledAt     DateTime?
+  partnerAchievementAlertsEnabledAt DateTime?
+  quietHoursStartMinute             Int?
   quietHoursEndMinute        Int?
   reminderMinuteOfDay        Int?
   pushSubscriptions          PushSubscription[]
@@ -1037,6 +1043,9 @@ enum NotificationKind {
   ACTIVITY_COMMENT
   /// SOC-09: one of four fixed prompts from an allowed training partner.
   TRAINING_PARTNER_ENCOURAGEMENT
+  /// NOTIF-07: selected activity from a partner who currently shares it.
+  TRAINING_PARTNER_SESSION
+  TRAINING_PARTNER_ACHIEVEMENT
 }
 
 /// NOTIF-08: one subscribed browser on one device. The endpoint is the
@@ -1092,11 +1101,17 @@ model Notification {
   session   WorkoutSession?  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   payload   Json
   /// When the announced thing happened, not when it was gathered.
-  createdAt DateTime
-  readAt    DateTime?
+  createdAt       DateTime
+  readAt          DateTime?
+  /// NOTIF-07: a durable one-shot claim for its optional Web Push delivery.
+  pushProcessedAt DateTime?
+  /// NOTIF-07: hidden while its source is no longer authorized. Keeping the
+  /// row preserves the one-shot push claim if access is later restored.
+  revokedAt       DateTime?
 
   @@unique([userId, sourceKey])
   @@index([userId, createdAt])
+  @@index([kind, pushProcessedAt, createdAt])
 }
 
 /// SOC-03/SOC-04: the activity types a member can share. Entries are
