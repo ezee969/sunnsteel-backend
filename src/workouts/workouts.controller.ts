@@ -197,6 +197,11 @@ export class WorkoutsController {
     return this.workoutsService.getPlateaus(req.user.id);
   }
 
+  @Get("progress/signals")
+  async trainingSignals(@Req() req: RequestWithUser) {
+    return this.workoutsService.getTrainingSignals(req.user.id);
+  }
+
   @Put("sessions/:id/set-logs")
   async upsertSetLog(
     @Req() req: RequestWithUser,
@@ -252,7 +257,7 @@ export class WorkoutsController {
 
   /**
    * NOTIF-03: schedule the push that fires when this session's rest period
-   * ends. One pending alert per session — a new rest period replaces the last.
+   * ends. One pending alert per session â€” a new rest period replaces the last.
    * The response says plainly when nothing was scheduled, because the session
    * screen must not imply an alert the owner will never receive.
    */

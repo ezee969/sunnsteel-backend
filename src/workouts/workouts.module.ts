@@ -27,6 +27,7 @@ import {
 import { GoalsModule } from "../goals/goals.module";
 import { WorkoutPersonalGoalsService } from "./workout-personal-goals.service";
 import { WorkoutPlateausService } from "./workout-plateaus.service";
+import { WorkoutTrainingSignalsService } from "./workout-training-signals.service";
 import { PushModule } from "../notifications/push/push.module";
 
 @Module({
@@ -56,6 +57,7 @@ import { PushModule } from "../notifications/push/push.module";
     WorkoutSessionShareService,
     WorkoutPersonalGoalsService,
     WorkoutPlateausService,
+    WorkoutTrainingSignalsService,
   ],
   exports: [WorkoutsService],
 })
