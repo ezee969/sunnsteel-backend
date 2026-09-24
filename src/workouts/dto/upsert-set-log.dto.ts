@@ -1,5 +1,6 @@
 import {
   IsBoolean,
+  IsInt,
   IsNumber,
   IsOptional,
   IsString,
@@ -13,7 +14,7 @@ export class UpsertSetLogDto {
   @IsString()
   exerciseId!: string;
 
-  @IsNumber()
+  @IsInt()
   @Min(1)
   setNumber!: number;
 

@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { WorkoutSessionStatus } from '@prisma/client';
+import { Prisma, WorkoutSessionStatus } from '@prisma/client';
 import type { UpsertSetLogResponse } from '@sunsteel/contracts';
 import { DatabaseService } from '../../database/database.service';
 import { UpsertSetLogDto } from '../dto/upsert-set-log.dto';
@@ -18,6 +18,11 @@ import {
   readSubstitutions,
   substitutionFor,
 } from '../session-substitutions';
+import {
+  extraSetRefusal,
+  prescribedSetCount,
+  removeSetRefusal,
+} from '../session-extra-sets';
 import { toSetLogResponse } from '../workout-session.mapper';
 
 // Narrow unknown error objects that include a Prisma error code
@@ -26,6 +31,19 @@ const isPrismaErrorWithCode = (e: unknown): e is { code: string } => {
   const maybe = e as { code?: unknown };
   return typeof maybe.code === 'string';
 };
+
+const highestLoggedSet = async (
+  tx: Prisma.TransactionClient,
+  sessionId: string,
+  routineExerciseId: string,
+) =>
+  (
+    await tx.setLog.findFirst({
+      where: { sessionId, routineExerciseId },
+      orderBy: { setNumber: 'desc' },
+      select: { setNumber: true },
+    })
+  )?.setNumber ?? 0;
 
 @Injectable()
 export class WorkoutSessionLogService {
@@ -46,6 +64,7 @@ export class WorkoutSessionLogService {
           status: true,
           routineDayId: true,
           exerciseSubstitutions: true,
+          snapshot: { select: { payload: true } },
         },
       });
       if (!session) {
@@ -67,6 +86,7 @@ export class WorkoutSessionLogService {
           id: true,
           exerciseId: true,
           exercise: { select: { name: true } },
+          sets: { select: { setNumber: true } },
         },
       });
       if (!routineExercise) {
@@ -111,6 +131,22 @@ export class WorkoutSessionLogService {
           isCompleted: true,
         },
       });
+      // LIVE-15: a new set above the prescription is an extra set.
+      if (!existing) {
+        const prescribed = prescribedSetCount(
+          session.snapshot?.payload,
+          routineExercise.id,
+          routineExercise.sets,
+        );
+        if (dto.setNumber > prescribed) {
+          const refusal = extraSetRefusal(
+            dto.setNumber,
+            prescribed,
+            await highestLoggedSet(tx, sessionId, routineExercise.id),
+          );
+          if (refusal) throw new BadRequestException(refusal);
+        }
+      }
       const priorSets = await tx.setLog.findMany({
         where: {
           exerciseId: dto.exerciseId,
@@ -196,7 +232,12 @@ export class WorkoutSessionLogService {
       // Validate session ownership and status
       const session = await tx.workoutSession.findFirst({
         where: { id: sessionId, userId },
-        select: { id: true, status: true },
+        select: {
+          id: true,
+          status: true,
+          routineDayId: true,
+          snapshot: { select: { payload: true } },
+        },
       });
       if (!session) {
         throw new NotFoundException('Workout session not found');
@@ -206,6 +247,25 @@ export class WorkoutSessionLogService {
           'Cannot modify set logs for a finished session',
         );
       }
+
+      // LIVE-15: only the last extra set can be taken back.
+      const liveSets = await tx.routineExerciseSet.findMany({
+        where: {
+          routineExerciseId,
+          routineExercise: { routineDayId: session.routineDayId! },
+        },
+        select: { setNumber: true },
+      });
+      const refusal = removeSetRefusal(
+        setNumber,
+        prescribedSetCount(
+          session.snapshot?.payload,
+          routineExerciseId,
+          liveSets,
+        ),
+        await highestLoggedSet(tx, sessionId, routineExerciseId),
+      );
+      if (refusal) throw new BadRequestException(refusal);
 
       try {
         const deleted = await tx.setLog.delete({
