@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
 import {
+  countsAsWork,
   SessionExerciseSubstitution,
+  SetKind,
   WorkoutSessionSnapshotV1,
 } from '@sunsteel/contracts';
 import { performedExercise } from '../session-substitutions';
@@ -37,6 +39,8 @@ export interface AnalyticsLog {
   reps: number | null;
   isCompleted: boolean;
   completedAt: Date | null;
+  /** LIVE-12: a warm-up is never counted. Absent means a working set. */
+  kind?: SetKind | null;
 }
 
 export function sessionContribution(
@@ -70,7 +74,7 @@ export function sessionContribution(
         (b.completedAt ?? endedAt).getTime() || a.id.localeCompare(b.id),
   );
   for (const log of ordered) {
-    if (!log.isCompleted) continue;
+    if (!log.isCompleted || !countsAsWork(log.kind)) continue;
     completedSets++;
     const volume = (log.weight ?? 0) * (log.reps ?? 0);
     volumeKg += volume;

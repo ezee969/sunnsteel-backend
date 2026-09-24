@@ -11,6 +11,7 @@ import { SessionComparisonQueryDto } from "./dto/session-comparison.dto";
 import { summarizeRecapSets } from "./session-recap";
 import { performedExercise, readSubstitutions } from "./session-substitutions";
 import { routineDayName } from "./workout-session.selects";
+import { COUNTED_SET_LOG } from "./counted-sets";
 
 const ROUTINE_DAY_LIMIT = 100;
 
@@ -155,7 +156,7 @@ export class WorkoutSessionComparisonService {
             snapshot: { select: { payload: true } },
             exerciseSubstitutions: true,
             setLogs: {
-              where: { isCompleted: true, reps: { gt: 0 } },
+              where: { ...COUNTED_SET_LOG, reps: { gt: 0 } },
               orderBy: [
                 { sourceRoutineExerciseId: "asc" },
                 { routineExerciseId: "asc" },

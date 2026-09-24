@@ -15,12 +15,15 @@ import {
   TRAINING_SIGNAL_SHORT_LIFTS_MAX,
   TRAINING_SIGNAL_SHORT_POINTS_RISE,
   TRAINING_SIGNAL_WORKOUT_DROP,
+  countsForProgression,
+  type SetKind,
   type TrainingSignalsResponse,
   type WorkoutPeriod,
   type WorkoutSessionSnapshotV1,
 } from "@sunsteel/contracts";
 import { DatabaseService } from "../database/database.service";
 import { recordValues } from "./live-personal-records";
+import { COUNTED_SET_LOG_SQL } from "./counted-sets";
 
 const DAY_MS = 86_400_000;
 const EPSILON = 1e-9;
@@ -42,6 +45,8 @@ export interface TrainingSignalSetRow {
   reps: number | null;
   weight: number | null;
   rpe: number | null;
+  /** LIVE-12: warm-ups never arrive; a drop set has no rep target. */
+  kind?: SetKind | null;
 }
 
 /** Rep-target floors per session, keyed by `slotId:setNumber`. */
@@ -197,6 +202,7 @@ export function repTargetSignal(
   >();
   for (const row of rows) {
     if (row.slotId === null || row.reps === null) continue;
+    if (!countsForProgression(row.kind)) continue;
     const floor = floors
       .get(row.sessionId)
       ?.get(floorKey(row.slotId, row.setNumber));
@@ -387,7 +393,8 @@ export class WorkoutTrainingSignalsService {
         logs."setNumber",
         logs."reps",
         logs."weight",
-        logs."rpe"
+        logs."rpe",
+        logs."kind"::text AS "kind"
       FROM "SetLog" logs
       INNER JOIN "WorkoutSession" sessions ON sessions."id" = logs."sessionId"
       INNER JOIN "Exercise" exercises ON exercises."id" = logs."exerciseId"
@@ -397,7 +404,7 @@ export class WorkoutTrainingSignalsService {
         AND sessions."endedAt" > ${from}
         AND sessions."endedAt" <= ${to}
         ${routineId ? Prisma.sql`AND sessions."routineId" = ${routineId}` : Prisma.empty}
-        AND logs."isCompleted"`);
+        AND ${COUNTED_SET_LOG_SQL}`);
 
     const sessionIds = [...new Set(rows.map((row) => row.sessionId))];
     const snapshots = sessionIds.length

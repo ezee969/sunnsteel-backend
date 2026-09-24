@@ -12,6 +12,7 @@ import { localDate, weekDate } from "./analytics/analytics-contribution";
 import { readSnapshot } from "./analytics/session-snapshot";
 import type { VolumeTrendQueryDto } from "./dto/volume-trend.dto";
 import { getHeatmapWeekStarts } from "./workout-muscle-heatmap.service";
+import { COUNTED_SET_LOG } from "./counted-sets";
 
 export const DEFAULT_VOLUME_TREND_WEEKS = 8;
 
@@ -151,7 +152,7 @@ export class WorkoutVolumeTrendService {
         });
         const logs = await tx.setLog.findMany({
           where: {
-            isCompleted: true,
+            ...COUNTED_SET_LOG,
             session: {
               userId,
               status: "COMPLETED",

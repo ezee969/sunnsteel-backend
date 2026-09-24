@@ -6,6 +6,7 @@ const ROUTINE_SET_SELECT = {
   maxReps: true,
   weight: true,
   rir: true,
+  kind: true,
 } as const;
 
 const ROUTINE_EXERCISE_SELECT = {

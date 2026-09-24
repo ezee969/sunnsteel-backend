@@ -10,6 +10,7 @@ import {
 } from "@sunsteel/contracts";
 import { DatabaseService } from "../database/database.service";
 import { recordValues } from "./live-personal-records";
+import { COUNTED_SET_LOG_SQL } from "./counted-sets";
 
 const DAY_MS = 86_400_000;
 
@@ -173,7 +174,7 @@ export class WorkoutPlateausService {
         AND sessions."endedAt" IS NOT NULL
         AND sessions."endedAt" >= ${windowStart}
         AND sessions."endedAt" <= ${now}
-        AND logs."isCompleted"
+        AND ${COUNTED_SET_LOG_SQL}
         AND logs."reps" > 0
         AND logs."weight" > 0`);
     const [user, setRows] = await Promise.all([preferences, rows]);

@@ -44,6 +44,7 @@ function toRoutineSet(s: RoutineSetEntity): RoutineSet {
     maxReps: s.maxReps,
     weight: s.weight,
     rir: s.rir,
+    kind: s.kind,
   };
 }
 

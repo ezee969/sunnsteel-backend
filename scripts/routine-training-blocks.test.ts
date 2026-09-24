@@ -251,6 +251,8 @@ test("each revision gets its own working copy of its setup (ROUT-15)", async () 
     maxReps: null,
     weight: 140,
     rir: 2,
+    // LIVE-12: a setup captured before set kinds writes working sets.
+    kind: "WORKING",
   });
 });
 

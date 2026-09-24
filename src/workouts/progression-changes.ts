@@ -1,4 +1,9 @@
-import type { ProgressionChange, ProgressionScheme } from '@sunsteel/contracts';
+import {
+  countsForProgression,
+  type ProgressionChange,
+  type ProgressionScheme,
+  type SetKind,
+} from '@sunsteel/contracts';
 
 type PrescriptionSet = {
   setNumber: number;
@@ -7,6 +12,7 @@ type PrescriptionSet = {
   minReps?: number | null;
   maxReps?: number | null;
   weight?: number | null;
+  kind?: SetKind;
 };
 
 type PrescriptionExercise = {
@@ -24,6 +30,8 @@ export type ProgressionLog = {
   reps: number | null;
   weight: number | null;
   isCompleted: boolean;
+  /** LIVE-12: the kind the set was done as; absent means a working set. */
+  kind?: SetKind | null;
 };
 
 export type ProgressionUpdate = {
@@ -85,10 +93,23 @@ export function buildProgressionOutcome(
   const updates: ProgressionUpdate[] = [];
   const changes: ProgressionChange[] = [];
 
-  for (const exercise of exercises) {
-    const increment = exercise.minWeightIncrement ?? 2.5;
+  for (const prescribed of exercises) {
+    const increment = prescribed.minWeightIncrement ?? 2.5;
     const logFor = (set: PrescriptionSet) =>
-      logMap.get(logKey(exercise.id, set.setNumber));
+      logMap.get(logKey(prescribed.id, set.setNumber));
+    // LIVE-12: only working and optional sets take part, as the workout did
+    // them (a kind changed during it wins over the prescription's), and an
+    // optional set only once it was done. Warm-ups and drop sets keep their
+    // authored load.
+    const exercise = {
+      ...prescribed,
+      sets: prescribed.sets.filter((set) => {
+        const log = logFor(set);
+        const kind = log?.kind ?? set.kind ?? 'WORKING';
+        if (!countsForProgression(kind)) return false;
+        return kind !== 'OPTIONAL' || log?.isCompleted === true;
+      }),
+    };
 
     if (exercise.progressionScheme === 'DOUBLE_PROGRESSION') {
       const allSetsHit =

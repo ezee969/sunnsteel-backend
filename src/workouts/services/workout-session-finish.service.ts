@@ -97,6 +97,7 @@ export class WorkoutSessionFinishService {
                 reps: log.reps ?? null,
                 weight: typeof log.weight === 'number' ? log.weight : null,
                 isCompleted: log.isCompleted,
+                kind: log.kind,
               },
             ];
           });

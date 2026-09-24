@@ -32,6 +32,7 @@ export function workingCopyDays(routineId: string, setup: RoutineVersionSetup) {
               maxReps: set.maxReps ?? null,
               weight: set.weight ?? null,
               rir: set.rir ?? null,
+              kind: set.kind ?? 'WORKING',
             })),
           },
         })),

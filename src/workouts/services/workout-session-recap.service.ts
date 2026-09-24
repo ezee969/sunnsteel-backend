@@ -15,6 +15,7 @@ import { buildSessionRecapRecords, summarizeRecapSets } from '../session-recap';
 import { readExerciseNotes, recapExerciseNotes } from '../session-notes';
 import { readSubstitutions } from '../session-substitutions';
 import { routineDayName } from '../workout-session.selects';
+import { COUNTED_SET_LOG } from '../counted-sets';
 
 @Injectable()
 export class WorkoutSessionRecapService {
@@ -43,7 +44,7 @@ export class WorkoutSessionRecapService {
         routine: { select: { name: true } },
         routineDay: { select: { dayOfWeek: true, name: true, order: true } },
         setLogs: {
-          where: { isCompleted: true },
+          where: COUNTED_SET_LOG,
           select: {
             id: true,
             exerciseId: true,
@@ -95,7 +96,7 @@ export class WorkoutSessionRecapService {
                 totalVolumeKg: true,
                 completedSets: true,
                 setLogs: {
-                  where: { isCompleted: true },
+                  where: COUNTED_SET_LOG,
                   select: {
                     reps: true,
                     weight: true,
@@ -109,7 +110,7 @@ export class WorkoutSessionRecapService {
           ? this.db.setLog.findMany({
               where: {
                 exerciseId: { in: exerciseIds },
-                isCompleted: true,
+                ...COUNTED_SET_LOG,
                 reps: { gt: 0 },
                 session: {
                   userId,

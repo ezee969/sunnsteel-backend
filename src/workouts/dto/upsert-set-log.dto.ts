@@ -1,5 +1,7 @@
+import { SET_KINDS, type SetKind } from '@sunsteel/contracts';
 import {
   IsBoolean,
+  IsIn,
   IsInt,
   IsNumber,
   IsOptional,
@@ -33,4 +35,9 @@ export class UpsertSetLogDto {
   @IsOptional()
   @IsBoolean()
   isCompleted?: boolean;
+
+  // LIVE-12
+  @IsOptional()
+  @IsIn(SET_KINDS)
+  kind?: SetKind;
 }

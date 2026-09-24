@@ -744,6 +744,8 @@ model RoutineExerciseSet {
   maxReps           Int?
   weight            Float?
   rir               Int?
+  // LIVE-12: what the set is for
+  kind              SetKind         @default(WORKING)
 
   @@unique([routineExerciseId, setNumber])
 }
@@ -752,6 +754,15 @@ model RoutineExerciseSet {
 enum RepType {
   FIXED
   RANGE
+}
+
+// LIVE-12: a warm-up never counts as work; only working and optional sets
+// take part in progression; only working and drop sets are required.
+enum SetKind {
+  WORKING
+  WARMUP
+  DROP
+  OPTIONAL
 }
 
 // How weight progression should be applied for an exercise
@@ -893,6 +904,8 @@ model SetLog {
   weight                  Float?
   rpe                     Float?
   isCompleted             Boolean          @default(false)
+  // LIVE-12: starts from the prescription's kind, changeable during the workout
+  kind                    SetKind          @default(WORKING)
   completedAt             DateTime?
 
   createdAt DateTime @default(now())

@@ -46,6 +46,7 @@ import {
   excludeSubstitutedSlots,
   readSubstitutions,
 } from '../session-substitutions';
+import { COUNTED_SET_LOG } from '../counted-sets';
 
 type Tx = Prisma.TransactionClient;
 
@@ -386,7 +387,7 @@ export class WorkoutSessionCorrectionService {
       const prior = await tx.setLog.findFirst({
         where: {
           exerciseId,
-          isCompleted: true,
+          ...COUNTED_SET_LOG,
           weight: { gt: 0 },
           reps: { gt: 0 },
           sessionId: { not: sessionId },
@@ -557,6 +558,7 @@ export class WorkoutSessionCorrectionService {
               reps: log.reps ?? null,
               weight: typeof log.weight === 'number' ? log.weight : null,
               isCompleted: log.isCompleted,
+              kind: log.kind,
             },
           ];
         }),

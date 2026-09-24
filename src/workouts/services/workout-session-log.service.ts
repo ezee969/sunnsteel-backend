@@ -21,6 +21,7 @@ import {
 import {
   extraSetRefusal,
   prescribedSetCount,
+  prescribedSetKind,
   removeSetRefusal,
 } from '../session-extra-sets';
 import { toSetLogResponse } from '../workout-session.mapper';
@@ -86,7 +87,7 @@ export class WorkoutSessionLogService {
           id: true,
           exerciseId: true,
           exercise: { select: { name: true } },
-          sets: { select: { setNumber: true } },
+          sets: { select: { setNumber: true, kind: true } },
         },
       });
       if (!routineExercise) {
@@ -129,8 +130,19 @@ export class WorkoutSessionLogService {
           reps: true,
           weight: true,
           isCompleted: true,
+          kind: true,
         },
       });
+      // LIVE-12: a new set starts as its prescription's kind.
+      const newKind = existing
+        ? undefined
+        : (dto.kind ??
+          prescribedSetKind(
+            session.snapshot?.payload,
+            routineExercise.id,
+            dto.setNumber,
+            routineExercise.sets,
+          ));
       // LIVE-15: a new set above the prescription is an extra set.
       if (!existing) {
         const prescribed = prescribedSetCount(
@@ -157,7 +169,7 @@ export class WorkoutSessionLogService {
             OR: [{ status: WorkoutSessionStatus.COMPLETED }, { id: sessionId }],
           },
         },
-        select: { reps: true, weight: true, isCompleted: true },
+        select: { reps: true, weight: true, isCompleted: true, kind: true },
       });
 
       const upserted = await tx.setLog.upsert({
@@ -169,6 +181,7 @@ export class WorkoutSessionLogService {
           isCompleted: dto.isCompleted ?? undefined,
           completedAt: dto.isCompleted === undefined ? undefined : completedAt,
           exerciseId: dto.exerciseId,
+          kind: dto.kind,
         },
         create: {
           sessionId,
@@ -181,6 +194,7 @@ export class WorkoutSessionLogService {
           rpe: dto.rpe,
           isCompleted: dto.isCompleted ?? false,
           completedAt: dto.isCompleted ? new Date() : undefined,
+          kind: newKind,
         },
         select: {
           id: true,
@@ -193,6 +207,7 @@ export class WorkoutSessionLogService {
           weight: true,
           rpe: true,
           isCompleted: true,
+          kind: true,
           completedAt: true,
           createdAt: true,
           updatedAt: true,

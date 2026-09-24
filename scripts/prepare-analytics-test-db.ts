@@ -312,6 +312,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260924100000_partner_activity_alerts/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// LIVE-12: set kinds on prescribed sets and set logs.
+				readFileSync(
+					'prisma/migrations/20260924200000_set_kinds/migration.sql',
+					'utf8',
 				),
     );
     prisma(

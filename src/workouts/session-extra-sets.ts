@@ -1,3 +1,5 @@
+import { setKindOf, type SetKind } from '@sunsteel/contracts';
+
 import { readSnapshot } from './analytics/session-snapshot';
 
 /**
@@ -33,6 +35,26 @@ export function prescribedSetCount(
     if (slot) return highest(slot.sets);
   }
   return highest(liveSets);
+}
+
+/**
+ * LIVE-12: the kind a new set log starts with -- its prescription's, from the
+ * snapshot when there is one; an extra set is a working set.
+ */
+export function prescribedSetKind(
+  snapshotPayload: unknown,
+  routineExerciseId: string,
+  setNumber: number,
+  liveSets: Array<NumberedSet & { kind?: SetKind }>,
+): SetKind {
+  if (snapshotPayload) {
+    const slot = readSnapshot(snapshotPayload).routineDay.exercises.find(
+      (exercise) => exercise.id === routineExerciseId,
+    );
+    if (slot)
+      return setKindOf(slot.sets.find((set) => set.setNumber === setNumber));
+  }
+  return setKindOf(liveSets.find((set) => set.setNumber === setNumber));
 }
 
 /** Why a new set log above the prescription is refused, or null. */

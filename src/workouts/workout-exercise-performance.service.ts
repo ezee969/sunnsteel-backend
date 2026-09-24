@@ -15,6 +15,7 @@ import { DatabaseService } from "../database/database.service";
 import { readSnapshot } from "./analytics/session-snapshot";
 import { ExercisePerformanceHistoryQueryDto } from "./dto/exercise-performance-history.dto";
 import { routineDayName } from "./workout-session.selects";
+import { COUNTED_SET_LOG, COUNTED_SET_LOG_SQL } from "./counted-sets";
 
 interface ExerciseSummaryRow {
   exerciseId: string;
@@ -45,6 +46,7 @@ function mapPrescription(
       maxReps: set.maxReps,
       weightKg: set.weight,
       rir: set.rir,
+      kind: set.kind,
     })),
   };
 }
@@ -81,7 +83,7 @@ export class WorkoutExercisePerformanceService {
           WHERE sessions."userId" = ${userId}
             AND sessions."status" IN ('COMPLETED', 'ABORTED')
             AND sessions."endedAt" IS NOT NULL
-            AND logs."isCompleted"
+            AND ${COUNTED_SET_LOG_SQL}
             AND logs."reps" > 0
           GROUP BY logs."exerciseId", exercises."name"
           ORDER BY
@@ -127,7 +129,7 @@ export class WorkoutExercisePerformanceService {
             setLogs: {
               some: {
                 exerciseId: selectedExercise.exerciseId,
-                isCompleted: true,
+                ...COUNTED_SET_LOG,
                 reps: { gt: 0 },
               },
             },
@@ -147,7 +149,7 @@ export class WorkoutExercisePerformanceService {
             setLogs: {
               where: {
                 exerciseId: selectedExercise.exerciseId,
-                isCompleted: true,
+                ...COUNTED_SET_LOG,
                 reps: { gt: 0 },
               },
               orderBy: [

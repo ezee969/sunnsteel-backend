@@ -37,6 +37,7 @@ export function toSetLogResponse(
     weight: log.weight,
     rpe: log.rpe,
     isCompleted: log.isCompleted,
+    kind: log.kind,
     completedAt: log.completedAt ? log.completedAt.toISOString() : null,
     createdAt: log.createdAt.toISOString(),
     updatedAt: log.updatedAt.toISOString(),
@@ -68,6 +69,8 @@ function toRoutineDay(day: RoutineDayEntity): WorkoutSession['routineDay'] {
         minReps: s.minReps,
         maxReps: s.maxReps,
         weight: s.weight,
+        rir: s.rir,
+        kind: s.kind,
       })),
     })),
   };

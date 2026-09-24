@@ -22,6 +22,8 @@ import {
   ProgressionScheme,
   RepType,
   REP_TYPES,
+  SET_KINDS,
+  type SetKind,
   ROUTINE_DAY_NAME_MAX,
   ROUTINE_DAYS_MAX,
   ROUTINE_SCHEDULE_MODES,
@@ -86,6 +88,11 @@ export class CreateRoutineExerciseSetDto implements RoutineSet {
   @Min(0)
   @Max(10)
   rir?: number | null;
+
+  // LIVE-12: omitted means a working set.
+  @IsOptional()
+  @IsIn(SET_KINDS)
+  kind?: SetKind;
 }
 
 export class CreateRoutineExerciseDto implements CreateRoutineExerciseInput {

@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, ProgressionScheme } from '@prisma/client';
-import { Routine, RoutineScheduleMode } from '@sunsteel/contracts';
+import { Routine, RoutineScheduleMode, SetKind } from '@sunsteel/contracts';
 import { DatabaseService } from '../database/database.service';
 import { CreateRoutineDto } from './dto/create-routine.dto';
 import { resolveRoutineLineage } from './routine-lineage';
@@ -33,6 +33,7 @@ type RoutineSetInput = {
   maxReps?: number | null;
   weight?: number | null;
   rir?: number | null;
+  kind?: SetKind;
 };
 
 type RoutineExerciseInput = {
@@ -88,6 +89,7 @@ export class RoutinesService {
       setNumber: set.setNumber,
       repType: repTypeVal,
       weight: set.weight,
+      kind: set.kind ?? 'WORKING',
       ...(typeof set.rir === 'number' ? { rir: set.rir } : {}),
       ...(repTypeVal === 'FIXED' && typeof set.reps === 'number'
         ? { reps: set.reps }

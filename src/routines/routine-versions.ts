@@ -46,6 +46,8 @@ export function captureRoutineSetup(
                 maxReps: set.maxReps,
                 weight: set.weight,
                 rir: set.rir,
+                // LIVE-12: absent in setups captured before it.
+                ...(set.kind ? { kind: set.kind } : {}),
               }),
             ),
           }),

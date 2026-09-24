@@ -1,12 +1,16 @@
-import type {
-  EarnedPersonalRecord,
-  PersonalRecordKind,
+import {
+  countsAsWork,
+  type EarnedPersonalRecord,
+  type PersonalRecordKind,
+  type SetKind,
 } from '@sunsteel/contracts';
 
 export interface RecordSet {
   reps: number | null;
   weight: number | null;
   isCompleted: boolean;
+  /** LIVE-12: a warm-up never sets a record. Absent means a working set. */
+  kind?: SetKind | null;
 }
 
 export interface RecordFrontier {
@@ -31,7 +35,7 @@ const round = (value: number, precision: number) => {
 export function recordValues(set: RecordSet): RecordFrontier {
   const reps = set.reps ?? 0;
   const weight = set.weight ?? 0;
-  if (!set.isCompleted || reps <= 0) {
+  if (!set.isCompleted || reps <= 0 || !countsAsWork(set.kind)) {
     return {
       WEIGHT: null,
       REPS: null,
