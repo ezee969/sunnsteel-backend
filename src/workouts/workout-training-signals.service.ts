@@ -28,6 +28,8 @@ const EPSILON = 1e-9;
 /** One completed set of a finished or ended-early workout in the window. */
 export interface TrainingSignalSetRow {
   sessionId: string;
+  /** The routine the workout trained; null once that routine is deleted. */
+  routineId?: string | null;
   status: "COMPLETED" | "ABORTED";
   endedAt: Date;
   /** ROUT-16: the workout trained a deload. */
@@ -349,12 +351,28 @@ export class WorkoutTrainingSignalsService {
     userId: string,
     now = new Date(),
   ): Promise<TrainingSignalsResponse> {
-    const windowStart = new Date(
-      now.getTime() - 2 * TRAINING_SIGNAL_PERIOD_DAYS * DAY_MS,
+    const { rows, floors } = await this.readInputs(
+      userId,
+      new Date(now.getTime() - 2 * TRAINING_SIGNAL_PERIOD_DAYS * DAY_MS),
+      now,
     );
+    return evaluateTrainingSignals(rows, floors, now);
+  }
+
+  /**
+   * The completed sets of workouts that ended in (from, to], with their
+   * snapshots' rep-target floors. INTEL-02 reads a wider window through the
+   * same query, so both evaluations see exactly what PROG-10 sees.
+   */
+  async readInputs(
+    userId: string,
+    from: Date,
+    to: Date,
+  ): Promise<{ rows: TrainingSignalSetRow[]; floors: RepTargetFloors }> {
     const rows = await this.db.$queryRaw<TrainingSignalSetRow[]>(Prisma.sql`
       SELECT
         sessions."id" AS "sessionId",
+        sessions."routineId",
         sessions."status"::text AS "status",
         sessions."endedAt",
         (sessions."temporaryOverrideId" IS NOT NULL
@@ -372,8 +390,8 @@ export class WorkoutTrainingSignalsService {
       WHERE sessions."userId" = ${userId}
         AND sessions."status" IN ('COMPLETED', 'ABORTED')
         AND sessions."endedAt" IS NOT NULL
-        AND sessions."endedAt" > ${windowStart}
-        AND sessions."endedAt" <= ${now}
+        AND sessions."endedAt" > ${from}
+        AND sessions."endedAt" <= ${to}
         AND logs."isCompleted"`);
 
     const sessionIds = [...new Set(rows.map((row) => row.sessionId))];
@@ -390,6 +408,6 @@ export class WorkoutTrainingSignalsService {
       if (!payload?.routineDay?.exercises) continue;
       floors.set(snapshot.sessionId, repTargetFloors(payload));
     }
-    return evaluateTrainingSignals(rows, floors, now);
+    return { rows, floors };
   }
 }

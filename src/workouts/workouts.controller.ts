@@ -202,6 +202,11 @@ export class WorkoutsController {
     return this.workoutsService.getTrainingSignals(req.user.id);
   }
 
+  @Get("progress/deload-suggestion")
+  async deloadSuggestion(@Req() req: RequestWithUser) {
+    return this.workoutsService.getDeloadSuggestion(req.user.id);
+  }
+
   @Put("sessions/:id/set-logs")
   async upsertSetLog(
     @Req() req: RequestWithUser,
