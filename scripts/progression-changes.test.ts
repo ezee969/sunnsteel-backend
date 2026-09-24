@@ -91,10 +91,30 @@ test('typed reps on an incomplete set cannot trigger progression', () => {
   );
 
   assert.deepEqual(outcome.changes, []);
+  // TD-49: the unticked set's weight stays out of the routine.
   assert.deepEqual(
-    outcome.updates.map((update) => update.newWeight),
-    [102.5, 97.5],
+    outcome.updates.map((update) => [update.setNumber, update.newWeight]),
+    [[1, 102.5]],
   );
+});
+
+test('an unticked set never carries its logged weight, under any scheme', () => {
+  for (const scheme of [
+    'NONE',
+    'DOUBLE_PROGRESSION',
+    'DYNAMIC_DOUBLE_PROGRESSION',
+  ] as const) {
+    const outcome = buildProgressionOutcome(
+      [exercise(scheme)],
+      [log(1, 0, 120, false), log(2, 6, 90)],
+    );
+    assert.deepEqual(
+      outcome.updates.map((update) => [update.setNumber, update.newWeight]),
+      [[2, 90]],
+      scheme,
+    );
+    assert.deepEqual(outcome.changes, [], scheme);
+  }
 });
 
 test('dynamic progression advances and explains only completed sets that hit', () => {

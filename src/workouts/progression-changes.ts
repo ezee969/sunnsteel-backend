@@ -55,13 +55,16 @@ const hitTarget = (set: PrescriptionSet, log?: ProgressionLog) => {
   );
 };
 
+// TD-49: only a set that was done carries its weight into the routine. A
+// weight typed or filled into a set that was then skipped is not a load the
+// owner lifted, so it must not become the next workout's prescription.
 const carryLoggedWeight = (
   updates: ProgressionUpdate[],
   exercise: PrescriptionExercise,
   set: PrescriptionSet,
   log?: ProgressionLog,
 ) => {
-  if (typeof log?.weight !== 'number') return;
+  if (log?.isCompleted !== true || typeof log.weight !== 'number') return;
   updates.push({
     routineExerciseId: exercise.id,
     setNumber: set.setNumber,
