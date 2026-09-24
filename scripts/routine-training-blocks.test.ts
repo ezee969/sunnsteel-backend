@@ -156,6 +156,9 @@ function fakeDb() {
   };
   const tx = {
     $queryRaw: async () => [],
+    routineTemporaryOverride: {
+      findMany: async () => [],
+    },
     workoutSession: {
       findFirst: async ({ where }: any) =>
         where.status === "IN_PROGRESS" &&

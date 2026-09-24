@@ -75,7 +75,7 @@ export const ROUTINE_WITH_DAYS_SELECT = {
   // ROUT-15: the baseline only. A training block's working-copy days share
   // the table and are read through `ROUTINE_OWNER_SELECT`'s `trainingBlocks`.
   days: {
-    where: { trainingBlockId: null },
+    where: { trainingBlockId: null, temporaryOverrideId: null },
     select: ROUTINE_DAY_SELECT,
     orderBy: { order: 'asc' },
   },
@@ -100,6 +100,23 @@ export const ROUTINE_OWNER_SELECT = {
       startDate: true,
       endDate: true,
       setup: true,
+      days: {
+        select: ROUTINE_DAY_SELECT,
+        orderBy: { order: 'asc' },
+      },
+    },
+  },
+  // ROUT-16: the latest deloads, each with its own working-copy days.
+  temporaryOverrides: {
+    orderBy: { startDate: 'desc' },
+    take: 26,
+    select: {
+      id: true,
+      kind: true,
+      startDate: true,
+      endDate: true,
+      setup: true,
+      sourceTrainingBlockSeriesId: true,
       days: {
         select: ROUTINE_DAY_SELECT,
         orderBy: { order: 'asc' },

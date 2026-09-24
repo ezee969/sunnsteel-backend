@@ -33,7 +33,7 @@ const DISCOVERY_SELECT = {
     },
   },
   days: {
-    where: { trainingBlockId: null },
+    where: { trainingBlockId: null, temporaryOverrideId: null },
     select: {
       exercises: {
         select: {

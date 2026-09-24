@@ -16,7 +16,7 @@ export const ROUTINE_SUMMARY_SELECT = {
   updatedAt: true,
   // ROUT-15: the baseline, never a training block's working copy.
   days: {
-    where: { trainingBlockId: null },
+    where: { trainingBlockId: null, temporaryOverrideId: null },
     select: { _count: { select: { exercises: true } } },
   },
 } as const;

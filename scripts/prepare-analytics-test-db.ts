@@ -300,6 +300,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260923210000_training_block_execution/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// ROUT-16: deload overrides, their working-copy days and the session columns.
+				readFileSync(
+					'prisma/migrations/20260924090000_deload_overrides/migration.sql',
+					'utf8',
 				),
     );
     prisma(

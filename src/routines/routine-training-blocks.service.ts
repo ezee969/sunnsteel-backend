@@ -20,6 +20,8 @@ import { DatabaseService } from "../database/database.service";
 import { localClock } from "../notifications/push/local-time";
 import { lockTrainingAccount } from "../workouts/analytics/analytics-lock";
 import { ROUTINE_WITH_DAYS_SELECT } from "./routine.selects";
+import { workingCopyDays } from "./routine-working-copy";
+import { assertBlockLeavesDeloads } from "./routine-deloads";
 import { captureRoutineSetup, readRoutineSetup } from "./routine-versions";
 import {
   assertNoTrainingBlockOverlap,
@@ -94,45 +96,6 @@ const BLOCKS_FULL_MESSAGE =
 const REVISIONS_FULL_MESSAGE = `A training block keeps at most ${ROUTINE_TRAINING_BLOCK_REVISIONS_MAX} revisions`;
 
 /**
- * ROUT-15: a revision's working copy -- real days, exercises and sets marked
- * with the revision, created from its authored setup in the same write. A
- * session of a block day logs against these rows and progression advances
- * them, so the routine's baseline is never touched by training a block. A new
- * revision starts again from its own setup.
- */
-function workingCopyDays(routineId: string, setup: RoutineVersionSetup) {
-  return {
-    create: setup.days.map((day) => ({
-      routine: { connect: { id: routineId } },
-      dayOfWeek: day.dayOfWeek,
-      name: day.name,
-      order: day.order,
-      exercises: {
-        create: day.exercises.map((exercise) => ({
-          exercise: { connect: { id: exercise.exercise.id } },
-          order: exercise.order,
-          restSeconds: exercise.restSeconds,
-          note: exercise.note,
-          progressionScheme: exercise.progressionScheme,
-          minWeightIncrement: exercise.minWeightIncrement,
-          sets: {
-            create: exercise.sets.map((set) => ({
-              setNumber: set.setNumber,
-              repType: set.repType,
-              reps: set.reps ?? null,
-              minReps: set.minReps ?? null,
-              maxReps: set.maxReps ?? null,
-              weight: set.weight ?? null,
-              rir: set.rir ?? null,
-            })),
-          },
-        })),
-      },
-    })),
-  };
-}
-
-/**
  * ROUT-09: authored date ranges whose setup is copied at write time. ROUT-15
  * executes them: `resolveRoutinePlan` decides which one a date trains, and a
  * session of one of its days trains its working copy.
@@ -183,6 +146,13 @@ export class RoutineTrainingBlocksService {
         normalized.endDate,
         current,
       );
+      assertBlockLeavesDeloads({
+        seriesId: null,
+        startDate: normalized.startDate,
+        endDate: normalized.endDate,
+        today,
+        deloads: await this.deloads(tx, routineId),
+      });
       const source = await this.resolveSource(
         tx,
         routine,
@@ -274,6 +244,13 @@ export class RoutineTrainingBlocksService {
         normalized.endDate,
         others,
       );
+      assertBlockLeavesDeloads({
+        seriesId: block.seriesId,
+        startDate: normalized.startDate,
+        endDate: normalized.endDate,
+        today,
+        deloads: await this.deloads(tx, routineId),
+      });
       const source = await this.resolveSource(
         tx,
         routine,
@@ -345,9 +322,32 @@ export class RoutineTrainingBlocksService {
           "Only a future training block can be deleted",
         );
       }
+      // ROUT-16: a planned deload lightens this block; it goes first.
+      if (
+        (await this.deloads(tx, routineId)).some(
+          (deload) =>
+            deload.sourceTrainingBlockSeriesId === block.seriesId &&
+            deload.endDate >= deload.startDate,
+        )
+      ) {
+        throw new ConflictException(
+          "A deload lightens this training block; cancel it first",
+        );
+      }
       await tx.routineTrainingBlock.deleteMany({
         where: { routineId, seriesId: block.seriesId },
       });
+    });
+  }
+
+  private deloads(tx: Prisma.TransactionClient, routineId: string) {
+    return tx.routineTemporaryOverride.findMany({
+      where: { routineId },
+      select: {
+        startDate: true,
+        endDate: true,
+        sourceTrainingBlockSeriesId: true,
+      },
     });
   }
 

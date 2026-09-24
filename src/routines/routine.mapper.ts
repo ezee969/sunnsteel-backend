@@ -5,6 +5,7 @@ import {
   RoutineExercise,
   RoutineLineage,
   RoutineSet,
+  RoutineTemporaryOverridePlan,
   RoutineTrainingBlockPlan,
 } from '@sunsteel/contracts';
 import {
@@ -27,6 +28,8 @@ export type RoutineOwnerEntity = Prisma.RoutineGetPayload<{
   select: typeof ROUTINE_OWNER_SELECT;
 }>;
 type TrainingBlockPlanEntity = RoutineOwnerEntity['trainingBlocks'][number];
+type TemporaryOverridePlanEntity =
+  RoutineOwnerEntity['temporaryOverrides'][number];
 
 type RoutineDayEntity = RoutineWithDaysEntity['days'][number];
 type RoutineExerciseEntity = RoutineDayEntity['exercises'][number];
@@ -95,6 +98,34 @@ export function toTrainingBlockPlan(
 }
 
 /**
+ * ROUT-16: a deload as a plan. Its schedule is the lightened plan's, copied
+ * into its setup; its rotation continues the underlying plan, so its next day
+ * is the copy's day with the order the underlying plan would train next.
+ */
+export function toTemporaryOverridePlan(
+  row: TemporaryOverridePlanEntity,
+  underlyingNextOrder: number | null,
+): RoutineTemporaryOverridePlan {
+  const setup = readRoutineSetup(row.setup);
+  const rotation = setup.scheduleMode === 'ROTATION';
+  const days = row.days.map(toRoutineDay);
+  const next = rotation
+    ? (days.find((day) => day.order === underlyingNextOrder) ?? days[0] ?? null)
+    : null;
+  return {
+    id: row.id,
+    kind: row.kind,
+    startDate: row.startDate,
+    endDate: row.endDate,
+    scheduleMode: setup.scheduleMode,
+    restDays: rotation ? [] : [...setup.restDays],
+    rotationWeekdays: rotation ? [...(setup.rotationWeekdays ?? [])] : [],
+    nextRotationDayId: next?.id ?? null,
+    days,
+  };
+}
+
+/**
  * `nextRotationDayId` is resolved by the caller for ROTATION routines (it needs
  * the last completed session); WEEKLY routines always report null.
  */
@@ -103,6 +134,7 @@ export function toRoutineResponse(
   nextRotationDayId: string | null = null,
   lineage: RoutineLineage | null = null,
   trainingBlocks?: RoutineTrainingBlockPlan[],
+  temporaryOverrides?: RoutineTemporaryOverridePlan[],
 ): Routine {
   return {
     id: r.id,
@@ -125,6 +157,7 @@ export function toRoutineResponse(
     ...(lineage ? { lineage } : {}),
     days: r.days.map(toRoutineDay),
     ...(trainingBlocks ? { trainingBlocks } : {}),
+    ...(temporaryOverrides ? { temporaryOverrides } : {}),
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
   };

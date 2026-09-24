@@ -1,4 +1,7 @@
-import type { RoutineScheduleMode } from '@sunsteel/contracts';
+import type {
+  RoutineScheduleMode,
+  TemporaryOverrideKind,
+} from '@sunsteel/contracts';
 import { readRoutineSetup } from './routine-versions';
 
 /**
@@ -25,7 +28,7 @@ export const PLAN_BLOCKS_SELECT = {
 
 /** The baseline days only; a block's working copy is read through its block. */
 export const BASELINE_DAY_WEEKDAYS_SELECT = {
-  where: { trainingBlockId: null },
+  where: { trainingBlockId: null, temporaryOverrideId: null },
   select: { dayOfWeek: true },
 } as const;
 
@@ -63,6 +66,61 @@ export function toPlanBlocks(rows: readonly PlanBlockRow[]): PlanBlock[] {
       seriesId: row.seriesId,
       revision: row.revision,
       name: row.name,
+      startDate: row.startDate,
+      endDate: row.endDate,
+      scheduleMode: setup.scheduleMode,
+      restDays: rotation ? [] : [...setup.restDays],
+      rotationWeekdays: rotation ? [...(setup.rotationWeekdays ?? [])] : [],
+      nextRotationDayId: null,
+      days: row.days,
+    };
+  });
+}
+
+/** ROUT-16: the deloads the planners resolve, weekdays only like blocks. */
+export const PLAN_OVERRIDES_SELECT = {
+  orderBy: { startDate: 'desc' },
+  take: 26,
+  select: {
+    id: true,
+    kind: true,
+    startDate: true,
+    endDate: true,
+    setup: true,
+    days: { select: { dayOfWeek: true } },
+  },
+} as const;
+
+export interface PlanOverrideRow {
+  id: string;
+  kind: TemporaryOverrideKind;
+  startDate: string;
+  endDate: string;
+  setup: unknown;
+  days: { dayOfWeek: number | null }[];
+}
+
+export interface PlanOverride {
+  id: string;
+  kind: TemporaryOverrideKind;
+  startDate: string;
+  endDate: string;
+  scheduleMode: RoutineScheduleMode;
+  restDays: number[];
+  rotationWeekdays: number[];
+  nextRotationDayId: null;
+  days: { dayOfWeek: number | null }[];
+}
+
+export function toPlanOverrides(
+  rows: readonly PlanOverrideRow[],
+): PlanOverride[] {
+  return rows.map((row) => {
+    const setup = readRoutineSetup(row.setup);
+    const rotation = setup.scheduleMode === 'ROTATION';
+    return {
+      id: row.id,
+      kind: row.kind,
       startDate: row.startDate,
       endDate: row.endDate,
       scheduleMode: setup.scheduleMode,

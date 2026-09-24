@@ -135,6 +135,7 @@ const entity = (
   updatedAt: new Date('2026-09-01T10:00:00.000Z'),
   days: days.map((d) => ({ ...d, name: null, exercises: [] })),
   trainingBlocks: [],
+  temporaryOverrides: [],
 });
 
 test('routine reads report the next rotation day from the last completed session', async () => {

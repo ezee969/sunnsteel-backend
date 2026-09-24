@@ -175,6 +175,8 @@ export class WorkoutSessionReadService {
           dayName: routineDayName(snapshot?.routineDay ?? session.routineDay),
           trainingBlockName:
             snapshot?.trainingBlock?.name ?? session.trainingBlockName,
+          temporaryOverrideKind:
+            snapshot?.temporaryOverride?.kind ?? session.temporaryOverrideKind,
         },
       };
     });

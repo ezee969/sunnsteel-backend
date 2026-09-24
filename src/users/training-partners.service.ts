@@ -1,7 +1,9 @@
 import {
   BASELINE_DAY_WEEKDAYS_SELECT,
   PLAN_BLOCKS_SELECT,
+  PLAN_OVERRIDES_SELECT,
   toPlanBlocks,
+  toPlanOverrides,
 } from '../routines/routine-plan';
 import {
   BadRequestException,
@@ -308,6 +310,7 @@ export class TrainingPartnersService {
           rotationWeekdays: true,
           days: BASELINE_DAY_WEEKDAYS_SELECT,
           trainingBlocks: PLAN_BLOCKS_SELECT,
+          temporaryOverrides: PLAN_OVERRIDES_SELECT,
         },
       }),
       this.db.scheduleOverride.findMany({
@@ -338,6 +341,7 @@ export class TrainingPartnersService {
       ...routine,
       scheduleMode: routine.scheduleMode as 'WEEKLY' | 'ROTATION',
       trainingBlocks: toPlanBlocks(routine.trainingBlocks),
+      temporaryOverrides: toPlanOverrides(routine.temporaryOverrides),
     }));
     const normalizedOverrides = overrides.map((override) => ({
       ...override,

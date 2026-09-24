@@ -1,3 +1,4 @@
+import { progressionRuns } from '../session-training-block';
 import {
   ConflictException,
   Injectable,
@@ -269,7 +270,10 @@ export class WorkoutSessionCorrectionService {
           updatedProjection,
           removedEntryKeys,
         );
-        const progressionKept = await this.rederiveProgression(
+        // ROUT-16: a deload session had no progression to re-derive.
+        const progressionKept = !progressionRuns(session)
+          ? []
+          : await this.rederiveProgression(
           tx,
           userId,
           sessionId,

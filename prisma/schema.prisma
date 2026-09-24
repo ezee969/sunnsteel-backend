@@ -531,6 +531,7 @@ model Routine {
   workoutSessions     WorkoutSession[]
   versions            RoutineVersion[]
   trainingBlocks      RoutineTrainingBlock[]
+  temporaryOverrides  RoutineTemporaryOverride[]
   shares              RoutineShare[]
   scheduleOverrides   ScheduleOverride[]
 
@@ -604,6 +605,47 @@ model RoutineTrainingBlock {
   @@index([sourceVersionId])
 }
 
+// ROUT-16: a bounded, explicitly lighter copy of the prescription in force on
+// its dates -- a block's working copy or the baseline -- trained through its
+// own working-copy days. It never mutates the routine or the block, never
+// overlaps another override of the routine, and never crosses a plan boundary.
+model RoutineTemporaryOverride {
+  id                       String                      @id @default(uuid())
+  routineId                String
+  routine                  Routine                     @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  kind                     TemporaryOverrideKind       @default(DELOAD)
+  startDate                String                      @db.VarChar(10)
+  // Moved to the day before it was ended when it is ended early.
+  endDate                  String                      @db.VarChar(10)
+  loadReductionPercent     Int
+  setMode                  DeloadSetMode
+  sourceKind               TemporaryOverrideSourceKind
+  // The block series lightened, and its name then; both null on the baseline.
+  sourceTrainingBlockSeriesId String?
+  sourceTrainingBlockName  String?                     @db.VarChar(60)
+  originalSetup            Json
+  setup                    Json
+  endedEarlyAt             DateTime?
+  createdAt                DateTime                    @default(now())
+  days                     RoutineDay[]
+
+  @@index([routineId, startDate])
+}
+
+enum TemporaryOverrideKind {
+  DELOAD
+}
+
+enum DeloadSetMode {
+  ALL
+  HALF
+}
+
+enum TemporaryOverrideSourceKind {
+  BASELINE
+  TRAINING_BLOCK
+}
+
 enum RoutineTrainingBlockSourceKind {
   CURRENT_ROUTINE
   SAVED_VERSION
@@ -657,8 +699,12 @@ model RoutineDay {
   // Prisma cannot declare a partial index.
   trainingBlockId String?
   trainingBlock   RoutineTrainingBlock? @relation(fields: [trainingBlockId], references: [id], onDelete: Cascade)
+  // ROUT-16: set on a deload's working copy; the baseline has both null.
+  temporaryOverrideId String?
+  temporaryOverride   RoutineTemporaryOverride? @relation(fields: [temporaryOverrideId], references: [id], onDelete: Cascade)
 
   @@index([routineId, trainingBlockId])
+  @@index([temporaryOverrideId])
   @@index([trainingBlockId])
 }
 
@@ -750,6 +796,9 @@ model WorkoutSession {
   trainingBlockSeriesId String?
   trainingBlockRevision Int?
   trainingBlockName     String?                 @db.VarChar(60)
+  // ROUT-16: the deload this session trained; no progression ran for it.
+  temporaryOverrideId   String?
+  temporaryOverrideKind TemporaryOverrideKind?
 
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt

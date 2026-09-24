@@ -23,6 +23,9 @@ export function buildWorkoutSessionSelect(includeLogs = false) {
     trainingBlockSeriesId: true,
     trainingBlockRevision: true,
     trainingBlockName: true,
+    // ROUT-16: the deload this session trained, if any.
+    temporaryOverrideId: true,
+    temporaryOverrideKind: true,
     createdAt: true,
     updatedAt: true,
     routine: {
@@ -117,6 +120,7 @@ export const WORKOUT_SESSION_LIST_SELECT = {
   durationSec: true,
   notes: true,
   trainingBlockName: true,
+  temporaryOverrideKind: true,
   routine: { select: { id: true, name: true } },
   routineDay: { select: { dayOfWeek: true, name: true, order: true } },
 } as const;

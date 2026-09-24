@@ -10,6 +10,7 @@ import { resolveActiveTrainingBlock } from '@sunsteel/contracts';
 import { localClock } from '../../notifications/push/local-time';
 import {
   assertDayInPlan,
+  temporaryOverrideColumns,
   trainingBlockColumns,
 } from '../session-training-block';
 import { DatabaseService } from '../../database/database.service';
@@ -103,9 +104,18 @@ export class WorkoutSessionStartService {
             id: true,
             dayOfWeek: true,
             trainingBlockId: true,
+            temporaryOverrideId: true,
             routine: {
               select: {
                 user: { select: { timeZone: true } },
+                temporaryOverrides: {
+                  select: {
+                    id: true,
+                    kind: true,
+                    startDate: true,
+                    endDate: true,
+                  },
+                },
                 trainingBlocks: {
                   where: { supersededAt: null },
                   select: {
@@ -136,7 +146,11 @@ export class WorkoutSessionStartService {
           routineDay.routine.trainingBlocks,
           today,
         );
-        assertDayInPlan(routineDay, active);
+        const deload = resolveActiveTrainingBlock(
+          routineDay.routine.temporaryOverrides,
+          today,
+        );
+        assertDayInPlan(routineDay, active, deload);
 
         const result = await tx.workoutSession.create({
           data: {
@@ -156,6 +170,9 @@ export class WorkoutSessionStartService {
                     name: active.name,
                   }
                 : null,
+            ),
+            ...temporaryOverrideColumns(
+              deload ? { id: deload.id, kind: deload.kind } : null,
             ),
           },
           select: buildWorkoutSessionSelect(),

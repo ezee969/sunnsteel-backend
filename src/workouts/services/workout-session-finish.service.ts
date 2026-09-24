@@ -1,3 +1,4 @@
+import { progressionRuns } from '../session-training-block';
 import {
   BadRequestException,
   Injectable,
@@ -99,14 +100,17 @@ export class WorkoutSessionFinishService {
               },
             ];
           });
-          const outcome = buildProgressionOutcome(
-            snapshot.routineDay.exercises ?? [],
-            // LIVE-11: a swapped slot was not done with the prescribed exercise.
-            excludeSubstitutedSlots(
-              progressionLogs,
-              readSubstitutions(session.exerciseSubstitutions),
-            ),
-          );
+          // ROUT-16: a deload session never advances progression.
+          const outcome = progressionRuns(session)
+            ? buildProgressionOutcome(
+                snapshot.routineDay.exercises ?? [],
+                // LIVE-11: a swapped slot was not done with the prescribed exercise.
+                excludeSubstitutedSlots(
+                  progressionLogs,
+                  readSubstitutions(session.exerciseSubstitutions),
+                ),
+              )
+            : { changes: [], updates: [] };
           progressionChanges = outcome.changes;
 
           await Promise.all(

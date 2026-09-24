@@ -2,7 +2,9 @@ import { resolveRoutinePlan } from '@sunsteel/contracts';
 import {
   BASELINE_DAY_WEEKDAYS_SELECT,
   PLAN_BLOCKS_SELECT,
+  PLAN_OVERRIDES_SELECT,
   toPlanBlocks,
+  toPlanOverrides,
 } from '../routines/routine-plan';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
@@ -159,11 +161,16 @@ export class ScheduleOverridesService {
         rotationWeekdays: true,
         days: BASELINE_DAY_WEEKDAYS_SELECT,
         trainingBlocks: PLAN_BLOCKS_SELECT,
+        temporaryOverrides: PLAN_OVERRIDES_SELECT,
       },
     });
     if (!routine) throw new NotFoundException('Routine not found');
     const plan = resolveRoutinePlan(
-      { ...routine, trainingBlocks: toPlanBlocks(routine.trainingBlocks) },
+      {
+        ...routine,
+        trainingBlocks: toPlanBlocks(routine.trainingBlocks),
+        temporaryOverrides: toPlanOverrides(routine.temporaryOverrides),
+      },
       date,
     );
     return {

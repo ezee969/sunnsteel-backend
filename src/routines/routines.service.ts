@@ -15,6 +15,7 @@ import { ROUTINE_OWNER_SELECT, ROUTINE_TOGGLE_SELECT } from './routine.selects';
 import {
   RoutineOwnerEntity,
   toRoutineResponse,
+  toTemporaryOverridePlan,
   toTrainingBlockPlan,
 } from './routine.mapper';
 import {
@@ -220,11 +221,26 @@ export class RoutinesService {
           routine.scheduleMode === 'ROTATION'
             ? await nextDayAfterLast(routine.id, null, routine.days)
             : null;
+        // ROUT-16: a deload continues the rotation of the plan it lightened.
+        const orderOf = (days: { id: string; order: number }[], id: string | null) =>
+          days.find((day) => day.id === id)?.order ?? null;
+        const temporaryOverrides = routine.temporaryOverrides.map((row) => {
+          const block = row.sourceTrainingBlockSeriesId
+            ? trainingBlocks.find(
+                (plan) => plan.seriesId === row.sourceTrainingBlockSeriesId,
+              )
+            : null;
+          const underlyingNextOrder = block
+            ? orderOf(block.days, block.nextRotationDayId)
+            : orderOf(routine.days, next);
+          return toTemporaryOverridePlan(row, underlyingNextOrder);
+        });
         return toRoutineResponse(
           routine,
           next,
           lineageFor(routine),
           trainingBlocks,
+          temporaryOverrides,
         );
       }),
     );
@@ -328,7 +344,7 @@ export class RoutinesService {
         restDays: true,
         rotationWeekdays: true,
         days: {
-          where: { trainingBlockId: null },
+          where: { trainingBlockId: null, temporaryOverrideId: null },
           select: { dayOfWeek: true },
         },
       },
@@ -368,7 +384,7 @@ export class RoutinesService {
     if (dto.days) {
       // ROUT-15: the baseline only; a block's working copy is not the routine's.
       await tx.routineDay.deleteMany({
-        where: { routineId: id, trainingBlockId: null },
+        where: { routineId: id, trainingBlockId: null, temporaryOverrideId: null },
       });
     }
 

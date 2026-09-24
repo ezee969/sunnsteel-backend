@@ -10,6 +10,8 @@ import {
 } from './routine-shares.controller';
 import { RoutineSharingService } from './routine-sharing.service';
 import { RoutineDiscoveryService } from './routine-discovery.service';
+import { RoutineDeloadsController } from './routine-deloads.controller';
+import { RoutineDeloadsService } from './routine-deloads.service';
 import { RoutineTrainingBlocksController } from './routine-training-blocks.controller';
 import { RoutineTrainingBlocksService } from './routine-training-blocks.service';
 
@@ -19,6 +21,7 @@ import { RoutineTrainingBlocksService } from './routine-training-blocks.service'
     RoutinesController,
     RoutineVersionsController,
     RoutineTrainingBlocksController,
+    RoutineDeloadsController,
     RoutineSharesController,
     SharedRoutinesController,
   ],
@@ -26,6 +29,7 @@ import { RoutineTrainingBlocksService } from './routine-training-blocks.service'
     RoutinesService,
     RoutineVersionsService,
     RoutineTrainingBlocksService,
+    RoutineDeloadsService,
     RoutineSharingService,
     RoutineDiscoveryService,
   ],

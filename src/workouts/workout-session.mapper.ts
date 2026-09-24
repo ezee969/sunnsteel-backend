@@ -3,7 +3,10 @@ import { Prisma } from '@prisma/client';
 import { SetLog, WorkoutSession } from '@sunsteel/contracts';
 import { readExerciseNotes } from './session-notes';
 import { readSubstitutions } from './session-substitutions';
-import { sessionTrainingBlock } from './session-training-block';
+import {
+  sessionTemporaryOverride,
+  sessionTrainingBlock,
+} from './session-training-block';
 import { buildWorkoutSessionSelect } from './workout-session.selects';
 
 /**
@@ -101,5 +104,7 @@ export function toWorkoutSessionResponse(
     exerciseSubstitutions: readSubstitutions(session.exerciseSubstitutions),
     exerciseNotes: readExerciseNotes(session.exerciseNotes),
     trainingBlock: snapshot?.trainingBlock ?? sessionTrainingBlock(session),
+    temporaryOverride:
+      snapshot?.temporaryOverride ?? sessionTemporaryOverride(session),
   };
 }

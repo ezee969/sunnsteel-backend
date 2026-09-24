@@ -1,6 +1,9 @@
 import { Prisma } from '@prisma/client';
 import { WorkoutSessionSnapshotV1 } from '@sunsteel/contracts';
-import { sessionTrainingBlock } from '../session-training-block';
+import {
+  sessionTemporaryOverride,
+  sessionTrainingBlock,
+} from '../session-training-block';
 import { buildWorkoutSessionSelect } from '../workout-session.selects';
 
 export function readSnapshot(payload: unknown): WorkoutSessionSnapshotV1 {
@@ -44,6 +47,7 @@ export async function ensureSessionSnapshot(
     routine: session.routine,
     routineDay: session.routineDay,
     trainingBlock: sessionTrainingBlock(session),
+    temporaryOverride: sessionTemporaryOverride(session),
   };
   await tx.workoutSessionSnapshot.create({
     data: {

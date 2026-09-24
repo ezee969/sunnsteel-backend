@@ -120,6 +120,7 @@ function fakeDb(rows: Row[]) {
               restDays: [],
               rotationWeekdays: [],
               trainingBlocks: [],
+              temporaryOverrides: [],
             }
           : null,
     },

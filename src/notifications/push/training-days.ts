@@ -1,5 +1,5 @@
 import { resolveRoutinePlan } from '@sunsteel/contracts';
-import type { PlanBlock } from '../../routines/routine-plan';
+import type { PlanBlock, PlanOverride } from '../../routines/routine-plan';
 
 /**
  * NOTIF-04: which routines an account is planned to train on one local date.
@@ -32,6 +32,8 @@ export interface ReminderRoutine {
    * schedule decides, through the same resolver the frontend schedule uses.
    */
   trainingBlocks?: PlanBlock[];
+  /** ROUT-16: deloads, which win over the plan they lighten. */
+  temporaryOverrides?: PlanOverride[];
 }
 
 export interface ReminderOverride {
