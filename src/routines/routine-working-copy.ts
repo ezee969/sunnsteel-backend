@@ -23,6 +23,7 @@ export function workingCopyDays(routineId: string, setup: RoutineVersionSetup) {
           note: exercise.note,
           progressionScheme: exercise.progressionScheme,
           minWeightIncrement: exercise.minWeightIncrement,
+          ...(exercise.warmUpsFollowLoad ? { warmUpsFollowLoad: true } : {}),
           sets: {
             create: exercise.sets.map((set) => ({
               setNumber: set.setNumber,
@@ -33,6 +34,9 @@ export function workingCopyDays(routineId: string, setup: RoutineVersionSetup) {
               weight: set.weight ?? null,
               rir: set.rir ?? null,
               kind: set.kind ?? 'WORKING',
+              ...(typeof set.warmUpShare === 'number'
+                ? { warmUpShare: set.warmUpShare }
+                : {}),
             })),
           },
         })),

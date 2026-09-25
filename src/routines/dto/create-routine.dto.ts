@@ -93,6 +93,13 @@ export class CreateRoutineExerciseSetDto implements RoutineSet {
   @IsOptional()
   @IsIn(SET_KINDS)
   kind?: SetKind;
+
+  // LIVE-20: a generated warm-up's share of the first working set.
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  warmUpShare?: number | null;
 }
 
 export class CreateRoutineExerciseDto implements CreateRoutineExerciseInput {
@@ -123,6 +130,11 @@ export class CreateRoutineExerciseDto implements CreateRoutineExerciseInput {
   @IsNumber()
   @Min(0.1)
   minWeightIncrement: number; // defaults to 2.5 if omitted
+
+  // LIVE-20: warm-ups with a share follow the first working set.
+  @IsOptional()
+  @IsBoolean()
+  warmUpsFollowLoad?: boolean;
 
   @IsArray()
   @ValidateNested({ each: true })

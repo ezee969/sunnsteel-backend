@@ -7,6 +7,7 @@ const ROUTINE_SET_SELECT = {
   weight: true,
   rir: true,
   kind: true,
+  warmUpShare: true,
 } as const;
 
 const ROUTINE_EXERCISE_SELECT = {
@@ -16,6 +17,7 @@ const ROUTINE_EXERCISE_SELECT = {
   note: true,
   progressionScheme: true,
   minWeightIncrement: true,
+  warmUpsFollowLoad: true,
   exercise: { select: { id: true, name: true } },
   sets: {
     select: ROUTINE_SET_SELECT,

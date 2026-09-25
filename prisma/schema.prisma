@@ -727,6 +727,8 @@ model RoutineExercise {
   // Progression configuration per exercise
   progressionScheme  ProgressionScheme    @default(NONE)
   minWeightIncrement Float                @default(2.5)
+  // LIVE-20: warm-ups with a share are recalculated from the first working set
+  warmUpsFollowLoad  Boolean              @default(false)
   sets               RoutineExerciseSet[]
   setLogs            SetLog[]
 }
@@ -746,6 +748,8 @@ model RoutineExerciseSet {
   rir               Int?
   // LIVE-12: what the set is for
   kind              SetKind         @default(WORKING)
+  // LIVE-20: a generated warm-up's share of the first working set
+  warmUpShare       Float?
 
   @@unique([routineExerciseId, setNumber])
 }

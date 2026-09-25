@@ -318,6 +318,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260924200000_set_kinds/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// LIVE-20: warm-ups that follow the working load.
+				readFileSync(
+					'prisma/migrations/20260925090000_warm_ups_follow_load/migration.sql',
+					'utf8',
 				),
     );
     prisma(

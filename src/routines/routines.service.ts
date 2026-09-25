@@ -34,6 +34,7 @@ type RoutineSetInput = {
   weight?: number | null;
   rir?: number | null;
   kind?: SetKind;
+  warmUpShare?: number | null;
 };
 
 type RoutineExerciseInput = {
@@ -43,6 +44,7 @@ type RoutineExerciseInput = {
   note?: string;
   progressionScheme: ProgressionScheme;
   minWeightIncrement?: number;
+  warmUpsFollowLoad?: boolean;
   sets: RoutineSetInput[];
 };
 
@@ -90,6 +92,12 @@ export class RoutinesService {
       repType: repTypeVal,
       weight: set.weight,
       kind: set.kind ?? 'WORKING',
+      // LIVE-20: only a warm-up carries a share.
+      warmUpShare:
+        (set.kind ?? 'WORKING') === 'WARMUP' &&
+        typeof set.warmUpShare === 'number'
+          ? set.warmUpShare
+          : null,
       ...(typeof set.rir === 'number' ? { rir: set.rir } : {}),
       ...(repTypeVal === 'FIXED' && typeof set.reps === 'number'
         ? { reps: set.reps }
@@ -110,6 +118,7 @@ export class RoutinesService {
       note: exercise.note,
       progressionScheme: exercise.progressionScheme ?? 'NONE',
       minWeightIncrement: exercise.minWeightIncrement ?? 2.5,
+      warmUpsFollowLoad: exercise.warmUpsFollowLoad ?? false,
       sets: {
         create: exercise.sets.map((set) => this.mapRoutineSetForCreate(set)),
       },

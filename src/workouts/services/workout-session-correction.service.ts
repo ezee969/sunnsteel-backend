@@ -47,6 +47,7 @@ import {
   readSubstitutions,
 } from '../session-substitutions';
 import { COUNTED_SET_LOG } from '../counted-sets';
+import { syncFollowingWarmUps } from '../../routines/warm-up-follow';
 
 type Tx = Prisma.TransactionClient;
 
@@ -587,11 +588,18 @@ export class WorkoutSessionCorrectionService {
       )
         continue;
 
-      const current = await tx.routineExerciseSet.findMany({
-        where: { routineExerciseId: exercise.id },
-        select: { setNumber: true, weight: true },
-      });
-      if (!prescriptionIntact(exercise.sets, current, finishUpdates)) {
+      // LIVE-20: warm-up loads are not progression's -- a following warm-up
+      // is recalculated after it -- so they are neither compared nor written.
+      const notWarmUp = <T extends { kind?: string | null }>(sets: T[]) =>
+        sets.filter((set) => (set.kind ?? 'WORKING') !== 'WARMUP');
+      const current = notWarmUp(
+        await tx.routineExerciseSet.findMany({
+          where: { routineExerciseId: exercise.id },
+          select: { setNumber: true, weight: true, kind: true },
+        }),
+      );
+      const prescribed = notWarmUp(exercise.sets);
+      if (!prescriptionIntact(prescribed, current, finishUpdates)) {
         kept.push({
           exerciseId: exercise.exerciseId ?? exercise.exercise.id ?? '',
           exerciseName: exercise.exercise.name,
@@ -601,7 +609,7 @@ export class WorkoutSessionCorrectionService {
       const currentWeights = new Map(
         current.map((set) => [set.setNumber, set.weight]),
       );
-      for (const set of correctedPrescription(exercise.sets, nowUpdates)) {
+      for (const set of correctedPrescription(prescribed, nowUpdates)) {
         if ((currentWeights.get(set.setNumber) ?? null) === set.weight) continue;
         await tx.routineExerciseSet.update({
           where: {
@@ -614,6 +622,8 @@ export class WorkoutSessionCorrectionService {
           select: { id: true },
         });
       }
+      // LIVE-20: following warm-ups move with the re-derived working load.
+      await syncFollowingWarmUps(tx, userId, [exercise.id]);
       const eventKey = progressionKey(sessionId, exercise.id);
       if (nowChange) {
         const payload = json({ schemaVersion: 1, ...nowChange });

@@ -26,6 +26,7 @@ import {
   readSubstitutions,
 } from '../session-substitutions';
 import { buildWorkoutSessionSelect } from '../workout-session.selects';
+import { syncFollowingWarmUps } from '../../routines/warm-up-follow';
 
 @Injectable()
 export class WorkoutSessionFinishService {
@@ -127,6 +128,12 @@ export class WorkoutSessionFinishService {
                 select: { id: true },
               }),
             ),
+          );
+          // LIVE-20: warm-ups that follow the working load move with it.
+          await syncFollowingWarmUps(
+            tx,
+            userId,
+            outcome.updates.map((update) => update.routineExerciseId),
           );
           await writeProgressionEvents(
             tx,

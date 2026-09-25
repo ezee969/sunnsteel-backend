@@ -37,6 +37,7 @@ export function captureRoutineSetup(
             note: exercise.note ?? null,
             progressionScheme: exercise.progressionScheme,
             minWeightIncrement: exercise.minWeightIncrement,
+            ...(exercise.warmUpsFollowLoad ? { warmUpsFollowLoad: true } : {}),
             sets: exercise.sets.map(
               (set): RoutineSet => ({
                 setNumber: set.setNumber,
@@ -48,6 +49,9 @@ export function captureRoutineSetup(
                 rir: set.rir,
                 // LIVE-12: absent in setups captured before it.
                 ...(set.kind ? { kind: set.kind } : {}),
+                ...(typeof set.warmUpShare === 'number'
+                  ? { warmUpShare: set.warmUpShare }
+                  : {}),
               }),
             ),
           }),
@@ -120,6 +124,7 @@ export function setupToRoutineUpdate(setup: RoutineVersionSetup) {
         note: exercise.note ?? undefined,
         progressionScheme: exercise.progressionScheme,
         minWeightIncrement: exercise.minWeightIncrement,
+        ...(exercise.warmUpsFollowLoad ? { warmUpsFollowLoad: true } : {}),
         sets: exercise.sets.map((set) => ({ ...set })),
       })),
     })),
