@@ -748,8 +748,9 @@ export class UsersService {
       );
     }
     if (ids.length === 0) return ids;
+    // EXER-06: favorites are public training identity, so catalog only.
     const existing = await this.db.exercise.findMany({
-      where: { id: { in: ids } },
+      where: { id: { in: ids }, ownerId: null },
       select: { id: true },
     });
     if (existing.length !== ids.length) {

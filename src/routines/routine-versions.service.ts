@@ -22,6 +22,7 @@ import {
   setupToRoutineUpdate,
 } from './routine-versions';
 import { RoutinesService } from './routines.service';
+import { usableExerciseWhere } from '../exercises/exercise-access';
 
 const VERSION_SELECT = {
   id: true,
@@ -112,7 +113,9 @@ export class RoutineVersionsService {
       const setup = readRoutineSetup(version.setup);
 
       const ids = setupExerciseIds(setup);
-      const known = await tx.exercise.count({ where: { id: { in: ids } } });
+      const known = await tx.exercise.count({
+        where: { id: { in: ids }, ...usableExerciseWhere(userId) },
+      });
       if (known !== ids.length) {
         throw new ConflictException(
           'An exercise in this version is no longer in the catalog',

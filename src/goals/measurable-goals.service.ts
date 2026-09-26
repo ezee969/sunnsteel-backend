@@ -8,6 +8,7 @@ import type {
 } from "@sunsteel/contracts";
 import { MEASURABLE_GOALS_MAX } from "@sunsteel/contracts";
 import { DatabaseService } from "../database/database.service";
+import { usableExerciseWhere } from "../exercises/exercise-access";
 
 export const measurableGoalSelect = {
   id: true,
@@ -144,7 +145,7 @@ export class MeasurableGoalsService {
       );
       if (exerciseIds.length) {
         const exerciseCount = await tx.exercise.count({
-          where: { id: { in: exerciseIds } },
+          where: { id: { in: exerciseIds }, ...usableExerciseWhere(userId) },
         });
         if (exerciseCount !== exerciseIds.length) {
           throw new BadRequestException("Unknown strength-goal exercise");

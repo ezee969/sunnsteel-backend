@@ -227,8 +227,9 @@ function fakeDb(
       },
     },
     exercise: {
-      findUnique: async ({ where }: { where: { id: string } }) =>
-        where.id === 'pushups' ? pushupsRow : null,
+      // EXER-06: the lookup is scoped to what the owner may use.
+      findFirst: async ({ where }: { where: { id: string; OR: unknown } }) =>
+        where.id === 'pushups' && where.OR ? pushupsRow : null,
     },
     routineExercise: {
       updateMany: async (args: unknown) => {

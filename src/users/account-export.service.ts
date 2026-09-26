@@ -77,6 +77,7 @@ export class AccountExportService {
       locations,
       overrides,
       stars,
+      customExercises,
       following,
       followers,
       blocked,
@@ -142,6 +143,23 @@ export class AccountExportService {
         select: {
           createdAt: true,
           exercise: { select: { id: true, name: true } },
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
+      // EXER-06: the member's own exercises, archived ones included.
+      this.db.exercise.findMany({
+        where: { ownerId: userId },
+        select: {
+          id: true,
+          name: true,
+          primaryMuscles: true,
+          secondaryMuscles: true,
+          equipmentRequired: true,
+          movementPattern: true,
+          mechanic: true,
+          note: true,
+          archivedAt: true,
+          createdAt: true,
         },
         orderBy: { createdAt: 'asc' },
       }),
@@ -320,6 +338,11 @@ export class AccountExportService {
           exerciseId: star.exercise.id,
           name: star.exercise.name,
           starredAt: iso(star.createdAt),
+        })),
+        custom: customExercises.map((exercise) => ({
+          ...exercise,
+          archivedAt: exercise.archivedAt ? iso(exercise.archivedAt) : null,
+          createdAt: iso(exercise.createdAt),
         })),
       },
       social: {

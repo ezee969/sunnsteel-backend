@@ -172,6 +172,11 @@ function fakeDb() {
           ? routine
           : null,
     },
+    // EXER-06: every exercise a saved version names is still usable here.
+    exercise: {
+      findMany: async ({ where }: any) =>
+        where.id.in.map((id: string) => ({ id })),
+    },
     routineVersion: {
       findFirst: async ({ where }: any) =>
         versions.find(

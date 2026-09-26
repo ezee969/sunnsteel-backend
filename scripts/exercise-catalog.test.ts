@@ -86,6 +86,9 @@ describe('ExercisesService', () => {
     substitutionGroup: 'horizontal-press',
     instructions: [],
     mediaUrl: null,
+    ownerId: null,
+    note: null,
+    archivedAt: null,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     updatedAt: new Date('2026-01-02T00:00:00.000Z'),
   };
@@ -96,14 +99,22 @@ describe('ExercisesService', () => {
     assert.equal(exercise.createdAt, '2026-01-01T00:00:00.000Z');
     assert.equal(exercise.movementPattern, 'HORIZONTAL_PUSH');
     assert.equal(exercise.substitutionGroup, 'horizontal-press');
+    // EXER-06: a catalog exercise says nothing about ownership.
+    assert.equal('ownerId' in exercise, false);
+    assert.equal(exercise.isCustom, undefined);
   });
 
   it('returns the catalog sorted by name with metadata selected', async () => {
     let select: Record<string, boolean> | undefined;
+    let where: unknown;
     const db = {
       exercise: {
-        findMany: async (args: { select: Record<string, boolean> }) => {
+        findMany: async (args: {
+          select: Record<string, boolean>;
+          where: unknown;
+        }) => {
           select = args.select;
+          where = args.where;
           return [
             { ...row, id: 'b', name: 'Squat' },
             { ...row, id: 'a', name: 'bench press' },
@@ -111,7 +122,9 @@ describe('ExercisesService', () => {
         },
       },
     } as unknown as DatabaseService;
-    const result = await new ExercisesService(db).findAll();
+    const result = await new ExercisesService(db).findAll('user-1');
+    // EXER-06: the catalog and the caller's own, never another member's.
+    assert.deepEqual(where, { OR: [{ ownerId: null }, { ownerId: 'user-1' }] });
     assert.deepEqual(
       result.map((exercise) => exercise.name),
       ['bench press', 'Squat'],

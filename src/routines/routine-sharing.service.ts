@@ -5,7 +5,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
-  CLONE_ROUTINE_REFUSALS,
   ROUTINE_SHARE_MAX_ACTIVE_LINKS,
   type CloneRoutineRequest,
   type MemberRoutinesResponse,
@@ -25,9 +24,10 @@ import {
   ROUTINE_SUMMARY_SELECT,
   toSharedRoutineSummary,
 } from './routine-summary';
-import { captureRoutineSetup, setupExerciseIds } from './routine-versions';
+import { captureRoutineSetup } from './routine-versions';
 import { canViewRoutine } from './routine-visibility';
 import { RoutinesService } from './routines.service';
+import { CustomExercisesService } from '../exercises/custom-exercises.service';
 
 // base64url of 18 random bytes is 24 characters; anything else is not a token.
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{24}$/;
@@ -68,6 +68,7 @@ export class RoutineSharingService {
   constructor(
     private readonly db: DatabaseService,
     private readonly routines: RoutinesService,
+    private readonly customExercises: CustomExercisesService,
   ) {}
 
   async setVisibility(
@@ -341,20 +342,15 @@ export class RoutineSharingService {
         ? await this.readByToken(source.token)
         : await this.readVisibleRoutine(userId, source.routineId);
 
-    // The setup names catalog exercises by id, exactly as a stored version
-    // does, so a routine sharing an exercise that has since been withdrawn is
-    // refused by name rather than created with a day that cannot be trained.
-    const ids = setupExerciseIds(shared.setup);
-    const known = await this.db.exercise.count({ where: { id: { in: ids } } });
-    if (known !== ids.length) {
-      throw new ConflictException(
-        `${CLONE_ROUTINE_REFUSALS.UNKNOWN_EXERCISE}: an exercise in this routine is no longer in the catalog`,
-      );
-    }
+    // The setup names exercises by id, exactly as a stored version does, so a
+    // routine sharing an exercise that has since been withdrawn is refused
+    // rather than created with a day that cannot be trained. EXER-06: the
+    // author's custom exercises become the cloner's own first.
+    const setup = await this.customExercises.adoptForClone(userId, shared.setup);
 
     const clone = await this.routines.create(
       userId,
-      setupToClonedRoutine(shared.setup) as unknown as CreateRoutineDto,
+      setupToClonedRoutine(setup) as unknown as CreateRoutineDto,
     );
     // ROUT-06: what it was cloned from, recorded on the clone only. The source
     // is never told it was copied. The author is stored beside the routine id

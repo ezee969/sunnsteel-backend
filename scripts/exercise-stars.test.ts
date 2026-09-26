@@ -52,8 +52,11 @@ function fakeDb(rows: Row[], exercises = new Set(['bench', 'squat'])) {
   };
   const tx = {
     exercise: {
-      findUnique: async (query: any) =>
-        exercises.has(query.where.id) ? { id: query.where.id } : null,
+      // EXER-06: the lookup is scoped to what the owner may use.
+      findFirst: async (query: any) =>
+        exercises.has(query.where.id) && query.where.OR
+          ? { id: query.where.id }
+          : null,
     },
     starredExercise,
   };

@@ -9,6 +9,7 @@ import {
   StarredExercisesResponse,
 } from '@sunsteel/contracts';
 import { DatabaseService } from '../database/database.service';
+import { usableExerciseWhere } from './exercise-access';
 
 type StarReader = Pick<Prisma.TransactionClient, 'starredExercise'>;
 
@@ -48,8 +49,8 @@ export class ExerciseStarsService {
 
   star(userId: string, exerciseId: string): Promise<StarredExercisesResponse> {
     return this.db.$transaction(async (tx) => {
-      const exercise = await tx.exercise.findUnique({
-        where: { id: exerciseId },
+      const exercise = await tx.exercise.findFirst({
+        where: { id: exerciseId, ...usableExerciseWhere(userId) },
         select: { id: true },
       });
       if (!exercise) throw new NotFoundException('Exercise not found');

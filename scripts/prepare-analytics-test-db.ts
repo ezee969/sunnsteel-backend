@@ -324,6 +324,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260925090000_warm_ups_follow_load/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// EXER-06: custom exercises and the cascades they need.
+				readFileSync(
+					'prisma/migrations/20260925200000_custom_exercises/migration.sql',
+					'utf8',
 				),
     );
     prisma(

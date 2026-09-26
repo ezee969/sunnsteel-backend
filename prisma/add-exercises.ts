@@ -31,11 +31,15 @@ async function main() {
 			equipmentRequired: exercise.equipmentRequired,
 			substitutionGroup: exercise.substitutionGroup,
 		}
-		const result = await prisma.exercise.upsert({
-			where: { name: exercise.name },
-			update: data,
-			create: { name: exercise.name, ...data },
+		// EXER-06: the name is unique within the catalog only (a partial index),
+		// so a custom exercise can never be matched here.
+		const existing = await prisma.exercise.findFirst({
+			where: { name: exercise.name, ownerId: null },
+			select: { id: true },
 		})
+		const result = existing
+			? await prisma.exercise.update({ where: { id: existing.id }, data })
+			: await prisma.exercise.create({ data: { name: exercise.name, ...data } })
 
 		const isNew = result.createdAt.getTime() === result.updatedAt.getTime()
 		if (isNew) {

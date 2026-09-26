@@ -24,6 +24,11 @@ import {
   normalizeRotationWeekdays,
   normalizeRoutineDays,
 } from './routine-schedule';
+import { assertUsableExercises } from '../exercises/exercise-access';
+
+const dayExerciseIds = (
+  days: ReadonlyArray<{ exercises: ReadonlyArray<{ exerciseId: string }> }>,
+) => days.flatMap((day) => day.exercises.map((e) => e.exerciseId));
 
 type RoutineSetInput = {
   setNumber: number;
@@ -269,6 +274,8 @@ export class RoutinesService {
   async create(userId: string, dto: CreateRoutineDto): Promise<Routine> {
     const scheduleMode: RoutineScheduleMode = dto.scheduleMode ?? 'WEEKLY';
     const days = normalizeRoutineDays(scheduleMode, dto.days);
+    // EXER-06: the catalog and the owner's own exercises only.
+    await assertUsableExercises(this.db, userId, dayExerciseIds(days));
     const routine = await this.db.routine.create({
       data: {
         user: {
@@ -376,6 +383,7 @@ export class RoutinesService {
     const days = dto.days
       ? normalizeRoutineDays(scheduleMode, dto.days)
       : undefined;
+    if (days) await assertUsableExercises(tx, userId, dayExerciseIds(days));
     // SCHED-07: omitted rest days are kept, minus new training weekdays.
     const restDays = normalizeRestDays(
       scheduleMode,

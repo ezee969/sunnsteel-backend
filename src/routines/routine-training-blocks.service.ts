@@ -22,13 +22,18 @@ import { lockTrainingAccount } from "../workouts/analytics/analytics-lock";
 import { ROUTINE_WITH_DAYS_SELECT } from "./routine.selects";
 import { workingCopyDays } from "./routine-working-copy";
 import { assertBlockLeavesDeloads } from "./routine-deloads";
-import { captureRoutineSetup, readRoutineSetup } from "./routine-versions";
+import {
+  captureRoutineSetup,
+  readRoutineSetup,
+  setupExerciseIds,
+} from "./routine-versions";
 import {
   assertNoTrainingBlockOverlap,
   assertTrainingBlockRange,
   normalizeTrainingBlockName,
   trainingBlockState,
 } from "./routine-training-blocks";
+import { unusableExerciseIds } from "../exercises/exercise-access";
 
 const BLOCK_SELECT = {
   id: true,
@@ -380,14 +385,19 @@ export class RoutineTrainingBlocksService {
       select: { id: true, number: true, name: true, setup: true },
     });
     if (!version) throw new NotFoundException("Routine version not found");
+    const setup = readRoutineSetup(version.setup);
+    // EXER-06: a custom exercise named by the version may have been deleted.
+    if ((await unusableExerciseIds(tx, routine.userId, setupExerciseIds(setup))).length) {
+      throw new ConflictException(
+        "An exercise in this version is no longer available",
+      );
+    }
     return {
       sourceKind: "SAVED_VERSION" as const,
       sourceVersionId: version.id,
       sourceVersionNumber: version.number,
       sourceVersionName: version.name,
-      setup: readRoutineSetup(
-        version.setup,
-      ) as unknown as Prisma.InputJsonValue,
+      setup: setup as unknown as Prisma.InputJsonValue,
     };
   }
 

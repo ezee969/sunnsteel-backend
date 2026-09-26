@@ -20,6 +20,7 @@ import {
 } from '../session-substitutions';
 import { toWorkoutSessionResponse } from '../workout-session.mapper';
 import { buildWorkoutSessionSelect } from '../workout-session.selects';
+import { usableExerciseWhere } from '../../exercises/exercise-access';
 
 const slotLogs = (sessionId: string, routineExerciseId: string) => ({
   sessionId,
@@ -58,8 +59,8 @@ export class WorkoutSessionSubstitutionService {
 
       let next = withoutSubstitution(substitutions, routineExerciseId);
       if (dto.exerciseId !== slot.exercise.id) {
-        const exercise = await tx.exercise.findUnique({
-          where: { id: dto.exerciseId },
+        const exercise = await tx.exercise.findFirst({
+          where: { id: dto.exerciseId, ...usableExerciseWhere(userId) },
           select: {
             id: true,
             name: true,
