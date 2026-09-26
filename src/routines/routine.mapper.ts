@@ -58,6 +58,7 @@ function toRoutineExercise(e: RoutineExerciseEntity): RoutineExercise {
     progressionScheme: e.progressionScheme,
     minWeightIncrement: e.minWeightIncrement,
     warmUpsFollowLoad: e.warmUpsFollowLoad,
+    linkedToNext: e.linkedToNext,
     exercise: { id: e.exercise.id, name: e.exercise.name },
     sets: e.sets.map(toRoutineSet),
   };

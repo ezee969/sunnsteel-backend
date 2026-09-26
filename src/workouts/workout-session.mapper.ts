@@ -56,6 +56,7 @@ function toRoutineDay(day: RoutineDayEntity): WorkoutSession['routineDay'] {
       restSeconds: e.restSeconds,
       progressionScheme: e.progressionScheme,
       minWeightIncrement: e.minWeightIncrement,
+      linkedToNext: e.linkedToNext,
       exercise: {
         id: e.exercise.id,
         name: e.exercise.name,

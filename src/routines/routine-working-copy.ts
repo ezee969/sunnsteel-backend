@@ -24,6 +24,7 @@ export function workingCopyDays(routineId: string, setup: RoutineVersionSetup) {
           progressionScheme: exercise.progressionScheme,
           minWeightIncrement: exercise.minWeightIncrement,
           ...(exercise.warmUpsFollowLoad ? { warmUpsFollowLoad: true } : {}),
+          ...(exercise.linkedToNext ? { linkedToNext: true } : {}),
           sets: {
             create: exercise.sets.map((set) => ({
               setNumber: set.setNumber,

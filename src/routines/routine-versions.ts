@@ -38,6 +38,7 @@ export function captureRoutineSetup(
             progressionScheme: exercise.progressionScheme,
             minWeightIncrement: exercise.minWeightIncrement,
             ...(exercise.warmUpsFollowLoad ? { warmUpsFollowLoad: true } : {}),
+            ...(exercise.linkedToNext ? { linkedToNext: true } : {}),
             sets: exercise.sets.map(
               (set): RoutineSet => ({
                 setNumber: set.setNumber,
@@ -125,6 +126,7 @@ export function setupToRoutineUpdate(setup: RoutineVersionSetup) {
         progressionScheme: exercise.progressionScheme,
         minWeightIncrement: exercise.minWeightIncrement,
         ...(exercise.warmUpsFollowLoad ? { warmUpsFollowLoad: true } : {}),
+        ...(exercise.linkedToNext ? { linkedToNext: true } : {}),
         sets: exercise.sets.map((set) => ({ ...set })),
       })),
     })),

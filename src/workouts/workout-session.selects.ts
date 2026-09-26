@@ -49,6 +49,8 @@ export function buildWorkoutSessionSelect(includeLogs = false) {
             note: true,
             progressionScheme: true,
             minWeightIncrement: true,
+            // ROUT-12: the grouping a session trains in rounds (LIVE-14).
+            linkedToNext: true,
             exercise: {
               select: {
                 id: true,

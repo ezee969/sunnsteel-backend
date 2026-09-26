@@ -330,6 +330,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260925200000_custom_exercises/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// ROUT-12: supersets and circuits.
+				readFileSync(
+					'prisma/migrations/20260926100000_exercise_groups/migration.sql',
+					'utf8',
 				),
     );
     prisma(

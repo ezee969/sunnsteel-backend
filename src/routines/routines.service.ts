@@ -25,6 +25,7 @@ import {
   normalizeRoutineDays,
 } from './routine-schedule';
 import { assertUsableExercises } from '../exercises/exercise-access';
+import { assertExerciseLinks, dayExerciseLinks } from './exercise-links';
 
 const dayExerciseIds = (
   days: ReadonlyArray<{ exercises: ReadonlyArray<{ exerciseId: string }> }>,
@@ -50,6 +51,7 @@ type RoutineExerciseInput = {
   progressionScheme: ProgressionScheme;
   minWeightIncrement?: number;
   warmUpsFollowLoad?: boolean;
+  linkedToNext?: boolean;
   sets: RoutineSetInput[];
 };
 
@@ -115,7 +117,10 @@ export class RoutinesService {
     };
   }
 
-  private mapRoutineExerciseForCreate(exercise: RoutineExerciseInput) {
+  private mapRoutineExerciseForCreate(
+    exercise: RoutineExerciseInput,
+    linkedToNext: boolean,
+  ) {
     return {
       exercise: { connect: { id: exercise.exerciseId } },
       order: exercise.order ?? 0,
@@ -124,6 +129,7 @@ export class RoutinesService {
       progressionScheme: exercise.progressionScheme ?? 'NONE',
       minWeightIncrement: exercise.minWeightIncrement ?? 2.5,
       warmUpsFollowLoad: exercise.warmUpsFollowLoad ?? false,
+      linkedToNext,
       sets: {
         create: exercise.sets.map((set) => this.mapRoutineSetForCreate(set)),
       },
@@ -131,13 +137,15 @@ export class RoutinesService {
   }
 
   private mapRoutineDayForCreate(day: RoutineDayInput) {
+    // ROUT-12: links read in training order; the last exercise never links.
+    const links = dayExerciseLinks(day.exercises);
     return {
       dayOfWeek: day.dayOfWeek,
       name: day.name,
       order: day.order,
       exercises: {
-        create: day.exercises.map((exercise) =>
-          this.mapRoutineExerciseForCreate(exercise),
+        create: day.exercises.map((exercise, index) =>
+          this.mapRoutineExerciseForCreate(exercise, links[index]),
         ),
       },
     };
@@ -276,6 +284,7 @@ export class RoutinesService {
     const days = normalizeRoutineDays(scheduleMode, dto.days);
     // EXER-06: the catalog and the owner's own exercises only.
     await assertUsableExercises(this.db, userId, dayExerciseIds(days));
+    assertExerciseLinks(days);
     const routine = await this.db.routine.create({
       data: {
         user: {
@@ -383,7 +392,10 @@ export class RoutinesService {
     const days = dto.days
       ? normalizeRoutineDays(scheduleMode, dto.days)
       : undefined;
-    if (days) await assertUsableExercises(tx, userId, dayExerciseIds(days));
+    if (days) {
+      await assertUsableExercises(tx, userId, dayExerciseIds(days));
+      assertExerciseLinks(days);
+    }
     // SCHED-07: omitted rest days are kept, minus new training weekdays.
     const restDays = normalizeRestDays(
       scheduleMode,

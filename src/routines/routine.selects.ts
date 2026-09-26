@@ -18,6 +18,7 @@ const ROUTINE_EXERCISE_SELECT = {
   progressionScheme: true,
   minWeightIncrement: true,
   warmUpsFollowLoad: true,
+  linkedToNext: true,
   exercise: { select: { id: true, name: true } },
   sets: {
     select: ROUTINE_SET_SELECT,

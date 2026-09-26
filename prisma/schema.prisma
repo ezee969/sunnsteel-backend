@@ -738,6 +738,8 @@ model RoutineExercise {
   minWeightIncrement Float                @default(2.5)
   // LIVE-20: warm-ups with a share are recalculated from the first working set
   warmUpsFollowLoad  Boolean              @default(false)
+  // ROUT-12: done in rounds with the next exercise of the day
+  linkedToNext       Boolean              @default(false)
   sets               RoutineExerciseSet[]
   setLogs            SetLog[]
 }

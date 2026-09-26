@@ -136,6 +136,11 @@ export class CreateRoutineExerciseDto implements CreateRoutineExerciseInput {
   @IsBoolean()
   warmUpsFollowLoad?: boolean;
 
+  // ROUT-12: done in rounds with the next exercise of the day.
+  @IsOptional()
+  @IsBoolean()
+  linkedToNext?: boolean;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => CreateRoutineExerciseSetDto)
