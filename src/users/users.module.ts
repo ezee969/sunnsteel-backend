@@ -18,6 +18,8 @@ import { TrainingPartnersService } from './training-partners.service';
 
 import { AccountDeletionService } from './account-deletion.service';
 import { AccountExportService } from './account-export.service';
+import { BodyMeasurementsService } from './body-measurements.service';
+import { BodyMeasurementsController } from './body-measurements.controller';
 @Module({
   imports: [
     AnalyticsModule,
@@ -38,6 +40,7 @@ import { AccountExportService } from './account-export.service';
     TrainingPartnersService,
     AccountDeletionService,
     AccountExportService,
+    BodyMeasurementsService,
     DatabaseService,
   ],
   exports: [UsersService],
@@ -45,6 +48,7 @@ import { AccountExportService } from './account-export.service';
     UsersController,
     PublicProfilesController,
     MemberReportsController,
+    BodyMeasurementsController,
   ],
 })
 export class UsersModule {}

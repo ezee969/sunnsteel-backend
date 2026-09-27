@@ -30,6 +30,7 @@ describe('SOC-08 training partnership rules', () => {
       routines: 'FOLLOWERS',
       achievements: 'FOLLOWERS',
       bodyMetrics: 'FOLLOWERS',
+      bodyProgress: 'FOLLOWERS',
     };
     assert.deepEqual(
       resolveProfileViewerAccess(settings, {
@@ -47,6 +48,7 @@ describe('SOC-08 training partnership rules', () => {
         routines: true,
         achievements: true,
         bodyMetrics: false,
+        bodyProgress: false,
       },
     );
   });
@@ -62,6 +64,7 @@ describe('SOC-08 training partnership rules', () => {
         'routines',
         'achievements',
         'bodyMetrics',
+        'bodyProgress',
       ].map((key) => [key, 'PRIVATE']),
     ) as unknown as ProfilePrivacySettings;
     const access = resolveProfileViewerAccess(settings, {

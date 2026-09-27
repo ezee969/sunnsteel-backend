@@ -13,6 +13,11 @@ import { readRoutineSetup } from '../routines/routine-versions';
 import { buildWorkoutSessionSelect } from '../workouts/workout-session.selects';
 import { toWorkoutSessionResponse } from '../workouts/workout-session.mapper';
 import { UsersService } from './users.service';
+import {
+  BODY_MEASUREMENT_SELECT,
+  entryValues,
+  rowDate,
+} from './body-measurement-rules';
 
 const MEMBER_SELECT = { username: true, name: true } as const;
 
@@ -74,6 +79,7 @@ export class AccountExportService {
       records,
       events,
       goals,
+      bodyMeasurements,
       locations,
       overrides,
       stars,
@@ -129,6 +135,11 @@ export class AccountExportService {
       this.db.measurableGoal.findMany({
         where: { userId },
         orderBy: { createdAt: 'asc' },
+      }),
+      this.db.bodyMeasurement.findMany({
+        where: { userId },
+        select: BODY_MEASUREMENT_SELECT,
+        orderBy: { date: 'asc' },
       }),
       this.db.trainingLocationPreference.findMany({
         where: { userId },
@@ -319,6 +330,12 @@ export class AccountExportService {
         targetValue: goal.targetValue,
         exerciseId: goal.exerciseId,
         createdAt: iso(goal.createdAt),
+      })),
+      bodyMeasurements: bodyMeasurements.map((entry) => ({
+        date: rowDate(entry.date),
+        ...entryValues(entry),
+        createdAt: iso(entry.createdAt),
+        updatedAt: iso(entry.updatedAt),
       })),
       trainingLocations: locations.map((location) => ({
         name: location.name,

@@ -194,6 +194,14 @@ test(
           targetValue: 3,
         },
       });
+      await db.bodyMeasurement.create({
+        data: {
+          userId: owner.id,
+          date: new Date('2026-09-20T00:00:00Z'),
+          weightKg: 81.5,
+          waistCm: 84,
+        },
+      });
       await db.starredExercise.create({
         data: { userId: owner.id, exerciseId: exercise.id },
       });
@@ -267,6 +275,15 @@ test(
         ),
       );
       assert.equal(exported.goals[0].type, 'WEEKLY_SESSIONS');
+      assert.deepEqual(
+        exported.bodyMeasurements?.map((entry) => [
+          entry.date,
+          entry.weightKg,
+          entry.waistCm,
+          entry.hipsCm,
+        ]),
+        [['2026-09-20', 81.5, 84, null]],
+      );
       assert.equal(exported.exercises.starred[0].name, 'Export Row');
       assert.deepEqual(
         exported.social.following.map((m) => m.username),

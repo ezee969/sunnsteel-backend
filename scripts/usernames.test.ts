@@ -39,6 +39,7 @@ const profileRecord = {
   routinesVisibility: 'PRIVATE' as const,
   achievementsVisibility: 'PRIVATE' as const,
   bodyMetricsVisibility: 'PRIVATE' as const,
+  bodyProgressVisibility: 'PRIVATE' as const,
   discoverableByName: true,
   discoverableByUsername: true,
   discoverableByContacts: false,

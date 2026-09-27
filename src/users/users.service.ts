@@ -10,6 +10,13 @@ import { DatabaseService } from '../database/database.service';
 import { hiddenFromViewer, isHiddenFromViewer } from './member-blocks';
 import { trainingPartnerPermissions } from './training-partner-access';
 import {
+  bodyMeasurementProblems,
+  isBodyMeasurementDate,
+} from '@sunsteel/contracts';
+import { localDate } from '../notifications/push/local-time';
+import { isAllowedEntryDate, isSameWeight } from './body-measurement-rules';
+import { recordProfileWeight } from './body-weight-sync';
+import {
   PREFERRED_TRAINING_STYLE_VALUES,
   ProfileDiscoverySettings,
   PROFILE_BIO_MAX_LENGTH,
@@ -64,6 +71,7 @@ const userProfileSelect = {
   routinesVisibility: true,
   achievementsVisibility: true,
   bodyMetricsVisibility: true,
+  bodyProgressVisibility: true,
   discoverableByName: true,
   discoverableByUsername: true,
   discoverableByContacts: true,
@@ -129,6 +137,7 @@ export class UsersService {
       routinesVisibility,
       achievementsVisibility,
       bodyMetricsVisibility,
+      bodyProgressVisibility,
       discoverableByName,
       discoverableByUsername,
       discoverableByContacts,
@@ -146,6 +155,7 @@ export class UsersService {
         routinesVisibility,
         achievementsVisibility,
         bodyMetricsVisibility,
+        bodyProgressVisibility,
       }),
       discoverySettings: {
         discoverableByName,
@@ -219,6 +229,14 @@ export class UsersService {
     const favoriteExerciseIds = await this.validateFavoriteExerciseIds(
       data.favoriteExerciseIds,
     );
+    // PROG-12: a changed weight is also recorded as that date's measurement.
+    const before =
+      typeof data.weight === 'number'
+        ? await this.db.user.findUnique({
+            where: { email },
+            select: { id: true, weight: true, timeZone: true },
+          })
+        : null;
 
     try {
       const user = await this.db.user.update({
@@ -252,6 +270,20 @@ export class UsersService {
         },
         select: userProfileSelect,
       });
+      if (
+        before &&
+        typeof data.weight === 'number' &&
+        !isSameWeight(before.weight, data.weight) &&
+        bodyMeasurementProblems({ weightKg: data.weight }).length === 0
+      ) {
+        const current = await recordProfileWeight(
+          this.db,
+          before.id,
+          this.measurementDate(data.localDate, before.timeZone),
+          data.weight,
+        );
+        if (current !== null) user.weight = current;
+      }
       return this.mapUserProfile(user);
     } catch (error) {
       if (this.isUniqueUsernameViolation(error)) {
@@ -259,6 +291,19 @@ export class UsersService {
       }
       throw error;
     }
+  }
+
+  /** The member's own local date when it is a real one not in the future, else the server's. */
+  private measurementDate(
+    requested: string | undefined,
+    timeZone: string | null,
+  ): string {
+    const today = localDate(new Date(), timeZone ?? 'UTC');
+    return requested &&
+      isBodyMeasurementDate(requested) &&
+      isAllowedEntryDate(requested, today)
+      ? requested
+      : today;
   }
 
   async updateProfilePrivacy(
@@ -282,6 +327,9 @@ export class UsersService {
         routinesVisibility: data.routines,
         achievementsVisibility: data.achievements,
         bodyMetricsVisibility: data.bodyMetrics,
+        ...(data.bodyProgress === undefined
+          ? {}
+          : { bodyProgressVisibility: data.bodyProgress }),
       },
       select: userProfileSelect,
     });
@@ -385,6 +433,7 @@ export class UsersService {
         routinesVisibility: true,
         achievementsVisibility: true,
         bodyMetricsVisibility: true,
+        bodyProgressVisibility: true,
         moderationHiddenAt: true,
         _count: {
           select: {

@@ -336,6 +336,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260926100000_exercise_groups/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// PROG-12: body measurements.
+				readFileSync(
+					'prisma/migrations/20260927100000_body_measurements/migration.sql',
+					'utf8',
 				),
     );
     prisma(

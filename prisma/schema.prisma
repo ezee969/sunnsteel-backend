@@ -50,6 +50,8 @@ model User {
   routinesVisibility         ProfileVisibility            @default(PRIVATE)
   achievementsVisibility     ProfileVisibility            @default(PRIVATE)
   bodyMetricsVisibility      ProfileVisibility            @default(PRIVATE)
+  // PROG-12: the dated weight and measurement history, separate from bodyMetrics.
+  bodyProgressVisibility     ProfileVisibility            @default(PRIVATE)
   discoverableByName         Boolean                      @default(true)
   discoverableByUsername     Boolean                      @default(true)
   discoverableByContacts     Boolean                      @default(false)
@@ -72,6 +74,7 @@ model User {
   sessionCorrections         SessionCorrection[]
   routineShares              RoutineShare[]
   measurableGoals            MeasurableGoal[]
+  bodyMeasurements           BodyMeasurement[]
   scheduleOverrides          ScheduleOverride[]
   notifications              Notification[]               @relation("NotificationRecipient")
   notificationsAsActor       Notification[]               @relation("NotificationActor")
@@ -468,6 +471,27 @@ model MeasurableGoal {
 
   @@index([userId, createdAt])
   @@index([exerciseId])
+}
+
+// PROG-12: one entry per member per local date. Weight in kilograms, lengths
+// in centimetres; every value optional, but the service requires at least one.
+// User.weight follows the latest entry that records a weight.
+model BodyMeasurement {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date           DateTime @db.Date
+  weightKg       Float?
+  waistCm        Float?
+  hipsCm         Float?
+  chestCm        Float?
+  armCm          Float?
+  thighCm        Float?
+  bodyFatPercent Float?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([userId, date])
 }
 
 model UserFavoriteExercise {

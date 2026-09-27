@@ -13,6 +13,7 @@ export interface StoredProfilePrivacy {
   routinesVisibility: ProfileVisibility;
   achievementsVisibility: ProfileVisibility;
   bodyMetricsVisibility: ProfileVisibility;
+  bodyProgressVisibility: ProfileVisibility;
 }
 
 export function mapProfilePrivacy(
@@ -27,6 +28,7 @@ export function mapProfilePrivacy(
     routines: stored.routinesVisibility,
     achievements: stored.achievementsVisibility,
     bodyMetrics: stored.bodyMetricsVisibility,
+    bodyProgress: stored.bodyProgressVisibility,
   };
 }
 
@@ -74,5 +76,7 @@ export function resolveProfileViewerAccess(
       progressContext,
     ),
     bodyMetrics: canViewProfileSection(settings.bodyMetrics, context),
+    // PROG-12: like body metrics, a training partner never widens it.
+    bodyProgress: canViewProfileSection(settings.bodyProgress, context),
   };
 }

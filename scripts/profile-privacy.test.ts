@@ -18,6 +18,7 @@ const privateSettings = {
   routines: 'PRIVATE',
   achievements: 'PRIVATE',
   bodyMetrics: 'PRIVATE',
+  bodyProgress: 'PRIVATE',
 } as const;
 
 const storedProfile = {
@@ -50,6 +51,7 @@ const storedProfile = {
   routinesVisibility: 'PRIVATE' as const,
   achievementsVisibility: 'PRIVATE' as const,
   bodyMetricsVisibility: 'PRIVATE' as const,
+  bodyProgressVisibility: 'PRIVATE' as const,
   discoverableByName: true,
   discoverableByUsername: true,
   discoverableByContacts: false,
@@ -134,6 +136,7 @@ describe('profile privacy rules', () => {
           routines: 'PRIVATE',
           achievements: 'PUBLIC',
           bodyMetrics: 'PRIVATE',
+          bodyProgress: 'FOLLOWERS',
         },
         { isOwner: false, isFollower: true },
       ),
@@ -146,6 +149,7 @@ describe('profile privacy rules', () => {
         routines: false,
         achievements: true,
         bodyMetrics: false,
+        bodyProgress: true,
       },
     );
   });
@@ -184,6 +188,7 @@ describe('UsersService privacy boundary', () => {
       routines: 'PRIVATE',
       achievements: 'PRIVATE',
       bodyMetrics: 'PRIVATE',
+      bodyProgress: 'PRIVATE',
     });
 
     assert.deepEqual(
@@ -197,6 +202,7 @@ describe('UsersService privacy boundary', () => {
         routinesVisibility: 'PRIVATE',
         achievementsVisibility: 'PRIVATE',
         bodyMetricsVisibility: 'PRIVATE',
+        bodyProgressVisibility: 'PRIVATE',
       },
     );
     assert.deepEqual(result.privacySettings, {
@@ -294,6 +300,7 @@ describe('UsersService privacy boundary', () => {
       routines: false,
       achievements: false,
       bodyMetrics: false,
+      bodyProgress: false,
     });
     assert.equal('trainingSummary' in result, false);
     assert.equal('bio' in result, false);
@@ -386,6 +393,7 @@ describe('UsersService privacy boundary', () => {
           routinesVisibility: 'PRIVATE',
           achievementsVisibility: 'FOLLOWERS',
           bodyMetricsVisibility: 'FOLLOWERS',
+          bodyProgressVisibility: 'PRIVATE',
         }),
         count: async () => 0,
         findUnique: async (args: { select: Record<string, boolean> }) => {
@@ -457,6 +465,7 @@ describe('UsersService privacy boundary', () => {
       routines: false,
       achievements: true,
       bodyMetrics: true,
+      bodyProgress: false,
     });
     assert.deepEqual(result.trainingSummary, {
       completedWorkouts: 12,

@@ -44,6 +44,7 @@ import { SendTrainingPartnerEncouragementDto } from './dto/send-training-partner
 import { AccountDeletionService } from './account-deletion.service';
 import { AccountExportService } from './account-export.service';
 import { DeleteAccountDto } from './dto/delete-account.dto';
+import { BodyMeasurementsService } from './body-measurements.service';
 
 @UseGuards(SupabaseJwtGuard)
 @Controller('users')
@@ -61,6 +62,7 @@ export class UsersController {
     private readonly trainingPartners: TrainingPartnersService,
     private readonly accountDeletion: AccountDeletionService,
     private readonly accountExport: AccountExportService,
+    private readonly bodyMeasurements: BodyMeasurementsService,
   ) {}
 
   /**
@@ -281,6 +283,20 @@ export class UsersController {
   ) {
     const ownerId = await this.routineSharing.resolveOwnerId(identifier);
     return this.routineSharing.listVisibleRoutines(req.user.id, ownerId);
+  }
+
+  /**
+   * PROG-12: the member's dated body weight and measurements, when their
+   * body progress visibility allows this viewer; otherwise the 404 a missing
+   * member gets.
+   */
+  @Get(':identifier/body-measurements')
+  getBodyProgress(
+    @Request() req: RequestWithUser,
+    @Param('identifier') identifier: string,
+    @Query('range') range?: string,
+  ) {
+    return this.bodyMeasurements.memberProgress(req.user.id, identifier, range);
   }
 
   @Post(':identifier/training-partner-request')

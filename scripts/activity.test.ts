@@ -59,6 +59,7 @@ const privacy = (
   routines: 'PUBLIC',
   achievements: 'PUBLIC',
   bodyMetrics: 'PRIVATE',
+  bodyProgress: 'PRIVATE',
   ...overrides,
 });
 
@@ -433,6 +434,7 @@ describe('ActivityService', () => {
     routinesVisibility: 'PUBLIC',
     achievementsVisibility: 'PUBLIC',
     bodyMetricsVisibility: 'PRIVATE',
+    bodyProgressVisibility: 'PRIVATE',
     ...overrides,
   });
 
@@ -745,6 +747,7 @@ describe('ActivityService reactions', () => {
           routinesVisibility: 'PUBLIC',
           achievementsVisibility: 'PUBLIC',
           bodyMetricsVisibility: 'PRIVATE',
+          bodyProgressVisibility: 'PRIVATE',
         }),
         findFirst: async () => null,
         findMany: async () => [],

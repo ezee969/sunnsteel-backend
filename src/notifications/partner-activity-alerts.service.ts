@@ -42,6 +42,7 @@ const AUTHOR_SELECT = {
   routinesVisibility: true,
   achievementsVisibility: true,
   bodyMetricsVisibility: true,
+  bodyProgressVisibility: true,
 } as const;
 
 const SESSION_SELECT = {
