@@ -157,7 +157,9 @@ export class TrainingReminderService {
           kind: 'STREAK_AT_RISK',
           title: 'Your streak ends after today',
           body: describeStreakRisk(risk),
-          url: '/progress',
+          // The training run is shown by Progress › Workouts' consistency
+          // calendar since the frontend split Progress into tabs (UX-11).
+          url: '/progress/workouts',
           tag: `reminder-${date}`,
         };
         return payload;
