@@ -58,6 +58,10 @@ model User {
   // PREF-05: sessions without a new best before the plateau watch flags a
   // lift; bounded by PLATEAU_MIN_SESSIONS_MIN/MAX (checked in the migration).
   plateauMinSessions         Int                          @default(4)
+  // DASH-05 / PREF-03: the dashboard order and hidden sections, as contracts'
+  // DashboardLayout. Null is the default layout; it is read through
+  // normalizeDashboardLayout, never trusted as stored.
+  dashboardLayout            Json?
   routines                   Routine[]
   workoutSessions            WorkoutSession[]
   trainingLocations          TrainingLocationPreference[]

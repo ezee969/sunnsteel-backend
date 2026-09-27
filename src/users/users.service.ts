@@ -12,6 +12,9 @@ import { trainingPartnerPermissions } from './training-partner-access';
 import {
   bodyMeasurementProblems,
   isBodyMeasurementDate,
+  isDefaultDashboardLayout,
+  normalizeDashboardLayout,
+  type UpdateDashboardLayoutRequest,
 } from '@sunsteel/contracts';
 import { localDate } from '../notifications/push/local-time';
 import { isAllowedEntryDate, isSameWeight } from './body-measurement-rules';
@@ -77,6 +80,7 @@ const userProfileSelect = {
   discoverableByContacts: true,
   // TRUST-04: the owner's own read only. It never reaches PublicUserProfile.
   isModerator: true,
+  dashboardLayout: true,
   createdAt: true,
   updatedAt: true,
   _count: {
@@ -142,6 +146,7 @@ export class UsersService {
       discoverableByUsername,
       discoverableByContacts,
       isModerator,
+      dashboardLayout,
       ...profile
     } = user;
     return {
@@ -163,6 +168,7 @@ export class UsersService {
         discoverableByContacts,
       },
       isModerator,
+      dashboardLayout: normalizeDashboardLayout(dashboardLayout),
       trainingIdentity: {
         goals: trainingGoals,
         experienceLevel: trainingExperienceLevel,
@@ -304,6 +310,28 @@ export class UsersService {
       isAllowedEntryDate(requested, today)
       ? requested
       : today;
+  }
+
+  /**
+   * DASH-05 / PREF-03: the dashboard order and hidden sections. What is stored
+   * is the normalized layout, or null when it is the default, so a member who
+   * never changed it follows the default as sections are added.
+   */
+  async updateDashboardLayout(
+    email: string,
+    sections: UpdateDashboardLayoutRequest['sections'],
+  ): Promise<UserProfile> {
+    const layout = normalizeDashboardLayout(sections);
+    const user = await this.db.user.update({
+      where: { email },
+      data: {
+        dashboardLayout: isDefaultDashboardLayout(layout)
+          ? Prisma.DbNull
+          : (layout as unknown as Prisma.InputJsonValue),
+      },
+      select: userProfileSelect,
+    });
+    return this.mapUserProfile(user);
   }
 
   async updateProfilePrivacy(

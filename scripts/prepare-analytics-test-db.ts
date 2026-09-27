@@ -342,6 +342,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260927100000_body_measurements/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// DASH-05 / PREF-03: the dashboard layout.
+				readFileSync(
+					'prisma/migrations/20260927140000_dashboard_layout/migration.sql',
+					'utf8',
 				),
     );
     prisma(

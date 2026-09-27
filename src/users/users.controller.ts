@@ -33,6 +33,7 @@ import { FollowSuggestionsQueryDto } from './dto/follow-suggestions-query.dto';
 import { MeasurableGoalsService } from '../goals/measurable-goals.service';
 import { ReplaceMeasurableGoalsDto } from './dto/replace-measurable-goals.dto';
 import { UpdatePlateauPreferencesDto } from './dto/update-plateau-preferences.dto';
+import { UpdateDashboardLayoutDto } from './dto/update-dashboard-layout.dto';
 import { PlateauPreferencesService } from './plateau-preferences.service';
 import { RoutineSharingService } from '../routines/routine-sharing.service';
 import { FeaturedProfileItemsService } from './featured-profile-items.service';
@@ -165,6 +166,15 @@ export class UsersController {
     @Body() dto: ReplaceMeasurableGoalsDto,
   ) {
     return this.measurableGoals.replace(req.user.id, dto.goals);
+  }
+
+  /** DASH-05 / PREF-03: the dashboard order and hidden sections. */
+  @Put('preferences/dashboard')
+  updateDashboardLayout(
+    @Request() req: RequestWithUser,
+    @Body() dto: UpdateDashboardLayoutDto,
+  ) {
+    return this.usersService.updateDashboardLayout(req.user.email, dto.sections);
   }
 
   @Put('preferences/plateaus')
