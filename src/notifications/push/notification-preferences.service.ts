@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable } from "@nestjs/common";
 import {
   MINUTES_IN_DAY,
   NOTIFICATION_CATEGORIES,
@@ -8,9 +8,9 @@ import {
   type QuietHours,
   type UpdateNotificationPreferencesRequest,
   isWithinQuietHours,
-} from '@sunsteel/contracts';
-import { DatabaseService } from '../../database/database.service';
-import { PushConfigService } from './push-config.service';
+} from "@sunsteel/contracts";
+import { DatabaseService } from "../../database/database.service";
+import { PushConfigService } from "./push-config.service";
 
 const PREFERENCE_SELECT = {
   notifyRestAlert: true,
@@ -167,14 +167,14 @@ export class NotificationPreferencesService {
     input: UpdateNotificationPreferencesRequest,
   ): Promise<void> {
     const kinds: (
-      | 'TRAINING_PARTNER_SESSION'
-      | 'TRAINING_PARTNER_ACHIEVEMENT'
+      | "TRAINING_PARTNER_SESSION"
+      | "TRAINING_PARTNER_ACHIEVEMENT"
     )[] = [];
     if (input.categories?.TRAINING_PARTNER_SESSION === false) {
-      kinds.push('TRAINING_PARTNER_SESSION');
+      kinds.push("TRAINING_PARTNER_SESSION");
     }
     if (input.categories?.TRAINING_PARTNER_ACHIEVEMENT === false) {
-      kinds.push('TRAINING_PARTNER_ACHIEVEMENT');
+      kinds.push("TRAINING_PARTNER_ACHIEVEMENT");
     }
     if (kinds.length === 0) return;
     await this.db.notification.deleteMany({
@@ -187,7 +187,7 @@ export class NotificationPreferencesService {
     input: UpdateNotificationPreferencesRequest,
   ): Promise<void> {
     const prefixes: string[] = [];
-    if (input.categories?.REST_ALERT === false) prefixes.push('rest:');
+    if (input.categories?.REST_ALERT === false) prefixes.push("rest:");
     if (
       input.categories?.TRAINING_REMINDER === false ||
       input.categories?.STREAK_AT_RISK === false ||
@@ -195,7 +195,7 @@ export class NotificationPreferencesService {
     ) {
       // Both categories share the one pending row per local date, so either
       // being switched off must drop whichever is waiting.
-      prefixes.push('reminder:');
+      prefixes.push("reminder:");
     }
     if (prefixes.length === 0) return;
 
@@ -218,7 +218,7 @@ export class NotificationPreferencesService {
 }
 
 /** Why a notification was not delivered, or null when it may go out. */
-export type SuppressionReason = 'CATEGORY_OFF' | 'QUIET_HOURS';
+export type SuppressionReason = "CATEGORY_OFF" | "QUIET_HOURS";
 
 /**
  * The one place a category switch and a quiet window are applied. `at` is the
@@ -231,12 +231,12 @@ export function suppressionFor(
   at: Date,
   localMinuteOf: (date: Date, timeZone: string) => number,
 ): SuppressionReason | null {
-  if (!preferences.categories[category]) return 'CATEGORY_OFF';
+  if (!preferences.categories[category]) return "CATEGORY_OFF";
   if (!preferences.quietHours || !preferences.timeZone) return null;
 
   const minute = localMinuteOf(at, preferences.timeZone) % MINUTES_IN_DAY;
   return isWithinQuietHours(minute, preferences.quietHours)
-    ? 'QUIET_HOURS'
+    ? "QUIET_HOURS"
     : null;
 }
 

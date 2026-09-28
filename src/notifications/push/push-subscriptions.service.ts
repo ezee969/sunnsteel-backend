@@ -1,12 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable } from "@nestjs/common";
 import {
   PUSH_SUBSCRIPTIONS_MAX,
   type PushSubscriptionSummary,
   type PushSubscriptionsResponse,
   type RegisterPushSubscriptionRequest,
-} from '@sunsteel/contracts';
-import { DatabaseService } from '../../database/database.service';
-import { PushConfigService } from './push-config.service';
+} from "@sunsteel/contracts";
+import { DatabaseService } from "../../database/database.service";
+import { PushConfigService } from "./push-config.service";
 
 const DEVICE_LABEL_MAX = 60;
 
@@ -66,7 +66,7 @@ export class PushSubscriptionsService {
   private async evictBeyondCap(userId: string): Promise<void> {
     const subscriptions = await this.db.pushSubscription.findMany({
       where: { userId },
-      orderBy: { lastSeenAt: 'desc' },
+      orderBy: { lastSeenAt: "desc" },
       select: { id: true },
       skip: PUSH_SUBSCRIPTIONS_MAX,
     });
@@ -82,7 +82,7 @@ export class PushSubscriptionsService {
   ): Promise<PushSubscriptionsResponse> {
     const rows = await this.db.pushSubscription.findMany({
       where: { userId },
-      orderBy: { lastSeenAt: 'desc' },
+      orderBy: { lastSeenAt: "desc" },
       select: {
         id: true,
         endpoint: true,

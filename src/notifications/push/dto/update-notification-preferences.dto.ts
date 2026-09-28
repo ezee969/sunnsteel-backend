@@ -3,8 +3,8 @@ import {
   type NotificationCategory,
   type QuietHours,
   type UpdateNotificationPreferencesRequest,
-} from '@sunsteel/contracts';
-import { Type } from 'class-transformer';
+} from "@sunsteel/contracts";
+import { Type } from "class-transformer";
 import {
   IsBoolean,
   IsInt,
@@ -12,7 +12,7 @@ import {
   Max,
   Min,
   ValidateNested,
-} from 'class-validator';
+} from "class-validator";
 
 class NotificationCategoriesDto implements Partial<
   Record<NotificationCategory, boolean>

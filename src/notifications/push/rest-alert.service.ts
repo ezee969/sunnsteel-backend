@@ -1,19 +1,20 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from "@nestjs/common";
 import {
   REST_ALERT_MAX_LEAD_SECONDS,
   REST_ALERT_MIN_LEAD_SECONDS,
   type RestAlertPushPayload,
   type ScheduleRestAlertRequest,
   type ScheduleRestAlertResponse,
-} from '@sunsteel/contracts';
-import { DatabaseService } from '../../database/database.service';
-import { localMinuteOfDay } from './local-time';
+} from "@sunsteel/contracts";
+import { DatabaseService } from "../../database/database.service";
+import { recipientLocale, serverCopy } from "../../i18n/server-copy";
+import { localMinuteOfDay } from "./local-time";
 import {
   NotificationPreferencesService,
   suppressionFor,
-} from './notification-preferences.service';
-import { PushConfigService } from './push-config.service';
-import { ScheduledPushService } from './scheduled-push.service';
+} from "./notification-preferences.service";
+import { PushConfigService } from "./push-config.service";
+import { ScheduledPushService } from "./scheduled-push.service";
 
 const EXERCISE_NAME_MAX = 60;
 
@@ -46,7 +47,7 @@ export class RestAlertService {
     await this.assertOwnedActiveSession(userId, sessionId);
 
     if (!this.config.isConfigured) {
-      return { scheduledFor: null, reason: 'PUSH_UNAVAILABLE' };
+      return { scheduledFor: null, reason: "PUSH_UNAVAILABLE" };
     }
 
     const subscriptions = await this.db.pushSubscription.count({
@@ -55,7 +56,7 @@ export class RestAlertService {
     if (subscriptions === 0) {
       // Not an error: most accounts never grant permission, and the session
       // screen keeps its in-app tone either way.
-      return { scheduledFor: null, reason: 'NO_SUBSCRIPTION' };
+      return { scheduledFor: null, reason: "NO_SUBSCRIPTION" };
     }
 
     const endsAt = new Date(input.endsAt);
@@ -65,7 +66,7 @@ export class RestAlertService {
     // owner has switched off or silenced.
     const preferences = await this.preferences.forDelivery(userId);
     const suppressed = suppressionFor(
-      'REST_ALERT',
+      "REST_ALERT",
       preferences,
       endsAt,
       localMinuteOfDay,
@@ -80,18 +81,21 @@ export class RestAlertService {
       // Closer than the sweep resolution: the page's own tone is still the
       // faster channel, so claiming a push here would be a false promise.
       await this.scheduled.cancel(userId, restAlertKey(sessionId));
-      return { scheduledFor: null, reason: 'TOO_SOON' };
+      return { scheduledFor: null, reason: "TOO_SOON" };
     }
     if (leadSeconds > REST_ALERT_MAX_LEAD_SECONDS) {
-      return { scheduledFor: null, reason: 'TOO_SOON' };
+      return { scheduledFor: null, reason: "TOO_SOON" };
     }
 
+    // I18N-06: written now, in the member's language, and sent as stored.
+    const copy = serverCopy(await recipientLocale(this.db, userId));
     const exerciseName =
-      input.exerciseName.trim().slice(0, EXERCISE_NAME_MAX) || 'Your next set';
+      input.exerciseName.trim().slice(0, EXERCISE_NAME_MAX) ||
+      copy.restNextFallback;
     const payload: RestAlertPushPayload = {
-      kind: 'REST_ALERT',
-      title: 'Rest is over',
-      body: `${exerciseName} is up next.`,
+      kind: "REST_ALERT",
+      title: copy.restOverTitle,
+      body: copy.restNextBody(exerciseName),
       sessionId,
       url: `/workouts/sessions/${sessionId}`,
       tag: `rest-${sessionId}`,
@@ -120,6 +124,6 @@ export class RestAlertService {
       where: { id: sessionId, userId },
       select: { id: true },
     });
-    if (!session) throw new NotFoundException('Workout session not found');
+    if (!session) throw new NotFoundException("Workout session not found");
   }
 }

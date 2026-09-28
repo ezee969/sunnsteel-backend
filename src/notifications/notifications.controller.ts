@@ -6,15 +6,15 @@ import {
   Post,
   Req,
   UseGuards,
-} from '@nestjs/common';
-import { SupabaseJwtGuard } from '../auth/guards/supabase-jwt.guard';
-import type { RequestWithUser } from '../common/types/request-with-user';
-import { MarkNotificationsReadDto } from './dto/mark-notifications-read.dto';
-import { NotificationsService } from './notifications.service';
+} from "@nestjs/common";
+import { SupabaseJwtGuard } from "../auth/guards/supabase-jwt.guard";
+import type { RequestWithUser } from "../common/types/request-with-user";
+import { MarkNotificationsReadDto } from "./dto/mark-notifications-read.dto";
+import { NotificationsService } from "./notifications.service";
 
 /** NOTIF-01: the owner's in-app notifications and their read state. */
 @UseGuards(SupabaseJwtGuard)
-@Controller('notifications')
+@Controller("notifications")
 export class NotificationsController {
   constructor(private readonly notifications: NotificationsService) {}
 
@@ -23,12 +23,9 @@ export class NotificationsController {
     return this.notifications.list(req.user.id);
   }
 
-  @Post('read')
+  @Post("read")
   @HttpCode(200)
-  markRead(
-    @Req() req: RequestWithUser,
-    @Body() dto: MarkNotificationsReadDto,
-  ) {
+  markRead(@Req() req: RequestWithUser, @Body() dto: MarkNotificationsReadDto) {
     return this.notifications.markRead(req.user.id, dto.ids);
   }
 }

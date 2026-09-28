@@ -1,5 +1,5 @@
-import type { ScheduleRestAlertRequest } from '@sunsteel/contracts';
-import { IsISO8601, IsString, MaxLength, MinLength } from 'class-validator';
+import type { ScheduleRestAlertRequest } from "@sunsteel/contracts";
+import { IsISO8601, IsString, MaxLength, MinLength } from "class-validator";
 
 export class ScheduleRestAlertDto implements ScheduleRestAlertRequest {
   @IsISO8601()

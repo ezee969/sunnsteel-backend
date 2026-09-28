@@ -1,4 +1,10 @@
-import { STREAK_MAX_GAP_DAYS } from '@sunsteel/contracts';
+import {
+  type AppLocale,
+  DEFAULT_LOCALE,
+  STREAK_MAX_GAP_DAYS,
+} from "@sunsteel/contracts";
+
+import { serverCopy } from "../../i18n/server-copy";
 
 /**
  * NOTIF-06: whether today is the last local date that can still save a run.
@@ -55,7 +61,10 @@ export function streakAtRisk(input: StreakRiskInput): StreakRisk | null {
 }
 
 /** States the evidence. No imperative, and no count of days "left". */
-export function describeStreakRisk(risk: StreakRisk): string {
-  const days = `${risk.runDays} ${risk.runDays === 1 ? 'day' : 'days'}`;
-  return `Your ${days} run continues if you train today. It has been ${risk.daysSince} days since your last session.`;
+export function describeStreakRisk(
+  risk: StreakRisk,
+  locale: AppLocale = DEFAULT_LOCALE,
+): string {
+  // I18N-06: written in the recipient's language, English by default.
+  return serverCopy(locale).streakBody(risk.runDays, risk.daysSince);
 }

@@ -14,13 +14,13 @@ const PART_FORMATTERS = new Map<string, Intl.DateTimeFormat>();
 function formatter(timeZone: string): Intl.DateTimeFormat {
   let existing = PART_FORMATTERS.get(timeZone);
   if (!existing) {
-    existing = new Intl.DateTimeFormat('en-CA', {
+    existing = new Intl.DateTimeFormat("en-CA", {
       timeZone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
       hour12: false,
     });
     PART_FORMATTERS.set(timeZone, existing);
@@ -38,12 +38,12 @@ export interface LocalClock {
 export function localClock(at: Date, timeZone: string): LocalClock {
   const parts = formatter(timeZone).formatToParts(at);
   const part = (type: string) =>
-    parts.find((candidate) => candidate.type === type)?.value ?? '00';
+    parts.find((candidate) => candidate.type === type)?.value ?? "00";
   // `hour12: false` yields 24 in some engines for midnight; normalise it.
-  const hour = Number(part('hour')) % 24;
+  const hour = Number(part("hour")) % 24;
   return {
-    date: `${part('year')}-${part('month')}-${part('day')}`,
-    minuteOfDay: hour * 60 + Number(part('minute')),
+    date: `${part("year")}-${part("month")}-${part("day")}`,
+    minuteOfDay: hour * 60 + Number(part("minute")),
   };
 }
 

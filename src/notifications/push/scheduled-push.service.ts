@@ -1,10 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { Interval } from '@nestjs/schedule';
-import { Prisma } from '@prisma/client';
-import type { PushPayload } from '@sunsteel/contracts';
-import { DatabaseService } from '../../database/database.service';
-import { PushConfigService } from './push-config.service';
-import { PushSenderService } from './push-sender.service';
+import { Injectable, Logger } from "@nestjs/common";
+import { Interval } from "@nestjs/schedule";
+import { Prisma } from "@prisma/client";
+import type { PushPayload } from "@sunsteel/contracts";
+import { DatabaseService } from "../../database/database.service";
+import { PushConfigService } from "./push-config.service";
+import { PushSenderService } from "./push-sender.service";
 
 /**
  * How often due alerts are swept. A rest alert is only useful within a few

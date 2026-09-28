@@ -1,10 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Injectable, Logger } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 // `esModuleInterop` is off in this project while `allowSyntheticDefaultImports`
 // is on, so `import webpush from 'web-push'` type-checks and then emits
 // `webpush_1.default`, which is undefined at runtime. A namespace import is
 // the form that actually compiles to `require('web-push')`.
-import * as webpush from 'web-push';
+import * as webpush from "web-push";
 
 /**
  * NOTIF-08: the VAPID key pair the server signs pushes with.
@@ -20,11 +20,11 @@ export class PushConfigService {
   private readonly privateKey: string | null;
 
   constructor(config: ConfigService) {
-    const publicKey = config.get<string>('VAPID_PUBLIC_KEY')?.trim() || null;
-    const privateKey = config.get<string>('VAPID_PRIVATE_KEY')?.trim() || null;
+    const publicKey = config.get<string>("VAPID_PUBLIC_KEY")?.trim() || null;
+    const privateKey = config.get<string>("VAPID_PRIVATE_KEY")?.trim() || null;
     const subject =
-      config.get<string>('VAPID_SUBJECT')?.trim() ||
-      'mailto:support@sunnsteel.app';
+      config.get<string>("VAPID_SUBJECT")?.trim() ||
+      "mailto:support@sunnsteel.app";
 
     if (publicKey && privateKey) {
       webpush.setVapidDetails(subject, publicKey, privateKey);
@@ -34,7 +34,7 @@ export class PushConfigService {
       this.publicKey = null;
       this.privateKey = null;
       this.logger.warn(
-        'VAPID keys are not configured; Web Push is disabled and clients will not be prompted.',
+        "VAPID keys are not configured; Web Push is disabled and clients will not be prompted.",
       );
     }
   }

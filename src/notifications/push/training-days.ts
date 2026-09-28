@@ -1,5 +1,5 @@
-import { resolveRoutinePlan } from '@sunsteel/contracts';
-import type { PlanBlock, PlanOverride } from '../../routines/routine-plan';
+import { resolveRoutinePlan } from "@sunsteel/contracts";
+import type { PlanBlock, PlanOverride } from "../../routines/routine-plan";
 
 /**
  * NOTIF-04: which routines an account is planned to train on one local date.
@@ -20,7 +20,7 @@ export interface ReminderRoutineDay {
 export interface ReminderRoutine {
   id: string;
   name: string;
-  scheduleMode: 'WEEKLY' | 'ROTATION';
+  scheduleMode: "WEEKLY" | "ROTATION";
   /** Archived routines plan nothing, exactly as the Schedule page shows. */
   isCompleted: boolean;
   createdAt: Date;
@@ -38,7 +38,7 @@ export interface ReminderRoutine {
 
 export interface ReminderOverride {
   routineId: string;
-  kind: 'MOVE' | 'SKIP';
+  kind: "MOVE" | "SKIP";
   /** The planned date the override acts on. */
   date: string;
   /** Where a move sends it; null for a skip. */
@@ -87,14 +87,14 @@ export function routinesPlannedOn({
     // A workout moved onto this date counts even when the weekday does not,
     // and it is checked first so it survives a rest day on the target.
     const movedHere = routineOverrides.some(
-      (o) => o.kind === 'MOVE' && o.toDate === date,
+      (o) => o.kind === "MOVE" && o.toDate === date,
     );
     // Moving a day's workout away, or skipping it, empties the date.
     const movedAway = routineOverrides.some(
-      (o) => o.kind === 'MOVE' && o.date === date && o.toDate !== date,
+      (o) => o.kind === "MOVE" && o.date === date && o.toDate !== date,
     );
     const skipped = routineOverrides.some(
-      (o) => o.kind === 'SKIP' && o.date === date,
+      (o) => o.kind === "SKIP" && o.date === date,
     );
 
     if (movedHere) {
@@ -104,7 +104,7 @@ export function routinesPlannedOn({
     if (movedAway || skipped) continue;
 
     const plan = resolveRoutinePlan(routine, date);
-    if (plan.scheduleMode === 'WEEKLY') {
+    if (plan.scheduleMode === "WEEKLY") {
       // A rest day is a plan not to train, never an unlogged workout.
       if (plan.restDays.includes(weekday)) continue;
       if (plan.days.some((day) => day.dayOfWeek === weekday)) {
@@ -126,7 +126,7 @@ export function routinesPlannedOn({
 
 /** "Upper / Lower and Push Day" — a list a notification body can carry. */
 export function describePlannedRoutines(names: string[]): string {
-  if (names.length === 0) return '';
+  if (names.length === 0) return "";
   if (names.length === 1) return names[0];
-  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }

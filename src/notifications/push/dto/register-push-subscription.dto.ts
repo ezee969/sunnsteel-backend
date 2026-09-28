@@ -1,8 +1,8 @@
 import type {
   PushSubscriptionKeys,
   RegisterPushSubscriptionRequest,
-} from '@sunsteel/contracts';
-import { Type } from 'class-transformer';
+} from "@sunsteel/contracts";
+import { Type } from "class-transformer";
 import {
   IsInt,
   IsNotEmpty,
@@ -12,7 +12,7 @@ import {
   MaxLength,
   Min,
   ValidateNested,
-} from 'class-validator';
+} from "class-validator";
 
 class PushSubscriptionKeysDto implements PushSubscriptionKeys {
   @IsString()
@@ -26,14 +26,12 @@ class PushSubscriptionKeysDto implements PushSubscriptionKeys {
   auth!: string;
 }
 
-export class RegisterPushSubscriptionDto
-  implements RegisterPushSubscriptionRequest
-{
+export class RegisterPushSubscriptionDto implements RegisterPushSubscriptionRequest {
   /**
    * A push endpoint is an https URL at the browser vendor's service. Rejecting
    * anything else keeps the server from being pointed at an arbitrary host.
    */
-  @IsUrl({ protocols: ['https'], require_protocol: true })
+  @IsUrl({ protocols: ["https"], require_protocol: true })
   @MaxLength(2048)
   endpoint!: string;
 

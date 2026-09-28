@@ -1,13 +1,14 @@
-import type { NotificationCategory, PushPayload } from '@sunsteel/contracts';
+import type { NotificationCategory, PushPayload } from "@sunsteel/contracts";
 import {
   eventActivityType,
   planAllows,
   type AuthorActivityPlan,
-} from '../activity/activity-rules';
+} from "../activity/activity-rules";
+import { serverCopy } from "../i18n/server-copy";
 
 export const PARTNER_ACTIVITY_NOTIFICATION_KINDS = [
-  'TRAINING_PARTNER_SESSION',
-  'TRAINING_PARTNER_ACHIEVEMENT',
+  "TRAINING_PARTNER_SESSION",
+  "TRAINING_PARTNER_ACHIEVEMENT",
 ] as const;
 
 export type PartnerActivityNotificationKind =
@@ -26,25 +27,25 @@ export interface PartnerAlertSelection {
   kind: PartnerActivityNotificationKind;
   category: Extract<
     NotificationCategory,
-    'TRAINING_PARTNER_SESSION' | 'TRAINING_PARTNER_ACHIEVEMENT'
+    "TRAINING_PARTNER_SESSION" | "TRAINING_PARTNER_ACHIEVEMENT"
   >;
 }
 
 /** NOTIF-07 intentionally chooses two bounded facts, never each PR/load event. */
 export function partnerAlertSelection(
-  event: Pick<PartnerAlertEvent, 'type' | 'payload'>,
+  event: Pick<PartnerAlertEvent, "type" | "payload">,
 ): PartnerAlertSelection | null {
   const type = eventActivityType(event);
-  if (type === 'SESSION_COMPLETED') {
+  if (type === "SESSION_COMPLETED") {
     return {
-      kind: 'TRAINING_PARTNER_SESSION',
-      category: 'TRAINING_PARTNER_SESSION',
+      kind: "TRAINING_PARTNER_SESSION",
+      category: "TRAINING_PARTNER_SESSION",
     };
   }
-  if (type === 'ACHIEVEMENT_UNLOCKED') {
+  if (type === "ACHIEVEMENT_UNLOCKED") {
     return {
-      kind: 'TRAINING_PARTNER_ACHIEVEMENT',
-      category: 'TRAINING_PARTNER_ACHIEVEMENT',
+      kind: "TRAINING_PARTNER_ACHIEVEMENT",
+      category: "TRAINING_PARTNER_ACHIEVEMENT",
     };
   }
   return null;
@@ -62,7 +63,7 @@ export function partnerAlertIsVisible({
   const type = eventActivityType(event);
   return Boolean(
     type &&
-    (type === 'SESSION_COMPLETED' || type === 'ACHIEVEMENT_UNLOCKED') &&
+    (type === "SESSION_COMPLETED" || type === "ACHIEVEMENT_UNLOCKED") &&
     enabledAt &&
     event.occurredAt >= enabledAt &&
     planAllows(plan, type, event.eventKey),
@@ -81,7 +82,7 @@ export function partnerAlertPayload(
 ): Record<string, unknown> | null {
   const selected = partnerAlertSelection(event);
   if (!selected) return null;
-  if (selected.kind === 'TRAINING_PARTNER_SESSION') {
+  if (selected.kind === "TRAINING_PARTNER_SESSION") {
     if (!event.sessionId || !session || session.id !== event.sessionId)
       return null;
     return {
@@ -91,12 +92,12 @@ export function partnerAlertPayload(
     };
   }
   const payload = (event.payload ?? {}) as Record<string, unknown>;
-  const achievementId = typeof payload.id === 'string' ? payload.id : '';
+  const achievementId = typeof payload.id === "string" ? payload.id : "";
   if (!achievementId) return null;
   return {
     entryId: event.eventKey,
     achievementId,
-    title: typeof payload.title === 'string' ? payload.title : 'Achievement',
+    title: typeof payload.title === "string" ? payload.title : "Achievement",
   };
 }
 
@@ -113,18 +114,22 @@ interface PartnerPushRow {
 
 export function partnerActivityPushPayload(
   row: PartnerPushRow,
+  locale?: string | null,
 ): PushPayload | null {
   if (!row.actor) return null;
+  // I18N-06: in the recipient's language. The routine, day and achievement
+  // names are carried as stored.
+  const copy = serverCopy(locale);
   const payload = (row.payload ?? {}) as Record<string, unknown>;
-  const name = [row.actor.name, row.actor.lastName].filter(Boolean).join(' ');
+  const name = [row.actor.name, row.actor.lastName].filter(Boolean).join(" ");
   const url = `/profile/${row.actor.username}`;
-  if (row.kind === 'TRAINING_PARTNER_SESSION') {
-    const routineName = String(payload.routineName ?? 'Workout');
+  if (row.kind === "TRAINING_PARTNER_SESSION") {
+    const routineName = String(payload.routineName ?? copy.workoutFallback);
     const dayName =
-      typeof payload.dayName === 'string' ? payload.dayName : null;
+      typeof payload.dayName === "string" ? payload.dayName : null;
     return {
       kind: row.kind,
-      title: `${name} completed a workout`,
+      title: copy.partnerSessionTitle(name),
       body: dayName ? `${routineName} · ${dayName}` : routineName,
       url,
       tag: `partner-session-${row.sourceKey}`,
@@ -132,8 +137,8 @@ export function partnerActivityPushPayload(
   }
   return {
     kind: row.kind,
-    title: `${name} earned an achievement`,
-    body: String(payload.title ?? 'Achievement'),
+    title: copy.partnerAchievementTitle(name),
+    body: String(payload.title ?? copy.achievementFallback),
     url,
     tag: `partner-achievement-${row.sourceKey}`,
   };

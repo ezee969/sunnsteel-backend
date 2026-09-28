@@ -1,21 +1,22 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { Interval } from '@nestjs/schedule';
-import { Prisma } from '@prisma/client';
-import type { ActivityType, ProfileVisibility } from '@sunsteel/contracts';
-import { DatabaseService } from '../database/database.service';
-import { hiddenFromViewer } from '../users/member-blocks';
+import { Injectable, Logger } from "@nestjs/common";
+import { Interval } from "@nestjs/schedule";
+import { Prisma } from "@prisma/client";
+import type { ActivityType, ProfileVisibility } from "@sunsteel/contracts";
+import { DatabaseService } from "../database/database.service";
+import { recipientLocale } from "../i18n/server-copy";
+import { hiddenFromViewer } from "../users/member-blocks";
 import {
   mapProfilePrivacy,
   resolveProfileViewerAccess,
-} from '../users/profile-privacy';
-import { readSnapshot } from '../workouts/analytics/session-snapshot';
-import { routineDayName } from '../workouts/workout-session.selects';
+} from "../users/profile-privacy";
+import { readSnapshot } from "../workouts/analytics/session-snapshot";
+import { routineDayName } from "../workouts/workout-session.selects";
 import {
   planAuthorActivity,
   type AuthorSharingChoices,
-} from '../activity/activity-rules';
-import { PushSenderService } from './push/push-sender.service';
-import { lookbackStart } from './notification-sources';
+} from "../activity/activity-rules";
+import { PushSenderService } from "./push/push-sender.service";
+import { lookbackStart } from "./notification-sources";
 import {
   PARTNER_ACTIVITY_NOTIFICATION_KINDS,
   partnerActivityPushPayload,
@@ -23,7 +24,7 @@ import {
   partnerAlertPayload,
   partnerAlertSelection,
   type PartnerAlertEvent,
-} from './partner-activity-alerts';
+} from "./partner-activity-alerts";
 
 export const PARTNER_ACTIVITY_SWEEP_INTERVAL_MS = 60_000;
 const RECIPIENT_BATCH_SIZE = 50;
@@ -103,7 +104,7 @@ export class PartnerActivityAlertsService {
           ],
           ...(this.recipientCursor ? { id: { gt: this.recipientCursor } } : {}),
         },
-        orderBy: { id: 'asc' },
+        orderBy: { id: "asc" },
         take: RECIPIENT_BATCH_SIZE,
         select: {
           id: true,
@@ -169,7 +170,7 @@ export class PartnerActivityAlertsService {
         activity: true,
         grantorId: { not: recipient.id },
         partnership: {
-          status: 'ACTIVE',
+          status: "ACTIVE",
           OR: [{ requesterId: recipient.id }, { recipientId: recipient.id }],
         },
       },
@@ -209,7 +210,7 @@ export class PartnerActivityAlertsService {
             ...(sessionSince
               ? [
                   {
-                    type: 'SESSION_COMPLETED' as const,
+                    type: "SESSION_COMPLETED" as const,
                     occurredAt: { gte: sessionSince },
                   },
                 ]
@@ -217,14 +218,14 @@ export class PartnerActivityAlertsService {
             ...(achievementSince
               ? [
                   {
-                    type: 'ACHIEVEMENT_UNLOCKED' as const,
+                    type: "ACHIEVEMENT_UNLOCKED" as const,
                     occurredAt: { gte: achievementSince },
                   },
                 ]
               : []),
           ],
         },
-        orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
+        orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
         select: {
           eventKey: true,
           userId: true,
@@ -272,14 +273,14 @@ export class PartnerActivityAlertsService {
         event,
         plan,
         enabledAt:
-          selected.kind === 'TRAINING_PARTNER_SESSION'
+          selected.kind === "TRAINING_PARTNER_SESSION"
             ? sessionSince
             : achievementSince,
       });
     });
 
     const sessionIds = eligible.flatMap((event) =>
-      event.type === 'SESSION_COMPLETED' && event.sessionId
+      event.type === "SESSION_COMPLETED" && event.sessionId
         ? [event.sessionId]
         : [],
     );
@@ -288,7 +289,7 @@ export class PartnerActivityAlertsService {
           where: {
             id: { in: sessionIds },
             userId: { in: actorIds },
-            status: 'COMPLETED',
+            status: "COMPLETED",
           },
           select: SESSION_SELECT,
         })
@@ -303,7 +304,7 @@ export class PartnerActivityAlertsService {
           {
             id: session.id,
             routineName:
-              snapshot?.routine.name ?? session.routine?.name ?? 'Workout',
+              snapshot?.routine.name ?? session.routine?.name ?? "Workout",
             dayName: routineDayName(snapshot?.routineDay ?? session.routineDay),
           },
         ] as const;
@@ -323,7 +324,7 @@ export class PartnerActivityAlertsService {
           sourceKey: `partner:${event.eventKey}`,
           actorId: event.userId,
           sessionId:
-            selected.kind === 'TRAINING_PARTNER_SESSION'
+            selected.kind === "TRAINING_PARTNER_SESSION"
               ? event.sessionId
               : null,
           payload: json(payload),
@@ -394,6 +395,7 @@ export class PartnerActivityAlertsService {
         actor: { select: { username: true, name: true, lastName: true } },
       },
     });
+    const locale = await recipientLocale(this.db, userId);
     await Promise.all(
       rows.map(async (row) => {
         if (
@@ -403,10 +405,13 @@ export class PartnerActivityAlertsService {
         ) {
           return;
         }
-        const payload = partnerActivityPushPayload({
-          ...row,
-          kind: row.kind as (typeof PARTNER_ACTIVITY_NOTIFICATION_KINDS)[number],
-        });
+        const payload = partnerActivityPushPayload(
+          {
+            ...row,
+            kind: row.kind as (typeof PARTNER_ACTIVITY_NOTIFICATION_KINDS)[number],
+          },
+          locale,
+        );
         if (!payload) return;
         await this.sender.sendToUser(userId, payload);
       }),

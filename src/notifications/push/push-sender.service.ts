@@ -1,17 +1,17 @@
-import { Injectable, Logger } from '@nestjs/common';
-import type { PushPayload } from '@sunsteel/contracts';
+import { Injectable, Logger } from "@nestjs/common";
+import type { PushPayload } from "@sunsteel/contracts";
 // `esModuleInterop` is off in this project while `allowSyntheticDefaultImports`
 // is on, so `import webpush from 'web-push'` type-checks and then emits
 // `webpush_1.default`, which is undefined at runtime. A namespace import is
 // the form that actually compiles to `require('web-push')`.
-import * as webpush from 'web-push';
-import { DatabaseService } from '../../database/database.service';
-import { localMinuteOfDay } from './local-time';
+import * as webpush from "web-push";
+import { DatabaseService } from "../../database/database.service";
+import { localMinuteOfDay } from "./local-time";
 import {
   NotificationPreferencesService,
   suppressionFor,
-} from './notification-preferences.service';
-import { PushConfigService } from './push-config.service';
+} from "./notification-preferences.service";
+import { PushConfigService } from "./push-config.service";
 
 /**
  * A push endpoint that answers 404 or 410 is permanently gone: the browser
@@ -26,7 +26,7 @@ interface SendResult {
   /** Subscriptions deleted because the endpoint is permanently gone. */
   retired: number;
   /** NOTIF-05: set when the owner's controls stopped this one. */
-  suppressed: 'CATEGORY_OFF' | 'QUIET_HOURS' | null;
+  suppressed: "CATEGORY_OFF" | "QUIET_HOURS" | null;
 }
 
 @Injectable()
@@ -92,14 +92,16 @@ export class PushSenderService {
             return;
           }
           this.logger.warn(
-            `Push to one endpoint failed (status ${statusCode ?? 'none'}); keeping the subscription.`,
+            `Push to one endpoint failed (status ${statusCode ?? "none"}); keeping the subscription.`,
           );
         }
       }),
     );
 
     if (gone.length > 0) {
-      await this.db.pushSubscription.deleteMany({ where: { id: { in: gone } } });
+      await this.db.pushSubscription.deleteMany({
+        where: { id: { in: gone } },
+      });
     }
     return { sent, retired: gone.length, suppressed: null };
   }

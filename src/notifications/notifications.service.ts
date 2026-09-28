@@ -1,22 +1,22 @@
-import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Injectable } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
 import {
   NOTIFICATIONS_LIST_LIMIT,
   TRAINING_PARTNER_ENCOURAGEMENT_KINDS,
   type AppNotification,
   type MarkNotificationsReadResponse,
   type NotificationsResponse,
-} from '@sunsteel/contracts';
-import { DatabaseService } from '../database/database.service';
-import { readSnapshot } from '../workouts/analytics/session-snapshot';
-import { routineDayName } from '../workouts/workout-session.selects';
+} from "@sunsteel/contracts";
+import { DatabaseService } from "../database/database.service";
+import { readSnapshot } from "../workouts/analytics/session-snapshot";
+import { routineDayName } from "../workouts/workout-session.selects";
 import {
   NOTIFICATION_EVENT_TYPES,
   gatherNotifications,
   lookbackStart,
   retentionStart,
-} from './notification-sources';
-import { PartnerActivityAlertsService } from './partner-activity-alerts.service';
+} from "./notification-sources";
+import { PartnerActivityAlertsService } from "./partner-activity-alerts.service";
 
 const json = (value: unknown) =>
   JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
@@ -63,53 +63,53 @@ export function toAppNotification(
   };
   const payload = (row.payload ?? {}) as Record<string, unknown>;
   switch (row.kind) {
-    case 'ACHIEVEMENT':
+    case "ACHIEVEMENT":
       return {
         ...base,
-        kind: 'ACHIEVEMENT',
+        kind: "ACHIEVEMENT",
         achievement: {
-          id: String(payload.achievementId ?? ''),
-          title: String(payload.title ?? ''),
-          description: String(payload.description ?? ''),
+          id: String(payload.achievementId ?? ""),
+          title: String(payload.title ?? ""),
+          description: String(payload.description ?? ""),
         },
       };
-    case 'SESSION_PROGRESS':
+    case "SESSION_PROGRESS":
       if (!row.sessionId) return null;
       return {
         ...base,
-        kind: 'SESSION_PROGRESS',
+        kind: "SESSION_PROGRESS",
         session: {
           id: row.sessionId,
-          routineName: String(payload.routineName ?? ''),
-          dayName: typeof payload.dayName === 'string' ? payload.dayName : null,
+          routineName: String(payload.routineName ?? ""),
+          dayName: typeof payload.dayName === "string" ? payload.dayName : null,
           recordCount: Number(payload.recordCount ?? 0),
           progressionCount: Number(payload.progressionCount ?? 0),
         },
       };
-    case 'NEW_FOLLOWER':
+    case "NEW_FOLLOWER":
       if (!row.actor) return null;
       return {
         ...base,
-        kind: 'NEW_FOLLOWER',
+        kind: "NEW_FOLLOWER",
         actor: {
           ...row.actor,
           isFollowedByMe: followedIds.has(row.actor.id),
         },
       };
-    case 'ACTIVITY_COMMENT': {
+    case "ACTIVITY_COMMENT": {
       // SOC-06. No `isFollowedByMe`: a comment is not an invitation to follow
       // anyone, and the row carries no body, because it outlives the comment
       // it announces.
       const entryId =
-        typeof payload.entryId === 'string' ? payload.entryId : '';
+        typeof payload.entryId === "string" ? payload.entryId : "";
       if (!row.actor || !entryId) return null;
-      return { ...base, kind: 'ACTIVITY_COMMENT', actor: row.actor, entryId };
+      return { ...base, kind: "ACTIVITY_COMMENT", actor: row.actor, entryId };
     }
-    case 'TRAINING_PARTNER_ENCOURAGEMENT': {
+    case "TRAINING_PARTNER_ENCOURAGEMENT": {
       const encouragementKind = payload.encouragementKind;
       if (
         !row.actor ||
-        typeof encouragementKind !== 'string' ||
+        typeof encouragementKind !== "string" ||
         !TRAINING_PARTNER_ENCOURAGEMENT_KINDS.includes(
           encouragementKind as (typeof TRAINING_PARTNER_ENCOURAGEMENT_KINDS)[number],
         )
@@ -118,43 +118,43 @@ export function toAppNotification(
       }
       return {
         ...base,
-        kind: 'TRAINING_PARTNER_ENCOURAGEMENT',
+        kind: "TRAINING_PARTNER_ENCOURAGEMENT",
         actor: row.actor,
         encouragement: {
           kind: encouragementKind as (typeof TRAINING_PARTNER_ENCOURAGEMENT_KINDS)[number],
         },
       };
     }
-    case 'TRAINING_PARTNER_SESSION': {
+    case "TRAINING_PARTNER_SESSION": {
       const entryId =
-        typeof payload.entryId === 'string' ? payload.entryId : '';
+        typeof payload.entryId === "string" ? payload.entryId : "";
       if (!row.actor || !row.sessionId || !entryId) return null;
       return {
         ...base,
-        kind: 'TRAINING_PARTNER_SESSION',
+        kind: "TRAINING_PARTNER_SESSION",
         actor: row.actor,
         entryId,
         session: {
           id: row.sessionId,
-          routineName: String(payload.routineName ?? 'Workout'),
-          dayName: typeof payload.dayName === 'string' ? payload.dayName : null,
+          routineName: String(payload.routineName ?? "Workout"),
+          dayName: typeof payload.dayName === "string" ? payload.dayName : null,
         },
       };
     }
-    case 'TRAINING_PARTNER_ACHIEVEMENT': {
+    case "TRAINING_PARTNER_ACHIEVEMENT": {
       const entryId =
-        typeof payload.entryId === 'string' ? payload.entryId : '';
+        typeof payload.entryId === "string" ? payload.entryId : "";
       const achievementId =
-        typeof payload.achievementId === 'string' ? payload.achievementId : '';
+        typeof payload.achievementId === "string" ? payload.achievementId : "";
       if (!row.actor || !entryId || !achievementId) return null;
       return {
         ...base,
-        kind: 'TRAINING_PARTNER_ACHIEVEMENT',
+        kind: "TRAINING_PARTNER_ACHIEVEMENT",
         actor: row.actor,
         entryId,
         achievement: {
           id: achievementId,
-          title: String(payload.title ?? 'Achievement'),
+          title: String(payload.title ?? "Achievement"),
         },
       };
     }
@@ -183,7 +183,7 @@ export class NotificationsService {
     const [rows, unreadCount] = await Promise.all([
       this.db.notification.findMany({
         where: { userId, revokedAt: null },
-        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         take: NOTIFICATIONS_LIST_LIMIT,
         select: NOTIFICATION_SELECT,
       }),
@@ -271,7 +271,7 @@ export class NotificationsService {
     const sessionIds = [
       ...new Set(
         events.flatMap((event) =>
-          event.type !== 'ACHIEVEMENT_UNLOCKED' && event.sessionId
+          event.type !== "ACHIEVEMENT_UNLOCKED" && event.sessionId
             ? [event.sessionId]
             : [],
         ),
@@ -296,7 +296,7 @@ export class NotificationsService {
           status: session.status,
           endedAt: session.endedAt,
           routineName:
-            snapshot?.routine.name ?? session.routine?.name ?? 'Workout',
+            snapshot?.routine.name ?? session.routine?.name ?? "Workout",
           dayName: routineDayName(snapshot?.routineDay ?? session.routineDay),
         };
       }),

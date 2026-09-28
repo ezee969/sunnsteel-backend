@@ -4,20 +4,21 @@ import {
   PLAN_OVERRIDES_SELECT,
   toPlanBlocks,
   toPlanOverrides,
-} from '../../routines/routine-plan';
-import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+} from "../../routines/routine-plan";
+import { Injectable, Logger } from "@nestjs/common";
+import { Cron, CronExpression } from "@nestjs/schedule";
 import type {
   PushPayload,
   StreakAtRiskPushPayload,
   TrainingReminderPushPayload,
-} from '@sunsteel/contracts';
-import { DatabaseService } from '../../database/database.service';
-import { PushConfigService } from './push-config.service';
-import { isWithinReminderWindow, localClock } from './local-time';
-import { ScheduledPushService } from './scheduled-push.service';
-import { describeStreakRisk, streakAtRisk } from './streak-risk';
-import { describePlannedRoutines, routinesPlannedOn } from './training-days';
+} from "@sunsteel/contracts";
+import { DatabaseService } from "../../database/database.service";
+import { serverCopy } from "../../i18n/server-copy";
+import { PushConfigService } from "./push-config.service";
+import { isWithinReminderWindow, localClock } from "./local-time";
+import { ScheduledPushService } from "./scheduled-push.service";
+import { streakAtRisk } from "./streak-risk";
+import { routinesPlannedOn } from "./training-days";
 
 /**
  * How late a reminder may still go out. The planner ticks more often than this,
@@ -67,6 +68,7 @@ export class TrainingReminderService {
           reminderMinuteOfDay: true,
           notifyTrainingReminder: true,
           notifyStreakAtRisk: true,
+          locale: true,
         },
       });
 
@@ -137,8 +139,14 @@ export class TrainingReminderService {
   private async payloadFor(
     userId: string,
     date: string,
-    categories: { notifyTrainingReminder: boolean; notifyStreakAtRisk: boolean },
+    categories: {
+      notifyTrainingReminder: boolean;
+      notifyStreakAtRisk: boolean;
+      locale?: string | null;
+    },
   ): Promise<PushPayload | null> {
+    // I18N-06: the push is written in the account's language.
+    const copy = serverCopy(categories.locale);
     const trainedToday = await this.hasSessionOn(userId, date);
 
     if (categories.notifyStreakAtRisk) {
@@ -154,12 +162,12 @@ export class TrainingReminderService {
       });
       if (risk) {
         const payload: StreakAtRiskPushPayload = {
-          kind: 'STREAK_AT_RISK',
-          title: 'Your streak ends after today',
-          body: describeStreakRisk(risk),
+          kind: "STREAK_AT_RISK",
+          title: copy.streakTitle,
+          body: copy.streakBody(risk.runDays, risk.daysSince),
           // The training run is shown by Progress › Workouts' consistency
           // calendar since the frontend split Progress into tabs (UX-11).
-          url: '/progress/workouts',
+          url: "/progress/workouts",
           tag: `reminder-${date}`,
         };
         return payload;
@@ -173,10 +181,10 @@ export class TrainingReminderService {
     if (planned.length === 0) return null;
 
     const payload: TrainingReminderPushPayload = {
-      kind: 'TRAINING_REMINDER',
-      title: 'Training day',
-      body: `${describePlannedRoutines(planned)} is planned for today.`,
-      url: '/schedule',
+      kind: "TRAINING_REMINDER",
+      title: copy.trainingDayTitle,
+      body: copy.trainingDayBody(planned),
+      url: "/schedule",
       tag: `reminder-${date}`,
     };
     return payload;
@@ -236,13 +244,13 @@ export class TrainingReminderService {
       date,
       routines: routines.map((routine) => ({
         ...routine,
-        scheduleMode: routine.scheduleMode as 'WEEKLY' | 'ROTATION',
+        scheduleMode: routine.scheduleMode as "WEEKLY" | "ROTATION",
         trainingBlocks: toPlanBlocks(routine.trainingBlocks),
         temporaryOverrides: toPlanOverrides(routine.temporaryOverrides),
       })),
       overrides: overrides.map((override) => ({
         routineId: override.routineId,
-        kind: override.kind as 'MOVE' | 'SKIP',
+        kind: override.kind as "MOVE" | "SKIP",
         date: override.date,
         toDate: override.toDate,
       })),

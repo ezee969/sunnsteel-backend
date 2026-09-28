@@ -2,15 +2,15 @@ import {
   NOTIFICATIONS_LOOKBACK_DAYS,
   NOTIFICATIONS_RETENTION_DAYS,
   type NotificationKind,
-} from '@sunsteel/contracts';
+} from "@sunsteel/contracts";
 
 const DAY_MS = 86_400_000;
 
 /** The training events a notification can come from. */
 export const NOTIFICATION_EVENT_TYPES = [
-  'ACHIEVEMENT_UNLOCKED',
-  'PERSONAL_RECORD',
-  'PROGRESSION_CHANGED',
+  "ACHIEVEMENT_UNLOCKED",
+  "PERSONAL_RECORD",
+  "PROGRESSION_CHANGED",
 ] as const;
 
 export interface SourceEvent {
@@ -88,7 +88,7 @@ export function gatherNotifications({
   const progress = new Map<string, { records: number; progressions: number }>();
 
   for (const event of events) {
-    if (event.type === 'ACHIEVEMENT_UNLOCKED') {
+    if (event.type === "ACHIEVEMENT_UNLOCKED") {
       const achievement = event.payload as {
         id?: string;
         title?: string;
@@ -97,15 +97,15 @@ export function gatherNotifications({
       };
       if (achievement.backfilled !== false || !achievement.id) continue;
       drafts.push({
-        kind: 'ACHIEVEMENT',
+        kind: "ACHIEVEMENT",
         sourceKey: `achievement:${achievement.id}`,
         createdAt: event.occurredAt,
         actorId: null,
         sessionId: null,
         payload: {
           achievementId: achievement.id,
-          title: achievement.title ?? '',
-          description: achievement.description ?? '',
+          title: achievement.title ?? "",
+          description: achievement.description ?? "",
         },
       });
       continue;
@@ -115,8 +115,8 @@ export function gatherNotifications({
       records: 0,
       progressions: 0,
     };
-    if (event.type === 'PERSONAL_RECORD') counts.records += 1;
-    else if (event.type === 'PROGRESSION_CHANGED') counts.progressions += 1;
+    if (event.type === "PERSONAL_RECORD") counts.records += 1;
+    else if (event.type === "PROGRESSION_CHANGED") counts.progressions += 1;
     else continue;
     progress.set(event.sessionId, counts);
   }
@@ -124,11 +124,11 @@ export function gatherNotifications({
   const byId = new Map(sessions.map((session) => [session.id, session]));
   for (const [sessionId, counts] of progress) {
     const session = byId.get(sessionId);
-    if (!session || session.status === 'IN_PROGRESS' || !session.endedAt) {
+    if (!session || session.status === "IN_PROGRESS" || !session.endedAt) {
       continue;
     }
     drafts.push({
-      kind: 'SESSION_PROGRESS',
+      kind: "SESSION_PROGRESS",
       sourceKey: `session:${sessionId}`,
       createdAt: session.endedAt,
       actorId: null,
@@ -144,7 +144,7 @@ export function gatherNotifications({
 
   for (const follow of follows) {
     drafts.push({
-      kind: 'NEW_FOLLOWER',
+      kind: "NEW_FOLLOWER",
       sourceKey: `follow:${follow.followerId}:${follow.createdAt.getTime()}`,
       createdAt: follow.createdAt,
       actorId: follow.followerId,
@@ -158,7 +158,7 @@ export function gatherNotifications({
     // deleted-then-rewritten comment is a new row rather than a silent repeat
     // of the old key.
     drafts.push({
-      kind: 'ACTIVITY_COMMENT',
+      kind: "ACTIVITY_COMMENT",
       sourceKey: `comment:${comment.id}`,
       createdAt: comment.createdAt,
       actorId: comment.userId,
