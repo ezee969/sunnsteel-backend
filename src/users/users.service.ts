@@ -12,6 +12,8 @@ import { trainingPartnerPermissions } from './training-partner-access';
 import {
   bodyMeasurementProblems,
   isBodyMeasurementDate,
+  type AppLocale,
+  isAppLocale,
   isDefaultDashboardLayout,
   normalizeDashboardLayout,
   type UpdateDashboardLayoutRequest,
@@ -81,6 +83,7 @@ const userProfileSelect = {
   // TRUST-04: the owner's own read only. It never reaches PublicUserProfile.
   isModerator: true,
   dashboardLayout: true,
+  locale: true,
   createdAt: true,
   updatedAt: true,
   _count: {
@@ -147,6 +150,7 @@ export class UsersService {
       discoverableByContacts,
       isModerator,
       dashboardLayout,
+      locale,
       ...profile
     } = user;
     return {
@@ -169,6 +173,7 @@ export class UsersService {
       },
       isModerator,
       dashboardLayout: normalizeDashboardLayout(dashboardLayout),
+      locale: isAppLocale(locale) ? locale : null,
       trainingIdentity: {
         goals: trainingGoals,
         experienceLevel: trainingExperienceLevel,
@@ -329,6 +334,23 @@ export class UsersService {
           ? Prisma.DbNull
           : (layout as unknown as Prisma.InputJsonValue),
       },
+      select: userProfileSelect,
+    });
+    return this.mapUserProfile(user);
+  }
+
+  /**
+   * I18N-02: the account's language, or null to follow each device. The
+   * frontend mirrors it into its locale cookie; push notifications are
+   * written in it (I18N-06).
+   */
+  async updateLocale(
+    email: string,
+    locale: AppLocale | null,
+  ): Promise<UserProfile> {
+    const user = await this.db.user.update({
+      where: { email },
+      data: { locale },
       select: userProfileSelect,
     });
     return this.mapUserProfile(user);

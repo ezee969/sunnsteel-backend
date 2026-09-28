@@ -34,6 +34,7 @@ import { MeasurableGoalsService } from '../goals/measurable-goals.service';
 import { ReplaceMeasurableGoalsDto } from './dto/replace-measurable-goals.dto';
 import { UpdatePlateauPreferencesDto } from './dto/update-plateau-preferences.dto';
 import { UpdateDashboardLayoutDto } from './dto/update-dashboard-layout.dto';
+import { UpdateLocaleDto } from './dto/update-locale.dto';
 import { PlateauPreferencesService } from './plateau-preferences.service';
 import { RoutineSharingService } from '../routines/routine-sharing.service';
 import { FeaturedProfileItemsService } from './featured-profile-items.service';
@@ -175,6 +176,12 @@ export class UsersController {
     @Body() dto: UpdateDashboardLayoutDto,
   ) {
     return this.usersService.updateDashboardLayout(req.user.email, dto.sections);
+  }
+
+  /** I18N-02: the account's language, or null to follow each device. */
+  @Put('preferences/locale')
+  updateLocale(@Request() req: RequestWithUser, @Body() dto: UpdateLocaleDto) {
+    return this.usersService.updateLocale(req.user.email, dto.locale);
   }
 
   @Put('preferences/plateaus')
