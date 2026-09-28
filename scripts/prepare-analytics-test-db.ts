@@ -348,6 +348,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260927140000_dashboard_layout/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// I18N-02: the account's language.
+				readFileSync(
+					'prisma/migrations/20260928190000_user_locale/migration.sql',
+					'utf8',
 				),
     );
     prisma(
