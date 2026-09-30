@@ -228,6 +228,16 @@ DTOs/enums are sourced from the published `@sunsteel/contracts` package rather t
 - `src/main.ts` polyfills `globalThis.crypto` via Node's `webcrypto` — this must stay as the very first thing in the file (before other imports run).
 - Global route prefix is `api`; CORS origin comes from `FRONTEND_URL` env var (fallback `http://localhost:3000`).
 - Global `ValidationPipe` has `transform: true` + implicit conversion, `whitelist: true`, `forbidNonWhitelisted: true` — DTO property types matter, and unknown request fields are rejected rather than ignored.
+- **Text the server writes goes through `serverCopy` (I18N-06).** A push
+  notification, the export's `omitted` list or anything else written with
+  nobody's page open reads the recipient's `User.locale` through
+  `recipientLocale` and takes its words from
+  [src/i18n/server-copy.ts](src/i18n/server-copy.ts), in English **and**
+  Spanish; English is the source and the fallback for a null or unknown
+  language, and a failed language lookup must never stop the push.
+  `scripts/server-copy.test.ts` holds both languages. Text a page renders is
+  the frontend's to translate, and a refusal's text is a contracts code (next
+  bullet), never a new English sentence here.
 - **A refusal a member can meet carries a stable code (I18N-06).** Throw it
   as `new XException(apiError('CODE', params))` with `apiError` from
   `@sunsteel/contracts`: Nest keeps the rendered English as the exception's
