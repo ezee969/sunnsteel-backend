@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from "@nestjs/common";
 import {
   ACHIEVEMENT_DEFINITIONS,
   FeaturedProfileItem,
@@ -13,25 +13,26 @@ import {
   RenaissanceRankDefinition,
   RoutineVisibility,
   SharedRoutineSummary,
-} from '@sunsteel/contracts';
-import { parseAchievementEvent } from '../achievements/achievements.service';
-import { renaissanceRankProgress } from '../achievements/renaissance-ranks';
-import { DatabaseService } from '../database/database.service';
+  apiError,
+} from "@sunsteel/contracts";
+import { parseAchievementEvent } from "../achievements/achievements.service";
+import { renaissanceRankProgress } from "../achievements/renaissance-ranks";
+import { DatabaseService } from "../database/database.service";
 import {
   ROUTINE_SUMMARY_SELECT,
   toSharedRoutineSummary,
-} from '../routines/routine-summary';
+} from "../routines/routine-summary";
 import {
   canViewRoutine,
   effectiveRoutineVisibility,
-} from '../routines/routine-visibility';
-import { lockTrainingAccount } from '../workouts/analytics/analytics-lock';
+} from "../routines/routine-visibility";
+import { lockTrainingAccount } from "../workouts/analytics/analytics-lock";
 
 interface AvailableFeaturedItems {
   records: Map<string, PersonalRecordEntry>;
   achievements: Map<
     string,
-    Extract<FeaturedProfileItem, { kind: 'ACHIEVEMENT' }>['achievement']
+    Extract<FeaturedProfileItem, { kind: "ACHIEVEMENT" }>["achievement"]
   >;
   ranks: Map<string, RenaissanceRankDefinition>;
   routines: Map<string, SharedRoutineSummary>;
@@ -43,8 +44,8 @@ interface AvailableFeaturedItems {
  * same routine, so the caller says which.
  */
 export type FeaturedRoutineAudience =
-  | { kind: 'OWNER_SELECTING' }
-  | { kind: 'VIEWER'; isOwner: boolean; isFollower: boolean };
+  | { kind: "OWNER_SELECTING" }
+  | { kind: "VIEWER"; isOwner: boolean; isFollower: boolean };
 
 /**
  * `ROUT-04`'s rule, asked the way each caller needs it. Selecting, the owner
@@ -63,8 +64,8 @@ function isRoutineFeaturable(
   // TRUST-04: a hidden routine is offered to nobody, its owner included --
   // featuring it would put a slot on the profile that no viewer renders.
   if (moderation.moderationHiddenAt) return false;
-  return audience.kind === 'OWNER_SELECTING'
-    ? effectiveRoutineVisibility(accountRule, visibility) !== 'PRIVATE'
+  return audience.kind === "OWNER_SELECTING"
+    ? effectiveRoutineVisibility(accountRule, visibility) !== "PRIVATE"
     : canViewRoutine(accountRule, visibility, audience, moderation);
 }
 
@@ -75,7 +76,7 @@ export class FeaturedProfileItemsService {
   async list(userId: string): Promise<FeaturedProfileSelectionsResponse> {
     const items = await this.db.featuredProfileItem.findMany({
       where: { userId },
-      orderBy: { position: 'asc' },
+      orderBy: { position: "asc" },
       select: { kind: true, referenceId: true, position: true },
     });
     return { items };
@@ -89,27 +90,25 @@ export class FeaturedProfileItemsService {
     const available = await this.loadAvailable(
       userId,
       {
-        records: items.some(item => item.kind === 'RECORD'),
-        achievements: items.some(item => item.kind === 'ACHIEVEMENT'),
-        ranks: items.some(item => item.kind === 'RANK'),
-        routines: items.some(item => item.kind === 'ROUTINE'),
+        records: items.some((item) => item.kind === "RECORD"),
+        achievements: items.some((item) => item.kind === "ACHIEVEMENT"),
+        ranks: items.some((item) => item.kind === "RANK"),
+        routines: items.some((item) => item.kind === "ROUTINE"),
       },
-      { kind: 'OWNER_SELECTING' },
+      { kind: "OWNER_SELECTING" },
     );
     for (const item of items) {
       if (!this.hasAvailable(available, item)) {
-        throw new BadRequestException(
-          'A featured item is not currently available to this account',
-        );
+        throw new BadRequestException(apiError("FEATURED_ITEM_UNAVAILABLE"));
       }
     }
 
-    await this.db.$transaction(async tx => {
+    await this.db.$transaction(async (tx) => {
       await lockTrainingAccount(tx, userId);
       await tx.featuredProfileItem.deleteMany({ where: { userId } });
       if (items.length) {
         await tx.featuredProfileItem.createMany({
-          data: items.map(item => ({ userId, ...item })),
+          data: items.map((item) => ({ userId, ...item })),
         });
       }
     });
@@ -124,7 +123,7 @@ export class FeaturedProfileItemsService {
    */
   async resolveForProfile(
     userId: string,
-    access: Pick<ProfileViewerAccess, 'records' | 'achievements'>,
+    access: Pick<ProfileViewerAccess, "records" | "achievements">,
     viewer: { isOwner: boolean; isFollower: boolean },
   ): Promise<FeaturedProfileItem[]> {
     const { items } = await this.list(userId);
@@ -133,38 +132,38 @@ export class FeaturedProfileItemsService {
     const available = await this.loadAvailable(
       userId,
       {
-        records: access.records && items.some(item => item.kind === 'RECORD'),
+        records: access.records && items.some((item) => item.kind === "RECORD"),
         achievements:
           access.achievements &&
-          items.some(item => item.kind === 'ACHIEVEMENT'),
+          items.some((item) => item.kind === "ACHIEVEMENT"),
         ranks:
-          access.achievements && items.some(item => item.kind === 'RANK'),
-        routines: items.some(item => item.kind === 'ROUTINE'),
+          access.achievements && items.some((item) => item.kind === "RANK"),
+        routines: items.some((item) => item.kind === "ROUTINE"),
       },
-      { kind: 'VIEWER', ...viewer },
+      { kind: "VIEWER", ...viewer },
     );
 
     const resolved: FeaturedProfileItem[] = [];
     for (const item of items) {
-      if (item.kind === 'RECORD') {
+      if (item.kind === "RECORD") {
         const record = available.records.get(item.referenceId);
-        if (record) resolved.push({ ...item, kind: 'RECORD', record });
+        if (record) resolved.push({ ...item, kind: "RECORD", record });
         continue;
       }
-      if (item.kind === 'ACHIEVEMENT') {
+      if (item.kind === "ACHIEVEMENT") {
         const achievement = available.achievements.get(item.referenceId);
         if (achievement) {
-          resolved.push({ ...item, kind: 'ACHIEVEMENT', achievement });
+          resolved.push({ ...item, kind: "ACHIEVEMENT", achievement });
         }
         continue;
       }
-      if (item.kind === 'ROUTINE') {
+      if (item.kind === "ROUTINE") {
         const routine = available.routines.get(item.referenceId);
-        if (routine) resolved.push({ ...item, kind: 'ROUTINE', routine });
+        if (routine) resolved.push({ ...item, kind: "ROUTINE", routine });
         continue;
       }
       const rank = available.ranks.get(item.referenceId);
-      if (rank) resolved.push({ ...item, kind: 'RANK', rank });
+      if (rank) resolved.push({ ...item, kind: "RANK", rank });
     }
     return resolved;
   }
@@ -173,11 +172,11 @@ export class FeaturedProfileItemsService {
     available: AvailableFeaturedItems,
     item: FeaturedProfileSelection,
   ): boolean {
-    if (item.kind === 'RECORD') return available.records.has(item.referenceId);
-    if (item.kind === 'ACHIEVEMENT') {
+    if (item.kind === "RECORD") return available.records.has(item.referenceId);
+    if (item.kind === "ACHIEVEMENT") {
       return available.achievements.has(item.referenceId);
     }
-    if (item.kind === 'ROUTINE') {
+    if (item.kind === "ROUTINE") {
       return available.routines.has(item.referenceId);
     }
     return available.ranks.has(item.referenceId);
@@ -188,7 +187,7 @@ export class FeaturedProfileItemsService {
   ): FeaturedProfileSelection[] {
     if (input.length > FEATURED_PROFILE_ITEMS_MAX) {
       throw new BadRequestException(
-        `Choose at most ${FEATURED_PROFILE_ITEMS_MAX} featured items`,
+        apiError("FEATURED_ITEMS_MAX", { max: FEATURED_PROFILE_ITEMS_MAX }),
       );
     }
     const seen = new Set<string>();
@@ -196,15 +195,17 @@ export class FeaturedProfileItemsService {
     return input.map((item, position) => {
       const referenceId = item.referenceId.trim();
       if (!referenceId) {
-        throw new BadRequestException('Featured item references cannot be blank');
+        throw new BadRequestException(
+          "Featured item references cannot be blank",
+        );
       }
       const key = `${item.kind}:${referenceId}`;
       if (seen.has(key)) {
-        throw new BadRequestException('Featured items must be unique');
+        throw new BadRequestException("Featured items must be unique");
       }
       seen.add(key);
-      if (item.kind === 'RANK' && ++rankCount > 1) {
-        throw new BadRequestException('Choose at most one featured rank');
+      if (item.kind === "RANK" && ++rankCount > 1) {
+        throw new BadRequestException(apiError("FEATURED_RANK_ONE"));
       }
       return { kind: item.kind, referenceId, position };
     });
@@ -222,42 +223,42 @@ export class FeaturedProfileItemsService {
   ): Promise<AvailableFeaturedItems> {
     const [recordRows, achievementEvents, projection, routines] =
       await Promise.all([
-      requested.records
-        ? this.db.personalRecord.findMany({
-            where: { userId },
-            select: {
-              exerciseId: true,
-              exerciseName: true,
-              weight: true,
-              reps: true,
-              estimated1rm: true,
-              achievedAt: true,
-            },
-          })
-        : [],
-      requested.achievements
-        ? this.db.trainingEvent.findMany({
-            where: { userId, type: 'ACHIEVEMENT_UNLOCKED' },
-            orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
-            take: ACHIEVEMENT_DEFINITIONS.length,
-            select: {
-              id: true,
-              sessionId: true,
-              occurredAt: true,
-              payload: true,
-            },
-          })
-        : [],
-      requested.ranks
-        ? this.db.workoutAnalyticsProjection.findFirst({
-            where: { userId, active: true, state: 'READY' },
-            select: { id: true, completedSessions: true },
-          })
-        : null,
-      requested.routines
-        ? this.loadRoutines(userId, audience)
-        : new Map<string, SharedRoutineSummary>(),
-    ]);
+        requested.records
+          ? this.db.personalRecord.findMany({
+              where: { userId },
+              select: {
+                exerciseId: true,
+                exerciseName: true,
+                weight: true,
+                reps: true,
+                estimated1rm: true,
+                achievedAt: true,
+              },
+            })
+          : [],
+        requested.achievements
+          ? this.db.trainingEvent.findMany({
+              where: { userId, type: "ACHIEVEMENT_UNLOCKED" },
+              orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
+              take: ACHIEVEMENT_DEFINITIONS.length,
+              select: {
+                id: true,
+                sessionId: true,
+                occurredAt: true,
+                payload: true,
+              },
+            })
+          : [],
+        requested.ranks
+          ? this.db.workoutAnalyticsProjection.findFirst({
+              where: { userId, active: true, state: "READY" },
+              select: { id: true, completedSessions: true },
+            })
+          : null,
+        requested.routines
+          ? this.loadRoutines(userId, audience)
+          : new Map<string, SharedRoutineSummary>(),
+      ]);
 
     const records = new Map<string, PersonalRecordEntry>();
     for (const record of recordRows) {
@@ -267,7 +268,7 @@ export class FeaturedProfileItemsService {
       });
     }
     const achievements = new Map(
-      achievementEvents.flatMap(event => {
+      achievementEvents.flatMap((event) => {
         const achievement = parseAchievementEvent(event);
         return achievement ? [[achievement.id, achievement] as const] : [];
       }),
@@ -277,7 +278,7 @@ export class FeaturedProfileItemsService {
       const activeWeeks = await this.db.workoutRollup.count({
         where: {
           projectionId: projection.id,
-          period: 'WEEK',
+          period: "WEEK",
           sessions: { gt: 0 },
         },
       });
@@ -311,12 +312,12 @@ export class FeaturedProfileItemsService {
 
     const rows = await this.db.routine.findMany({
       where: { userId },
-      orderBy: { updatedAt: 'desc' },
+      orderBy: { updatedAt: "desc" },
       select: ROUTINE_SUMMARY_SELECT,
     });
     return new Map(
       rows
-        .filter(routine =>
+        .filter((routine) =>
           isRoutineFeaturable(
             owner.routinesVisibility,
             routine.visibility,
@@ -324,7 +325,9 @@ export class FeaturedProfileItemsService {
             routine,
           ),
         )
-        .map(routine => [routine.id, toSharedRoutineSummary(routine)] as const),
+        .map(
+          (routine) => [routine.id, toSharedRoutineSummary(routine)] as const,
+        ),
     );
   }
 }

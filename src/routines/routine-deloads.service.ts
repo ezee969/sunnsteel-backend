@@ -3,24 +3,24 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+} from "@nestjs/common";
+import { Prisma } from "@prisma/client";
 import {
   applyDeload,
   DELOAD_MAX_DAYS,
-  DELOAD_NOT_LIGHTER,
   type CreateDeloadRequest,
   type RoutineTemporaryOverride,
   type RoutineTemporaryOverridesResponse,
   type RoutineVersionSetup,
-} from '@sunsteel/contracts';
-import { DatabaseService } from '../database/database.service';
-import { localClock } from '../notifications/push/local-time';
-import { lockTrainingAccount } from '../workouts/analytics/analytics-lock';
-import { ROUTINE_OWNER_SELECT } from './routine.selects';
-import { assertDeloadDates, endedEarlyEndDate } from './routine-deloads';
-import { captureRoutineSetup, readRoutineSetup } from './routine-versions';
-import { workingCopyDays } from './routine-working-copy';
+  apiError,
+} from "@sunsteel/contracts";
+import { DatabaseService } from "../database/database.service";
+import { localClock } from "../notifications/push/local-time";
+import { lockTrainingAccount } from "../workouts/analytics/analytics-lock";
+import { ROUTINE_OWNER_SELECT } from "./routine.selects";
+import { assertDeloadDates, endedEarlyEndDate } from "./routine-deloads";
+import { captureRoutineSetup, readRoutineSetup } from "./routine-versions";
+import { workingCopyDays } from "./routine-working-copy";
 
 const OVERRIDE_SELECT = {
   id: true,
@@ -51,9 +51,9 @@ const ROUTINE_FOR_DELOAD_SELECT = {
 function overrideState(
   row: { startDate: string; endDate: string },
   today: string,
-): RoutineTemporaryOverride['state'] {
-  if (row.endDate < today || row.endDate < row.startDate) return 'COMPLETE';
-  return today < row.startDate ? 'FUTURE' : 'ACTIVE';
+): RoutineTemporaryOverride["state"] {
+  if (row.endDate < today || row.endDate < row.startDate) return "COMPLETE";
+  return today < row.startDate ? "FUTURE" : "ACTIVE";
 }
 
 function toOverride(
@@ -67,7 +67,7 @@ function toOverride(
     startDate: row.startDate,
     endDate: row.endDate,
     loadReductionPercent:
-      row.loadReductionPercent as RoutineTemporaryOverride['loadReductionPercent'],
+      row.loadReductionPercent as RoutineTemporaryOverride["loadReductionPercent"],
     setMode: row.setMode,
     source: {
       kind: row.sourceKind,
@@ -101,12 +101,12 @@ export class RoutineDeloadsService {
       where: { id: routineId, userId },
       select: { user: { select: { timeZone: true } } },
     });
-    if (!routine) throw new NotFoundException('Routine not found');
-    const today = localClock(new Date(), routine.user.timeZone ?? 'UTC').date;
+    if (!routine) throw new NotFoundException(apiError("ROUTINE_NOT_FOUND"));
+    const today = localClock(new Date(), routine.user.timeZone ?? "UTC").date;
     const rows = await this.db.routineTemporaryOverride.findMany({
       where: { routineId },
       select: OVERRIDE_SELECT,
-      orderBy: { startDate: 'desc' },
+      orderBy: { startDate: "desc" },
       take: 26,
     });
     return {
@@ -127,8 +127,8 @@ export class RoutineDeloadsService {
         where: { id: routineId, userId },
         select: ROUTINE_FOR_DELOAD_SELECT,
       });
-      if (!routine) throw new NotFoundException('Routine not found');
-      const today = localClock(new Date(), routine.user.timeZone ?? 'UTC').date;
+      if (!routine) throw new NotFoundException(apiError("ROUTINE_NOT_FOUND"));
+      const today = localClock(new Date(), routine.user.timeZone ?? "UTC").date;
       const others = await tx.routineTemporaryOverride.findMany({
         where: { routineId },
         select: { startDate: true, endDate: true },
@@ -154,9 +154,9 @@ export class RoutineDeloadsService {
           ...routine,
           scheduleMode: authored.scheduleMode,
           restDays:
-            authored.scheduleMode === 'WEEKLY' ? [...authored.restDays] : [],
+            authored.scheduleMode === "WEEKLY" ? [...authored.restDays] : [],
           rotationWeekdays:
-            authored.scheduleMode === 'ROTATION'
+            authored.scheduleMode === "ROTATION"
               ? [...(authored.rotationWeekdays ?? [])]
               : [],
           days: source.days,
@@ -165,20 +165,21 @@ export class RoutineDeloadsService {
         original = captureRoutineSetup(routine);
       }
       if (original.days.every((day) => day.exercises.length === 0)) {
-        throw new BadRequestException('There is nothing to deload yet');
+        throw new BadRequestException(apiError("DELOAD_NOTHING_TO_LIGHTEN"));
       }
       const lighter = applyDeload(original, input);
-      if (!lighter) throw new BadRequestException(DELOAD_NOT_LIGHTER);
+      if (!lighter)
+        throw new BadRequestException(apiError("DELOAD_NOT_LIGHTER"));
 
       const row = await tx.routineTemporaryOverride.create({
         data: {
           routineId,
-          kind: 'DELOAD',
+          kind: "DELOAD",
           startDate: input.startDate,
           endDate: input.endDate,
           loadReductionPercent: input.loadReductionPercent,
           setMode: input.setMode,
-          sourceKind: source ? 'TRAINING_BLOCK' : 'BASELINE',
+          sourceKind: source ? "TRAINING_BLOCK" : "BASELINE",
           sourceTrainingBlockSeriesId: source?.seriesId ?? null,
           sourceTrainingBlockName: source?.name ?? null,
           originalSetup: original as unknown as Prisma.InputJsonValue,
@@ -205,10 +206,8 @@ export class RoutineDeloadsService {
         routineId,
         overrideId,
       );
-      if (overrideState(row, today) !== 'ACTIVE') {
-        throw new ConflictException(
-          'Only a deload in progress can be ended early',
-        );
+      if (overrideState(row, today) !== "ACTIVE") {
+        throw new ConflictException(apiError("DELOAD_NOT_IN_PROGRESS"));
       }
       const updated = await tx.routineTemporaryOverride.update({
         where: { id: row.id },
@@ -229,10 +228,8 @@ export class RoutineDeloadsService {
         routineId,
         overrideId,
       );
-      if (overrideState(row, today) !== 'FUTURE') {
-        throw new ConflictException(
-          'Only a deload that has not started can be cancelled',
-        );
+      if (overrideState(row, today) !== "FUTURE") {
+        throw new ConflictException(apiError("DELOAD_ALREADY_STARTED"));
       }
       await tx.routineTemporaryOverride.delete({ where: { id: row.id } });
     });
@@ -248,15 +245,15 @@ export class RoutineDeloadsService {
       where: { id: routineId, userId },
       select: { user: { select: { timeZone: true } } },
     });
-    if (!routine) throw new NotFoundException('Routine not found');
+    if (!routine) throw new NotFoundException(apiError("ROUTINE_NOT_FOUND"));
     const row = await tx.routineTemporaryOverride.findFirst({
       where: { id: overrideId, routineId },
       select: OVERRIDE_SELECT,
     });
-    if (!row) throw new NotFoundException('Deload not found');
+    if (!row) throw new NotFoundException(apiError("DELOAD_NOT_FOUND"));
     return {
       row,
-      today: localClock(new Date(), routine.user.timeZone ?? 'UTC').date,
+      today: localClock(new Date(), routine.user.timeZone ?? "UTC").date,
     };
   }
 }

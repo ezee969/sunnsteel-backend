@@ -1,26 +1,27 @@
+import { apiError } from "@sunsteel/contracts";
 import {
   BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
-import { Prisma, WorkoutSessionStatus } from '@prisma/client';
+} from "@nestjs/common";
+import { Prisma, WorkoutSessionStatus } from "@prisma/client";
 import type {
   SessionExerciseSubstitution,
   SubstituteSessionExerciseResponse,
-} from '@sunsteel/contracts';
-import { DatabaseService } from '../../database/database.service';
-import { lockTrainingAccount } from '../analytics/analytics-lock';
-import { ensureSessionSnapshot } from '../analytics/session-snapshot';
-import { SubstituteSessionExerciseDto } from '../dto/substitute-session-exercise.dto';
+} from "@sunsteel/contracts";
+import { DatabaseService } from "../../database/database.service";
+import { lockTrainingAccount } from "../analytics/analytics-lock";
+import { ensureSessionSnapshot } from "../analytics/session-snapshot";
+import { SubstituteSessionExerciseDto } from "../dto/substitute-session-exercise.dto";
 import {
   readSubstitutions,
   withoutSubstitution,
   withSubstitution,
-} from '../session-substitutions';
-import { toWorkoutSessionResponse } from '../workout-session.mapper';
-import { buildWorkoutSessionSelect } from '../workout-session.selects';
-import { usableExerciseWhere } from '../../exercises/exercise-access';
+} from "../session-substitutions";
+import { toWorkoutSessionResponse } from "../workout-session.mapper";
+import { buildWorkoutSessionSelect } from "../workout-session.selects";
+import { usableExerciseWhere } from "../../exercises/exercise-access";
 
 const slotLogs = (sessionId: string, routineExerciseId: string) => ({
   sessionId,
@@ -68,7 +69,8 @@ export class WorkoutSessionSubstitutionService {
             secondaryMuscles: true,
           },
         });
-        if (!exercise) throw new NotFoundException('Exercise not found');
+        if (!exercise)
+          throw new NotFoundException(apiError("EXERCISE_NOT_FOUND"));
         next = withSubstitution(substitutions, {
           routineExerciseId,
           exercise,
@@ -124,11 +126,10 @@ export class WorkoutSessionSubstitutionService {
       where: { id: sessionId, userId },
       select: { id: true, status: true, exerciseSubstitutions: true },
     });
-    if (!session) throw new NotFoundException('Workout session not found');
+    if (!session)
+      throw new NotFoundException(apiError("WORKOUT_SESSION_NOT_FOUND"));
     if (session.status !== WorkoutSessionStatus.IN_PROGRESS) {
-      throw new BadRequestException(
-        'Exercises can only be swapped in an active session',
-      );
+      throw new BadRequestException(apiError("SWAP_SESSION_NOT_ACTIVE"));
     }
 
     const snapshot = await ensureSessionSnapshot(tx, sessionId);
@@ -136,16 +137,14 @@ export class WorkoutSessionSubstitutionService {
       (exercise) => exercise.id === routineExerciseId,
     );
     if (!slot) {
-      throw new NotFoundException('That exercise is not part of this session');
+      throw new NotFoundException(apiError("SESSION_EXERCISE_NOT_FOUND"));
     }
 
     const completed = await tx.setLog.count({
       where: { ...slotLogs(sessionId, routineExerciseId), isCompleted: true },
     });
     if (completed > 0) {
-      throw new ConflictException(
-        'This exercise already has completed sets. Swap it before completing any.',
-      );
+      throw new ConflictException(apiError("SWAP_SETS_COMPLETED"));
     }
 
     return {

@@ -1,13 +1,14 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException } from "@nestjs/common";
 import {
   type CorrectSessionSetRequest,
   SESSION_CORRECTION_LIMITS,
   type SessionSetCorrection,
   type SetLogValues,
   setLogValuesDiffer,
-} from '@sunsteel/contracts';
-import type { AnalyticsLog } from './analytics/analytics-contribution';
-import type { ProgressionUpdate } from './progression-changes';
+  apiError,
+} from "@sunsteel/contracts";
+import type { AnalyticsLog } from "./analytics/analytics-contribution";
+import type { ProgressionUpdate } from "./progression-changes";
 
 /**
  * LIVE-17 rules, pure so each one is tested on its own. The service applies
@@ -35,22 +36,24 @@ function assertValues(values: SetLogValues) {
       values.weight > weightKgMax)
   )
     throw new BadRequestException(
-      `Weight must be between 0 and ${weightKgMax} kg`,
+      apiError("CORRECTION_WEIGHT_RANGE", { max: weightKgMax }),
     );
   if (
     values.reps !== null &&
     (!Number.isInteger(values.reps) || values.reps < 0 || values.reps > repsMax)
   )
     throw new BadRequestException(
-      `Reps must be a whole number between 0 and ${repsMax}`,
+      apiError("CORRECTION_REPS_RANGE", { max: repsMax }),
     );
   if (
     values.rpe !== null &&
     (!Number.isFinite(values.rpe) || values.rpe < rpeMin || values.rpe > rpeMax)
   )
-    throw new BadRequestException(`RPE must be between ${rpeMin} and ${rpeMax}`);
+    throw new BadRequestException(
+      apiError("CORRECTION_RPE_RANGE", { min: rpeMin, max: rpeMax }),
+    );
   if (values.isCompleted && (values.reps === null || values.reps < 1))
-    throw new BadRequestException('A completed set needs at least one rep');
+    throw new BadRequestException(apiError("CORRECTION_COMPLETED_NEEDS_REP"));
 }
 
 /**
@@ -70,9 +73,11 @@ export function planSetCorrections(
   for (const set of requested) {
     const log = byId.get(set.setLogId);
     if (!log)
-      throw new BadRequestException('Set does not belong to this workout');
+      throw new BadRequestException("Set does not belong to this workout");
     if (seen.has(set.setLogId))
-      throw new BadRequestException('Each set can be corrected once per request');
+      throw new BadRequestException(
+        "Each set can be corrected once per request",
+      );
     seen.add(set.setLogId);
     // An omitted value is an empty one, never "leave it as it was": the
     // request states how each set should read.
@@ -88,14 +93,14 @@ export function planSetCorrections(
     changes.push({
       setLogId: log.id,
       exerciseId: log.exerciseId,
-      exerciseName: exerciseNames.get(log.exerciseId) ?? 'Exercise',
+      exerciseName: exerciseNames.get(log.exerciseId) ?? "Exercise",
       setNumber: log.setNumber,
       before,
       after,
     });
   }
   if (changes.length === 0)
-    throw new BadRequestException('Nothing to correct: every set already reads that way');
+    throw new BadRequestException(apiError("CORRECTION_NOTHING_TO_CORRECT"));
   return changes;
 }
 
@@ -124,9 +129,7 @@ export function applySetCorrections<T extends CorrectableLog>(
     };
   });
   if (!corrected.some((log) => log.isCompleted))
-    throw new BadRequestException(
-      'A finished workout keeps at least one completed set',
-    );
+    throw new BadRequestException(apiError("CORRECTION_KEEPS_ONE_SET"));
   return corrected;
 }
 
@@ -198,7 +201,10 @@ export function contributionDelta(
   },
   after: typeof before,
 ) {
-  const muscles = new Map<string, { volumeKg: number; completedSets: number }>();
+  const muscles = new Map<
+    string,
+    { volumeKg: number; completedSets: number }
+  >();
   for (const [muscle, values] of after.muscles)
     muscles.set(muscle, { ...values });
   for (const [muscle, values] of before.muscles) {
@@ -212,7 +218,9 @@ export function contributionDelta(
     volumeKg: after.volumeKg - before.volumeKg,
     completedSets: after.completedSets - before.completedSets,
     muscles: [...muscles]
-      .filter(([, values]) => values.volumeKg !== 0 || values.completedSets !== 0)
+      .filter(
+        ([, values]) => values.volumeKg !== 0 || values.completedSets !== 0,
+      )
       .sort(([a], [b]) => a.localeCompare(b)),
   };
 }

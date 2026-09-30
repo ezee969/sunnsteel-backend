@@ -1,11 +1,11 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes } from "node:crypto";
 
 import {
   BadRequestException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
-import { WorkoutSessionStatus } from '@prisma/client';
+} from "@nestjs/common";
+import { WorkoutSessionStatus } from "@prisma/client";
 import {
   SESSION_SHARE_FIELDS,
   SESSION_SHARE_MAX_ACTIVE_LINKS,
@@ -16,10 +16,11 @@ import {
   SharedSessionRecap,
   WeightUnit,
   WorkoutSessionRecap,
-} from '@sunsteel/contracts';
+  apiError,
+} from "@sunsteel/contracts";
 
-import { DatabaseService } from '../database/database.service';
-import { WorkoutSessionRecapService } from './services';
+import { DatabaseService } from "../database/database.service";
+import { WorkoutSessionRecapService } from "./services";
 
 const SHARE_FIELD_SET = new Set<string>(SESSION_SHARE_FIELDS);
 // base64url of 18 random bytes is 24 characters; anything else is not a token.
@@ -38,7 +39,7 @@ const shareSelect = {
 
 /** 144 bits of randomness: the token is the only credential for a share. */
 export function createShareToken(): string {
-  return randomBytes(18).toString('base64url');
+  return randomBytes(18).toString("base64url");
 }
 
 /** Drops unknown values and returns the canonical order used everywhere. */
@@ -67,14 +68,14 @@ export function projectSharedRecap(
     routineName: recap.routineName,
     dayName: recap.dayName ?? null,
     endedAt: recap.endedAt,
-    ...(has('duration') ? { durationSec: recap.durationSec } : {}),
-    ...(has('volume') ? { totalVolumeKg: recap.totalVolumeKg } : {}),
-    ...(has('completedSets') ? { completedSets: recap.completedSets } : {}),
-    ...(has('records') ? { records: recap.records } : {}),
-    ...(has('progression')
+    ...(has("duration") ? { durationSec: recap.durationSec } : {}),
+    ...(has("volume") ? { totalVolumeKg: recap.totalVolumeKg } : {}),
+    ...(has("completedSets") ? { completedSets: recap.completedSets } : {}),
+    ...(has("records") ? { records: recap.records } : {}),
+    ...(has("progression")
       ? { progressionChanges: recap.progressionChanges }
       : {}),
-    ...(has('notes')
+    ...(has("notes")
       ? { notes: recap.notes ?? null, exerciseNotes: recap.exerciseNotes ?? [] }
       : {}),
   };
@@ -94,24 +95,25 @@ export class WorkoutSessionShareService {
   ): Promise<SessionShare> {
     const fields = normalizeShareFields(requestedFields);
     if (fields.length === 0) {
-      throw new BadRequestException(
-        'Choose at least one part of the recap to share',
-      );
+      throw new BadRequestException(apiError("SESSION_SHARE_NOTHING_CHOSEN"));
     }
     const session = await this.db.workoutSession.findFirst({
       where: { id: sessionId, userId },
       select: { status: true },
     });
-    if (!session) throw new NotFoundException('Workout session not found');
+    if (!session)
+      throw new NotFoundException(apiError("WORKOUT_SESSION_NOT_FOUND"));
     if (session.status !== WorkoutSessionStatus.COMPLETED) {
-      throw new BadRequestException('Only completed sessions can be shared');
+      throw new BadRequestException(apiError("SESSION_SHARE_NOT_COMPLETED"));
     }
     const activeLinks = await this.db.sessionShare.count({
       where: { sessionId, userId, revokedAt: null },
     });
     if (activeLinks >= SESSION_SHARE_MAX_ACTIVE_LINKS) {
       throw new BadRequestException(
-        `A session can have at most ${SESSION_SHARE_MAX_ACTIVE_LINKS} active share links`,
+        apiError("SESSION_SHARE_LINKS_MAX", {
+          max: SESSION_SHARE_MAX_ACTIVE_LINKS,
+        }),
       );
     }
     const share = await this.db.sessionShare.create({
@@ -129,10 +131,11 @@ export class WorkoutSessionShareService {
       where: { id: sessionId, userId },
       select: { id: true },
     });
-    if (!session) throw new NotFoundException('Workout session not found');
+    if (!session)
+      throw new NotFoundException(apiError("WORKOUT_SESSION_NOT_FOUND"));
     const shares = await this.db.sessionShare.findMany({
       where: { sessionId, userId, revokedAt: null },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       select: shareSelect,
     });
     return { items: shares.map((share) => this.mapShare(share)) };
@@ -147,13 +150,14 @@ export class WorkoutSessionShareService {
       where: { id: shareId, sessionId, userId, revokedAt: null },
       data: { revokedAt: new Date() },
     });
-    if (count === 0) throw new NotFoundException('Share link not found');
+    if (count === 0)
+      throw new NotFoundException(apiError("SHARE_LINK_NOT_FOUND"));
   }
 
   /** Unguarded read: the token alone authorizes it, and only while active. */
   async getShared(token: string): Promise<SharedSessionRecap> {
     if (!TOKEN_PATTERN.test(token)) {
-      throw new NotFoundException('Shared session not found');
+      throw new NotFoundException(apiError("SHARED_SESSION_NOT_FOUND"));
     }
     // TRUST-04: a hidden share stops resolving. `revokedAt` is untouched, so
     // the owner still sees an active link -- flagged as hidden -- and a
@@ -175,7 +179,8 @@ export class WorkoutSessionShareService {
         },
       },
     });
-    if (!share) throw new NotFoundException('Shared session not found');
+    if (!share)
+      throw new NotFoundException(apiError("SHARED_SESSION_NOT_FOUND"));
 
     let recap: WorkoutSessionRecap;
     try {
@@ -186,7 +191,7 @@ export class WorkoutSessionShareService {
         error instanceof NotFoundException ||
         error instanceof BadRequestException
       ) {
-        throw new NotFoundException('Shared session not found');
+        throw new NotFoundException(apiError("SHARED_SESSION_NOT_FOUND"));
       }
       throw error;
     }

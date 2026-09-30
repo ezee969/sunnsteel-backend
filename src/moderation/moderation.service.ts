@@ -2,8 +2,8 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+} from "@nestjs/common";
+import type { Prisma } from "@prisma/client";
 import {
   MODERATION_HISTORY_PAGE_SIZE,
   type ModerationActionKind,
@@ -18,10 +18,11 @@ import {
   type ReportSubjectPreview,
   type ReviewReportResponse,
   type UserSearchResponse,
-} from '@sunsteel/contracts';
-import { DatabaseService } from '../database/database.service';
-import { canViewRoutine } from '../routines/routine-visibility';
-import { isHiddenFromViewer } from '../users/member-blocks';
+  apiError,
+} from "@sunsteel/contracts";
+import { DatabaseService } from "../database/database.service";
+import { canViewRoutine } from "../routines/routine-visibility";
+import { isHiddenFromViewer } from "../users/member-blocks";
 import {
   clampPageSize,
   decodeQueueCursor,
@@ -30,7 +31,7 @@ import {
   resolvesReport,
   statusAfter,
   type ResolvedSubject,
-} from './moderation-rules';
+} from "./moderation-rules";
 
 const MEMBER_SELECT = {
   id: true,
@@ -51,7 +52,7 @@ interface MemberRow {
 function toMember(row: MemberRow): UserSearchResponse {
   return {
     id: row.id,
-    username: row.username ?? '',
+    username: row.username ?? "",
     name: row.name,
     lastName: row.lastName,
     avatarUrl: row.avatarUrl,
@@ -93,7 +94,7 @@ export class ModerationService {
     moderatorId: string,
     query: ModerationQueueQuery,
   ): Promise<ModerationQueueResponse> {
-    const status: ReportStatus = query.status ?? 'OPEN';
+    const status: ReportStatus = query.status ?? "OPEN";
     const take = queuePageSize(query.limit);
     const cursor = decodeQueueCursor(query.cursor);
 
@@ -112,11 +113,11 @@ export class ModerationService {
     const [rows, openCount] = await Promise.all([
       this.db.memberReport.findMany({
         where,
-        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         take: take + 1,
         select: REPORT_SELECT,
       }),
-      this.db.memberReport.count({ where: { status: 'OPEN' } }),
+      this.db.memberReport.count({ where: { status: "OPEN" } }),
     ]);
 
     const page = rows.slice(0, take);
@@ -153,7 +154,7 @@ export class ModerationService {
             }
           : {}),
       },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: take + 1,
       select: ACTION_SELECT,
     });
@@ -180,7 +181,7 @@ export class ModerationService {
     moderatorId: string,
     reportId: string,
   ): Promise<ReviewReportResponse> {
-    return this.act(moderatorId, reportId, 'VIEW_SUBJECT', null);
+    return this.act(moderatorId, reportId, "VIEW_SUBJECT", null);
   }
 
   async dismiss(
@@ -188,7 +189,7 @@ export class ModerationService {
     reportId: string,
     note: string | null,
   ): Promise<ReviewReportResponse> {
-    return this.act(moderatorId, reportId, 'DISMISS_REPORT', note);
+    return this.act(moderatorId, reportId, "DISMISS_REPORT", note);
   }
 
   async hide(
@@ -196,7 +197,7 @@ export class ModerationService {
     reportId: string,
     note: string | null,
   ): Promise<ReviewReportResponse> {
-    return this.act(moderatorId, reportId, 'HIDE_SUBJECT', note);
+    return this.act(moderatorId, reportId, "HIDE_SUBJECT", note);
   }
 
   async restore(
@@ -204,7 +205,7 @@ export class ModerationService {
     reportId: string,
     note: string | null,
   ): Promise<ReviewReportResponse> {
-    return this.act(moderatorId, reportId, 'RESTORE_SUBJECT', note);
+    return this.act(moderatorId, reportId, "RESTORE_SUBJECT", note);
   }
 
   /**
@@ -222,7 +223,7 @@ export class ModerationService {
       where: { id: reportId },
       select: { id: true, status: true, subjectKind: true, subjectId: true },
     });
-    if (!report) throw new NotFoundException('Report not found');
+    if (!report) throw new NotFoundException(apiError("REPORT_NOT_FOUND"));
 
     const subject = await this.resolveSubject(
       moderatorId,
@@ -231,22 +232,24 @@ export class ModerationService {
     );
     const isMissing = subject.resolvedId === null;
 
-    if (kind === 'HIDE_SUBJECT' || kind === 'RESTORE_SUBJECT') {
+    if (kind === "HIDE_SUBJECT" || kind === "RESTORE_SUBJECT") {
       if (isMissing) {
-        throw new ConflictException('The reported content no longer exists');
+        throw new ConflictException(apiError("REPORTED_CONTENT_GONE"));
       }
-      if (kind === 'HIDE_SUBJECT' && subject.isHidden) {
-        throw new ConflictException('The reported content is already hidden');
+      if (kind === "HIDE_SUBJECT" && subject.isHidden) {
+        throw new ConflictException(
+          apiError("REPORTED_CONTENT_ALREADY_HIDDEN"),
+        );
       }
-      if (kind === 'RESTORE_SUBJECT' && !subject.isHidden) {
-        throw new ConflictException('The reported content is not hidden');
+      if (kind === "RESTORE_SUBJECT" && !subject.isHidden) {
+        throw new ConflictException(apiError("REPORTED_CONTENT_NOT_HIDDEN"));
       }
     }
-    if (kind === 'VIEW_SUBJECT' && isMissing) {
-      throw new NotFoundException('The reported content no longer exists');
+    if (kind === "VIEW_SUBJECT" && isMissing) {
+      throw new NotFoundException(apiError("REPORTED_CONTENT_GONE"));
     }
-    if (resolvesReport(kind) && report.status !== 'OPEN') {
-      throw new ConflictException('This report has already been reviewed');
+    if (resolvesReport(kind) && report.status !== "OPEN") {
+      throw new ConflictException(apiError("REPORT_ALREADY_REVIEWED"));
     }
 
     // Whatever the reporter typed, the record stores what it resolved to: a
@@ -268,8 +271,8 @@ export class ModerationService {
         select: ACTION_SELECT,
       });
 
-      if (kind === 'HIDE_SUBJECT' || kind === 'RESTORE_SUBJECT') {
-        const hiddenAt = kind === 'HIDE_SUBJECT' ? created.createdAt : null;
+      if (kind === "HIDE_SUBJECT" || kind === "RESTORE_SUBJECT") {
+        const hiddenAt = kind === "HIDE_SUBJECT" ? created.createdAt : null;
         await this.applyHide(tx, report.subjectKind, subjectId, hiddenAt);
       }
 
@@ -308,21 +311,21 @@ export class ModerationService {
     subjectId: string,
     hiddenAt: Date | null,
   ): Promise<void> {
-    if (kind === 'MEMBER') {
+    if (kind === "MEMBER") {
       await tx.user.update({
         where: { id: subjectId },
         data: { moderationHiddenAt: hiddenAt },
       });
       return;
     }
-    if (kind === 'ROUTINE') {
+    if (kind === "ROUTINE") {
       await tx.routine.update({
         where: { id: subjectId },
         data: { moderationHiddenAt: hiddenAt },
       });
       return;
     }
-    if (kind === 'COMMENT') {
+    if (kind === "COMMENT") {
       await tx.activityComment.update({
         where: { id: subjectId },
         data: { moderationHiddenAt: hiddenAt },
@@ -333,7 +336,8 @@ export class ModerationService {
       where: { token: subjectId },
       data: { moderationHiddenAt: hiddenAt },
     });
-    if (count === 0) throw new NotFoundException('Share link not found');
+    if (count === 0)
+      throw new NotFoundException(apiError("SHARE_LINK_NOT_FOUND"));
   }
 
   private async toReport(
@@ -349,7 +353,7 @@ export class ModerationService {
       where: {
         subjectKind: row.subjectKind,
         subjectId: row.subjectId,
-        status: 'OPEN',
+        status: "OPEN",
         id: { not: row.id },
       },
     });
@@ -389,7 +393,7 @@ export class ModerationService {
       readable: false,
     };
 
-    if (kind === 'MEMBER') {
+    if (kind === "MEMBER") {
       const user = await this.db.user.findFirst({
         where: {
           OR: [{ id: reportedId }, { username: reportedId.toLowerCase() }],
@@ -424,7 +428,7 @@ export class ModerationService {
       };
     }
 
-    if (kind === 'ROUTINE') {
+    if (kind === "ROUTINE") {
       const routine = await this.db.routine.findUnique({
         where: { id: reportedId },
         select: {
@@ -459,7 +463,7 @@ export class ModerationService {
       };
     }
 
-    if (kind === 'COMMENT') {
+    if (kind === "COMMENT") {
       const comment = await this.db.activityComment.findUnique({
         where: { id: reportedId },
         select: {
@@ -509,7 +513,7 @@ export class ModerationService {
       kind,
       resolvedId: share.token,
       ownerId: share.user.id,
-      title: 'Shared workout',
+      title: "Shared workout",
       isHidden: share.moderationHiddenAt !== null,
       owner: share.user,
       // SOC-07: the token is the credential, and the moderator holds it

@@ -1,8 +1,9 @@
-import { ConflictException } from '@nestjs/common';
+import { apiError } from "@sunsteel/contracts";
+import { ConflictException } from "@nestjs/common";
 import type {
   SessionTemporaryOverride,
   SessionTrainingBlock,
-} from '@sunsteel/contracts';
+} from "@sunsteel/contracts";
 
 /** The session columns that record the block a session trained (ROUT-15). */
 export interface SessionTrainingBlockColumns {
@@ -45,7 +46,7 @@ export function trainingBlockColumns(
 /** ROUT-16: the session columns that record the deload a session trained. */
 export interface SessionTemporaryOverrideColumns {
   temporaryOverrideId: string | null;
-  temporaryOverrideKind: 'DELOAD' | null;
+  temporaryOverrideKind: "DELOAD" | null;
 }
 
 export function sessionTemporaryOverride(
@@ -91,24 +92,23 @@ export function assertDayInPlan(
   if (deload) {
     if (day.temporaryOverrideId !== deload.id) {
       throw new ConflictException(
-        `This routine is on a deload until ${deload.endDate}; start one of its days`,
+        apiError("SESSION_DELOAD_IN_FORCE", { endDate: deload.endDate }),
       );
     }
     return;
   }
   if (day.temporaryOverrideId) {
-    throw new ConflictException(
-      'That deload is not in force today; start a day of the plan in force',
-    );
+    throw new ConflictException(apiError("SESSION_DELOAD_NOT_IN_FORCE"));
   }
   if (active && day.trainingBlockId !== active.id) {
     throw new ConflictException(
-      `This routine follows the training block "${active.name}" until ${active.endDate}; start one of its days`,
+      apiError("SESSION_BLOCK_IN_FORCE", {
+        name: active.name,
+        endDate: active.endDate,
+      }),
     );
   }
   if (!active && day.trainingBlockId !== null) {
-    throw new ConflictException(
-      'That training block is not in force today; start a day of the routine',
-    );
+    throw new ConflictException(apiError("SESSION_BLOCK_NOT_IN_FORCE"));
   }
 }

@@ -1,9 +1,9 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes } from "node:crypto";
 import {
   ConflictException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
+} from "@nestjs/common";
 import {
   ROUTINE_SHARE_MAX_ACTIVE_LINKS,
   type CloneRoutineRequest,
@@ -13,21 +13,22 @@ import {
   type RoutineShareListResponse,
   type RoutineVisibility,
   type SharedRoutine,
-} from '@sunsteel/contracts';
-import { DatabaseService } from '../database/database.service';
-import { isHiddenFromViewer } from '../users/member-blocks';
-import { trainingPartnerPermissions } from '../users/training-partner-access';
-import { CreateRoutineDto } from './dto/create-routine.dto';
-import { readCloneSource, setupToClonedRoutine } from './routine-cloning';
-import { ROUTINE_WITH_DAYS_SELECT } from './routine.selects';
+  apiError,
+} from "@sunsteel/contracts";
+import { DatabaseService } from "../database/database.service";
+import { isHiddenFromViewer } from "../users/member-blocks";
+import { trainingPartnerPermissions } from "../users/training-partner-access";
+import { CreateRoutineDto } from "./dto/create-routine.dto";
+import { readCloneSource, setupToClonedRoutine } from "./routine-cloning";
+import { ROUTINE_WITH_DAYS_SELECT } from "./routine.selects";
 import {
   ROUTINE_SUMMARY_SELECT,
   toSharedRoutineSummary,
-} from './routine-summary';
-import { captureRoutineSetup } from './routine-versions';
-import { canViewRoutine } from './routine-visibility';
-import { RoutinesService } from './routines.service';
-import { CustomExercisesService } from '../exercises/custom-exercises.service';
+} from "./routine-summary";
+import { captureRoutineSetup } from "./routine-versions";
+import { canViewRoutine } from "./routine-visibility";
+import { RoutinesService } from "./routines.service";
+import { CustomExercisesService } from "../exercises/custom-exercises.service";
 
 // base64url of 18 random bytes is 24 characters; anything else is not a token.
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{24}$/;
@@ -43,11 +44,11 @@ const shareSelect = {
 export const sharedAtChange = (
   previous: RoutineVisibility,
   next: RoutineVisibility,
-) => previous === 'PRIVATE' && next !== 'PRIVATE';
+) => previous === "PRIVATE" && next !== "PRIVATE";
 
 /** 144 bits of randomness: the token is the only credential for a link. */
 export function createRoutineShareToken(): string {
-  return randomBytes(18).toString('base64url');
+  return randomBytes(18).toString("base64url");
 }
 
 const OWNER_SELECT = {
@@ -80,7 +81,7 @@ export class RoutineSharingService {
       where: { id: routineId, userId },
       select: { visibility: true },
     });
-    if (!current) throw new NotFoundException('Routine not found');
+    if (!current) throw new NotFoundException(apiError("ROUTINE_NOT_FOUND"));
     const routine = await this.db.routine.update({
       where: { id: routineId },
       data: {
@@ -106,7 +107,9 @@ export class RoutineSharingService {
     });
     if (active >= ROUTINE_SHARE_MAX_ACTIVE_LINKS) {
       throw new ConflictException(
-        `A routine keeps at most ${ROUTINE_SHARE_MAX_ACTIVE_LINKS} active links.`,
+        apiError("ROUTINE_SHARE_LINKS_MAX", {
+          max: ROUTINE_SHARE_MAX_ACTIVE_LINKS,
+        }),
       );
     }
     const share = await this.db.routineShare.create({
@@ -123,7 +126,7 @@ export class RoutineSharingService {
     await this.assertOwned(userId, routineId);
     const items = await this.db.routineShare.findMany({
       where: { routineId, revokedAt: null },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
       select: shareSelect,
     });
     return { items: items.map((item) => this.mapShare(item)) };
@@ -149,7 +152,8 @@ export class RoutineSharingService {
    * share does. Revoking is what withdraws it.
    */
   async readByToken(token: string): Promise<SharedRoutine> {
-    if (!TOKEN_PATTERN.test(token)) throw new NotFoundException('Link not found');
+    if (!TOKEN_PATTERN.test(token))
+      throw new NotFoundException(apiError("LINK_NOT_FOUND"));
     const share = await this.db.routineShare.findFirst({
       where: { token, revokedAt: null },
       select: {
@@ -162,19 +166,19 @@ export class RoutineSharingService {
     // the hide is in force "hidden from everyone" has to include link holders,
     // or the strongest action the product has would be trivially bypassed.
     if (!share?.routine || share.routine.moderationHiddenAt) {
-      throw new NotFoundException('Link not found');
+      throw new NotFoundException(apiError("LINK_NOT_FOUND"));
     }
 
     return {
       routineId: share.routine.id,
       setup: captureRoutineSetup(share.routine),
       owner: {
-        username: share.user.username ?? '',
+        username: share.user.username ?? "",
         name: share.user.name,
         lastName: share.user.lastName,
         avatarUrl: share.user.avatarUrl,
       },
-      source: 'LINK',
+      source: "LINK",
       updatedAt: share.routine.updatedAt.toISOString(),
     };
   }
@@ -192,7 +196,7 @@ export class RoutineSharingService {
       where: { id: ownerId },
       select: { routinesVisibility: true },
     });
-    if (!owner) throw new NotFoundException('Member not found');
+    if (!owner) throw new NotFoundException(apiError("MEMBER_NOT_FOUND"));
     // PROF-10: a blocked member's routines are not listed, nor a TRUST-04
     // hidden member's, and the refusal is the one a missing member gets.
     if (
@@ -200,7 +204,7 @@ export class RoutineSharingService {
       viewerId !== ownerId &&
       (await isHiddenFromViewer(this.db, viewerId, ownerId))
     ) {
-      throw new NotFoundException('Member not found');
+      throw new NotFoundException(apiError("MEMBER_NOT_FOUND"));
     }
 
     const isOwner = viewerId === ownerId;
@@ -209,7 +213,9 @@ export class RoutineSharingService {
       : await Promise.all([
           viewerId !== null
             ? this.db.userFollow
-                .count({ where: { followerId: viewerId, followingId: ownerId } })
+                .count({
+                  where: { followerId: viewerId, followingId: ownerId },
+                })
                 .then((count) => count > 0)
             : Promise.resolve(false),
           trainingPartnerPermissions(this.db, viewerId, ownerId),
@@ -218,7 +224,7 @@ export class RoutineSharingService {
 
     const routines = await this.db.routine.findMany({
       where: { userId: ownerId },
-      orderBy: { updatedAt: 'desc' },
+      orderBy: { updatedAt: "desc" },
       select: ROUTINE_SUMMARY_SELECT,
     });
 
@@ -237,10 +243,12 @@ export class RoutineSharingService {
   /** An identifier is a uuid or a username, as everywhere else on profiles. */
   async resolveOwnerId(identifier: string): Promise<string> {
     const owner = await this.db.user.findFirst({
-      where: { OR: [{ id: identifier }, { username: identifier.toLowerCase() }] },
+      where: {
+        OR: [{ id: identifier }, { username: identifier.toLowerCase() }],
+      },
       select: { id: true },
     });
-    if (!owner) throw new NotFoundException('Member not found');
+    if (!owner) throw new NotFoundException(apiError("MEMBER_NOT_FOUND"));
     return owner.id;
   }
 
@@ -258,12 +266,14 @@ export class RoutineSharingService {
       where: { id: routineId },
       select: {
         ...ROUTINE_WITH_DAYS_SELECT,
-        user: { select: { ...OWNER_SELECT, id: true, routinesVisibility: true } },
+        user: {
+          select: { ...OWNER_SELECT, id: true, routinesVisibility: true },
+        },
       },
     });
-    if (!routine) throw new NotFoundException('Routine not found');
+    if (!routine) throw new NotFoundException(apiError("ROUTINE_NOT_FOUND"));
     if (ownerId && routine.user.id !== ownerId) {
-      throw new NotFoundException('Routine not found');
+      throw new NotFoundException(apiError("ROUTINE_NOT_FOUND"));
     }
 
     const isOwner = viewerId === routine.user.id;
@@ -273,7 +283,7 @@ export class RoutineSharingService {
       (await isHiddenFromViewer(this.db, viewerId, routine.user.id))
     ) {
       // PROF-10: indistinguishable from a routine that does not exist.
-      throw new NotFoundException('Routine not found');
+      throw new NotFoundException(apiError("ROUTINE_NOT_FOUND"));
     }
     const [follows, partnerPermissions] = isOwner
       ? [false, null]
@@ -302,19 +312,19 @@ export class RoutineSharingService {
     ) {
       // Not "forbidden": a routine the viewer may not read must not be
       // distinguishable from one that does not exist.
-      throw new NotFoundException('Routine not found');
+      throw new NotFoundException(apiError("ROUTINE_NOT_FOUND"));
     }
 
     return {
       routineId: routine.id,
       setup: captureRoutineSetup(routine),
       owner: {
-        username: routine.user.username ?? '',
+        username: routine.user.username ?? "",
         name: routine.user.name,
         lastName: routine.user.lastName,
         avatarUrl: routine.user.avatarUrl,
       },
-      source: 'VISIBILITY',
+      source: "VISIBILITY",
       updatedAt: routine.updatedAt.toISOString(),
     };
   }
@@ -338,7 +348,7 @@ export class RoutineSharingService {
   ): Promise<Routine> {
     const source = readCloneSource(request);
     const shared =
-      source.kind === 'LINK'
+      source.kind === "LINK"
         ? await this.readByToken(source.token)
         : await this.readVisibleRoutine(userId, source.routineId);
 
@@ -346,7 +356,10 @@ export class RoutineSharingService {
     // routine sharing an exercise that has since been withdrawn is refused
     // rather than created with a day that cannot be trained. EXER-06: the
     // author's custom exercises become the cloner's own first.
-    const setup = await this.customExercises.adoptForClone(userId, shared.setup);
+    const setup = await this.customExercises.adoptForClone(
+      userId,
+      shared.setup,
+    );
 
     const clone = await this.routines.create(
       userId,
@@ -389,6 +402,6 @@ export class RoutineSharingService {
       where: { id: routineId, userId },
       select: { id: true },
     });
-    if (!routine) throw new NotFoundException('Routine not found');
+    if (!routine) throw new NotFoundException(apiError("ROUTINE_NOT_FOUND"));
   }
 }

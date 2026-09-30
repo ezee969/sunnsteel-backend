@@ -10,6 +10,7 @@ import {
   resolveRoutinePlan,
   TRAINING_BLOCK_COMPARISON_MAX_DAYS,
   type TrainingBlockComparisonResponse,
+  apiError,
 } from "@sunsteel/contracts";
 import { DatabaseService } from "../database/database.service";
 import { localClock } from "../notifications/push/local-time";
@@ -91,11 +92,9 @@ export function comparisonPeriods(
     a.startDate.localeCompare(b.startDate),
   );
   const block = sorted.find((candidate) => candidate.seriesId === seriesId);
-  if (!block) throw new NotFoundException("Training block not found");
+  if (!block) throw new NotFoundException(apiError("TRAINING_BLOCK_NOT_FOUND"));
   if (block.startDate > today) {
-    throw new BadRequestException(
-      "A training block that has not started has nothing to compare",
-    );
+    throw new BadRequestException(apiError("TRAINING_BLOCK_NOT_STARTED"));
   }
   const isRunning = block.endDate >= today;
   const currentCap = capRange({
@@ -340,7 +339,7 @@ export class WorkoutBlockComparisonService {
         user: { select: { timeZone: true } },
       },
     });
-    if (!routine) throw new NotFoundException("Routine not found");
+    if (!routine) throw new NotFoundException(apiError("ROUTINE_NOT_FOUND"));
     const timeZone = routine.user.timeZone ?? "UTC";
     const today = localClock(now, timeZone).date;
     const blocks = toPlanBlocks(routine.trainingBlocks);

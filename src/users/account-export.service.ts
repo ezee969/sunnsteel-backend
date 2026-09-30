@@ -1,24 +1,25 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from "@nestjs/common";
 import {
   ACCOUNT_EXPORT_FORMAT,
   ACCOUNT_EXPORT_VERSION,
   type AccountExportMember,
   type AccountExportV1,
   type SessionSetCorrection,
-} from '@sunsteel/contracts';
-import { DatabaseService } from '../database/database.service';
-import { SERVER_COPY, serverCopy } from '../i18n/server-copy';
-import { ROUTINE_WITH_DAYS_SELECT } from '../routines/routine.selects';
-import { toRoutineResponse } from '../routines/routine.mapper';
-import { readRoutineSetup } from '../routines/routine-versions';
-import { buildWorkoutSessionSelect } from '../workouts/workout-session.selects';
-import { toWorkoutSessionResponse } from '../workouts/workout-session.mapper';
-import { UsersService } from './users.service';
+  apiError,
+} from "@sunsteel/contracts";
+import { DatabaseService } from "../database/database.service";
+import { SERVER_COPY, serverCopy } from "../i18n/server-copy";
+import { ROUTINE_WITH_DAYS_SELECT } from "../routines/routine.selects";
+import { toRoutineResponse } from "../routines/routine.mapper";
+import { readRoutineSetup } from "../routines/routine-versions";
+import { buildWorkoutSessionSelect } from "../workouts/workout-session.selects";
+import { toWorkoutSessionResponse } from "../workouts/workout-session.mapper";
+import { UsersService } from "./users.service";
 import {
   BODY_MEASUREMENT_SELECT,
   entryValues,
   rowDate,
-} from './body-measurement-rules';
+} from "./body-measurement-rules";
 
 const MEMBER_SELECT = { username: true, name: true } as const;
 
@@ -66,9 +67,9 @@ export class AccountExportService {
         reminderMinuteOfDay: true,
       },
     });
-    if (!user) throw new NotFoundException('Account not found');
+    if (!user) throw new NotFoundException(apiError("ACCOUNT_NOT_FOUND"));
     const account = await this.users.findByEmail(user.email);
-    if (!account) throw new NotFoundException('Account not found');
+    if (!account) throw new NotFoundException(apiError("ACCOUNT_NOT_FOUND"));
 
     const [
       routines,
@@ -96,7 +97,7 @@ export class AccountExportService {
       this.db.routine.findMany({
         where: { userId },
         select: ROUTINE_WITH_DAYS_SELECT,
-        orderBy: { createdAt: 'asc' },
+        orderBy: { createdAt: "asc" },
       }),
       this.db.routineVersion.findMany({
         where: { routine: { userId } },
@@ -108,16 +109,16 @@ export class AccountExportService {
           createdAt: true,
           setup: true,
         },
-        orderBy: [{ routineId: 'asc' }, { number: 'asc' }],
+        orderBy: [{ routineId: "asc" }, { number: "asc" }],
       }),
       this.db.workoutSession.findMany({
         where: { userId },
         select: buildWorkoutSessionSelect(true),
-        orderBy: { startedAt: 'asc' },
+        orderBy: { startedAt: "asc" },
       }),
       this.db.personalRecord.findMany({
         where: { userId },
-        orderBy: { achievedAt: 'asc' },
+        orderBy: { achievedAt: "asc" },
       }),
       this.db.trainingEvent.findMany({
         where: { userId },
@@ -128,24 +129,24 @@ export class AccountExportService {
           schemaVersion: true,
           payload: true,
         },
-        orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }],
+        orderBy: [{ occurredAt: "asc" }, { id: "asc" }],
       }),
       this.db.measurableGoal.findMany({
         where: { userId },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { createdAt: "asc" },
       }),
       this.db.bodyMeasurement.findMany({
         where: { userId },
         select: BODY_MEASUREMENT_SELECT,
-        orderBy: { date: 'asc' },
+        orderBy: { date: "asc" },
       }),
       this.db.trainingLocationPreference.findMany({
         where: { userId },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { createdAt: "asc" },
       }),
       this.db.scheduleOverride.findMany({
         where: { userId },
-        orderBy: { date: 'asc' },
+        orderBy: { date: "asc" },
       }),
       this.db.starredExercise.findMany({
         where: { userId },
@@ -153,7 +154,7 @@ export class AccountExportService {
           createdAt: true,
           exercise: { select: { id: true, name: true } },
         },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { createdAt: "asc" },
       }),
       // EXER-06: the member's own exercises, archived ones included.
       this.db.exercise.findMany({
@@ -170,22 +171,22 @@ export class AccountExportService {
           archivedAt: true,
           createdAt: true,
         },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { createdAt: "asc" },
       }),
       this.db.userFollow.findMany({
         where: { followerId: userId },
         select: { createdAt: true, following: { select: MEMBER_SELECT } },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { createdAt: "asc" },
       }),
       this.db.userFollow.findMany({
         where: { followingId: userId },
         select: { createdAt: true, follower: { select: MEMBER_SELECT } },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { createdAt: "asc" },
       }),
       this.db.userBlock.findMany({
         where: { blockerId: userId },
         select: { createdAt: true, blocked: { select: MEMBER_SELECT } },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { createdAt: "asc" },
       }),
       this.db.trainingPartnership.findMany({
         where: { OR: [{ requesterId: userId }, { recipientId: userId }] },
@@ -197,7 +198,7 @@ export class AccountExportService {
           requester: { select: MEMBER_SELECT },
           recipient: { select: MEMBER_SELECT },
         },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { createdAt: "asc" },
       }),
       this.db.activityComment.findMany({
         where: { userId },
@@ -207,7 +208,7 @@ export class AccountExportService {
           createdAt: true,
           author: { select: MEMBER_SELECT },
         },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { createdAt: "asc" },
       }),
       this.db.activityEntryReaction.findMany({
         where: { userId },
@@ -217,7 +218,7 @@ export class AccountExportService {
           createdAt: true,
           author: { select: MEMBER_SELECT },
         },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { createdAt: "asc" },
       }),
       this.db.memberReport.findMany({
         where: { reporterId: userId },
@@ -228,22 +229,22 @@ export class AccountExportService {
           status: true,
           createdAt: true,
         },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { createdAt: "asc" },
       }),
       this.db.activitySharingDefault.findMany({
         where: { userId },
         select: { type: true, audience: true },
-        orderBy: { type: 'asc' },
+        orderBy: { type: "asc" },
       }),
       this.db.activityEntryOverride.findMany({
         where: { userId },
         select: { entryKey: true, audience: true },
-        orderBy: { entryKey: 'asc' },
+        orderBy: { entryKey: "asc" },
       }),
       // LIVE-17: the trail of corrections, so the file says what was changed.
       this.db.sessionCorrection.findMany({
         where: { userId },
-        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       }),
     ]);
 

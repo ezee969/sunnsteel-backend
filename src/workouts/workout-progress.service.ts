@@ -1,11 +1,11 @@
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
-import { Prisma, WorkoutAnalyticsProjection } from '@prisma/client';
-import { WorkoutProgressResponse } from '@sunsteel/contracts';
-import { DatabaseService } from '../database/database.service';
-import { WorkoutProgressQueryDto } from './dto/workout-progress.dto';
-import { routineDayName } from './workout-session.selects';
-import { dayDifference, localDate } from './analytics/analytics-contribution';
-import { readSnapshot } from './analytics/session-snapshot';
+import { Injectable, ServiceUnavailableException } from "@nestjs/common";
+import { Prisma, WorkoutAnalyticsProjection } from "@prisma/client";
+import { WorkoutProgressResponse, apiError } from "@sunsteel/contracts";
+import { DatabaseService } from "../database/database.service";
+import { WorkoutProgressQueryDto } from "./dto/workout-progress.dto";
+import { routineDayName } from "./workout-session.selects";
+import { dayDifference, localDate } from "./analytics/analytics-contribution";
+import { readSnapshot } from "./analytics/session-snapshot";
 
 @Injectable()
 export class WorkoutProgressService {
@@ -31,11 +31,11 @@ export class WorkoutProgressService {
           WHERE "userId" = ${userId} AND "active" AND "state" = 'READY' AND "timeZone" = ${query.timeZone} LIMIT 1`;
         if (!projection)
           throw new ServiceUnavailableException(
-            'Workout analytics projection is not ready',
+            apiError("ANALYTICS_NOT_READY"),
           );
         const records = await tx.personalRecord.findMany({
           where: { userId },
-          orderBy: { achievedAt: 'desc' },
+          orderBy: { achievedAt: "desc" },
           take: 5,
           select: {
             exerciseId: true,
@@ -81,7 +81,7 @@ export class WorkoutProgressService {
               sessionId: session.id,
               routineId: snapshot.sourceRoutineId,
               routineName: snapshot.routine.name,
-              dayName: routineDayName(snapshot.routineDay) ?? '',
+              dayName: routineDayName(snapshot.routineDay) ?? "",
               startedAt: session.startedAt.toISOString(),
               endedAt: session.endedAt?.toISOString() ?? null,
               durationSec: session.durationSec,

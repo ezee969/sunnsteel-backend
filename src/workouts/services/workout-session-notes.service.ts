@@ -1,18 +1,19 @@
+import { apiError } from "@sunsteel/contracts";
 import {
   ConflictException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
-import { Prisma } from '@prisma/client';
-import type { UpdateSessionNotesResponse } from '@sunsteel/contracts';
-import { DatabaseService } from '../../database/database.service';
-import { readSnapshot } from '../analytics/session-snapshot';
-import { UpdateSessionNotesDto } from '../dto/update-session-notes.dto';
+} from "@nestjs/common";
+import { Prisma } from "@prisma/client";
+import type { UpdateSessionNotesResponse } from "@sunsteel/contracts";
+import { DatabaseService } from "../../database/database.service";
+import { readSnapshot } from "../analytics/session-snapshot";
+import { UpdateSessionNotesDto } from "../dto/update-session-notes.dto";
 import {
   mergeExerciseNotes,
   normalizeSessionNote,
   readExerciseNotes,
-} from '../session-notes';
+} from "../session-notes";
 
 const json = (value: unknown) =>
   JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
@@ -41,12 +42,17 @@ export class WorkoutSessionNotesService {
           notes: true,
           exerciseNotes: true,
           snapshot: { select: { payload: true } },
-          routineDay: { select: { exercises: { select: { id: true }, orderBy: { order: 'asc' } } } },
+          routineDay: {
+            select: {
+              exercises: { select: { id: true }, orderBy: { order: "asc" } },
+            },
+          },
         },
       });
-      if (!session) throw new NotFoundException('Workout session not found');
-      if (session.status === 'ABORTED')
-        throw new ConflictException('A discarded workout cannot take notes');
+      if (!session)
+        throw new NotFoundException(apiError("WORKOUT_SESSION_NOT_FOUND"));
+      if (session.status === "ABORTED")
+        throw new ConflictException(apiError("NOTES_DISCARDED_SESSION"));
 
       const data: Prisma.WorkoutSessionUpdateInput = {};
       if (dto.notes !== undefined) data.notes = normalizeSessionNote(dto.notes);
@@ -57,7 +63,9 @@ export class WorkoutSessionNotesService {
           ? readSnapshot(session.snapshot.payload).routineDay.exercises.map(
               (exercise) => exercise.id,
             )
-          : (session.routineDay?.exercises ?? []).map((exercise) => exercise.id);
+          : (session.routineDay?.exercises ?? []).map(
+              (exercise) => exercise.id,
+            );
         data.exerciseNotes = json(
           mergeExerciseNotes(
             readExerciseNotes(session.exerciseNotes),
@@ -66,7 +74,7 @@ export class WorkoutSessionNotesService {
           ),
         );
       }
-      if (session.status === 'IN_PROGRESS') data.lastActivityAt = new Date();
+      if (session.status === "IN_PROGRESS") data.lastActivityAt = new Date();
 
       const saved = await tx.workoutSession.update({
         where: { id: sessionId },

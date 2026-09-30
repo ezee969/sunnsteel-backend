@@ -4,13 +4,14 @@ import {
   Injectable,
   Logger,
   NotFoundException,
-} from '@nestjs/common';
+} from "@nestjs/common";
 import {
   matchesDeletionConfirmation,
   type DeleteAccountResponse,
-} from '@sunsteel/contracts';
-import { SupabaseService } from '../auth/supabase.service';
-import { DatabaseService } from '../database/database.service';
+  apiError,
+} from "@sunsteel/contracts";
+import { SupabaseService } from "../auth/supabase.service";
+import { DatabaseService } from "../database/database.service";
 
 /**
  * How long the deletion transaction may stay open. It holds the account's row
@@ -61,18 +62,14 @@ export class AccountDeletionService {
         supabaseUserId: true,
       },
     });
-    if (!account) throw new NotFoundException('Account not found');
+    if (!account) throw new NotFoundException(apiError("ACCOUNT_NOT_FOUND"));
     if (!matchesDeletionConfirmation(confirmUsername, account.username)) {
-      throw new BadRequestException(
-        'Type your username exactly as it appears to confirm.',
-      );
+      throw new BadRequestException(apiError("ACCOUNT_DELETE_CONFIRMATION"));
     }
     // The moderation record is append-only and every row names its
     // moderator; deleting that member would cascade the record away.
     if (account.isModerator) {
-      throw new ConflictException(
-        'A moderator account cannot be deleted while it holds moderator access.',
-      );
+      throw new ConflictException(apiError("ACCOUNT_DELETE_MODERATOR"));
     }
 
     await this.supabase.removeStoredAvatars(account.supabaseUserId);

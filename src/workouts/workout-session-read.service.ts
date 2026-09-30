@@ -1,24 +1,25 @@
-import { readSnapshot } from './analytics/session-snapshot';
+import { readSnapshot } from "./analytics/session-snapshot";
 import {
   BadRequestException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
-import { Prisma, WorkoutSessionStatus } from '@prisma/client';
+} from "@nestjs/common";
+import { Prisma, WorkoutSessionStatus } from "@prisma/client";
 import {
   ListSessionsParams,
   PreviousPerformanceResponse,
   WorkoutSessionListResponse,
   WorkoutSessionSummary,
   WorkoutStatsResponse,
-} from '@sunsteel/contracts';
-import { DatabaseService } from '../database/database.service';
-import { WorkoutStatsQueryDto } from './dto/workout-stats.dto';
+  apiError,
+} from "@sunsteel/contracts";
+import { DatabaseService } from "../database/database.service";
+import { WorkoutStatsQueryDto } from "./dto/workout-stats.dto";
 import {
   buildWorkoutSessionSelect,
   routineDayName,
   WORKOUT_SESSION_LIST_SELECT,
-} from './workout-session.selects';
+} from "./workout-session.selects";
 
 type WorkoutSessionListRow = Prisma.WorkoutSessionGetPayload<{
   select: typeof WORKOUT_SESSION_LIST_SELECT;
@@ -41,7 +42,7 @@ export class WorkoutSessionReadService {
       duration <= 0 ||
       duration > 8 * 86400000
     ) {
-      throw new BadRequestException('Invalid week interval');
+      throw new BadRequestException("Invalid week interval");
     }
     const [total, totalCompleted, completedThisWeek] =
       await this.db.$transaction(
@@ -63,11 +64,11 @@ export class WorkoutSessionReadService {
         ],
         { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
       );
-    const dateFormatter = new Intl.DateTimeFormat('en-CA', {
+    const dateFormatter = new Intl.DateTimeFormat("en-CA", {
       timeZone: query.timeZone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
     });
     return {
       totalCompleted,
@@ -125,7 +126,7 @@ export class WorkoutSessionReadService {
         ? {
             notes: {
               contains: params.q,
-              mode: 'insensitive',
+              mode: "insensitive",
             } satisfies Prisma.StringNullableFilter,
           }
         : {}),
@@ -133,18 +134,18 @@ export class WorkoutSessionReadService {
   }
 
   private buildOrderBy(
-    sort: ListSessionsParams['sort'],
+    sort: ListSessionsParams["sort"],
   ): Prisma.WorkoutSessionOrderByWithRelationInput[] {
     switch (sort) {
-      case 'finishedAt:asc':
-        return [{ endedAt: 'asc' }, { id: 'asc' }];
-      case 'startedAt:asc':
-        return [{ startedAt: 'asc' }, { id: 'asc' }];
-      case 'startedAt:desc':
-        return [{ startedAt: 'desc' }, { id: 'desc' }];
-      case 'finishedAt:desc':
+      case "finishedAt:asc":
+        return [{ endedAt: "asc" }, { id: "asc" }];
+      case "startedAt:asc":
+        return [{ startedAt: "asc" }, { id: "asc" }];
+      case "startedAt:desc":
+        return [{ startedAt: "desc" }, { id: "desc" }];
+      case "finishedAt:desc":
       default:
-        return [{ endedAt: 'desc' }, { id: 'desc' }];
+        return [{ endedAt: "desc" }, { id: "desc" }];
     }
   }
 
@@ -190,7 +191,7 @@ export class WorkoutSessionReadService {
   async getActiveSession(userId: string) {
     return this.db.workoutSession.findFirst({
       where: { userId, status: WorkoutSessionStatus.IN_PROGRESS },
-      orderBy: { startedAt: 'desc' },
+      orderBy: { startedAt: "desc" },
       select: buildWorkoutSessionSelect(),
     });
   }
@@ -202,7 +203,7 @@ export class WorkoutSessionReadService {
     });
 
     if (!session) {
-      throw new NotFoundException('Workout session not found');
+      throw new NotFoundException(apiError("WORKOUT_SESSION_NOT_FOUND"));
     }
 
     return session;
@@ -222,7 +223,7 @@ export class WorkoutSessionReadService {
     });
 
     if (!current) {
-      throw new NotFoundException('Workout session not found');
+      throw new NotFoundException(apiError("WORKOUT_SESSION_NOT_FOUND"));
     }
 
     const routineDayId = current.sourceRoutineDayId ?? current.routineDayId;
@@ -238,16 +239,16 @@ export class WorkoutSessionReadService {
           { sourceRoutineDayId: null, routineDayId },
         ],
       },
-      orderBy: [{ endedAt: 'desc' }, { id: 'desc' }],
+      orderBy: [{ endedAt: "desc" }, { id: "desc" }],
       select: {
         id: true,
         endedAt: true,
         setLogs: {
           where: { isCompleted: true, reps: { not: null } },
           orderBy: [
-            { sourceRoutineExerciseId: 'asc' },
-            { routineExerciseId: 'asc' },
-            { setNumber: 'asc' },
+            { sourceRoutineExerciseId: "asc" },
+            { routineExerciseId: "asc" },
+            { setNumber: "asc" },
           ],
           select: {
             sourceRoutineExerciseId: true,

@@ -1,31 +1,36 @@
-import { ConflictException } from '@nestjs/common';
-import { lockTrainingAccount } from '../workouts/analytics/analytics-lock';
+import { ConflictException } from "@nestjs/common";
+import { lockTrainingAccount } from "../workouts/analytics/analytics-lock";
 import {
   BadRequestException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
-import { Prisma, ProgressionScheme } from '@prisma/client';
-import { Routine, RoutineScheduleMode, SetKind } from '@sunsteel/contracts';
-import { DatabaseService } from '../database/database.service';
-import { CreateRoutineDto } from './dto/create-routine.dto';
-import { resolveRoutineLineage } from './routine-lineage';
-import { UpdateRoutineDto } from './dto/update-routine.dto';
-import { ROUTINE_OWNER_SELECT, ROUTINE_TOGGLE_SELECT } from './routine.selects';
+} from "@nestjs/common";
+import { Prisma, ProgressionScheme } from "@prisma/client";
+import {
+  Routine,
+  RoutineScheduleMode,
+  SetKind,
+  apiError,
+} from "@sunsteel/contracts";
+import { DatabaseService } from "../database/database.service";
+import { CreateRoutineDto } from "./dto/create-routine.dto";
+import { resolveRoutineLineage } from "./routine-lineage";
+import { UpdateRoutineDto } from "./dto/update-routine.dto";
+import { ROUTINE_OWNER_SELECT, ROUTINE_TOGGLE_SELECT } from "./routine.selects";
 import {
   RoutineOwnerEntity,
   toRoutineResponse,
   toTemporaryOverridePlan,
   toTrainingBlockPlan,
-} from './routine.mapper';
+} from "./routine.mapper";
 import {
   nextRotationDayId,
   normalizeRestDays,
   normalizeRotationWeekdays,
   normalizeRoutineDays,
-} from './routine-schedule';
-import { assertUsableExercises } from '../exercises/exercise-access';
-import { assertExerciseLinks, dayExerciseLinks } from './exercise-links';
+} from "./routine-schedule";
+import { assertUsableExercises } from "../exercises/exercise-access";
+import { assertExerciseLinks, dayExerciseLinks } from "./exercise-links";
 
 const dayExerciseIds = (
   days: ReadonlyArray<{ exercises: ReadonlyArray<{ exerciseId: string }> }>,
@@ -33,7 +38,7 @@ const dayExerciseIds = (
 
 type RoutineSetInput = {
   setNumber: number;
-  repType: 'RANGE' | 'FIXED';
+  repType: "RANGE" | "FIXED";
   reps?: number | null;
   minReps?: number | null;
   maxReps?: number | null;
@@ -66,7 +71,7 @@ type RoutineDayInput = {
 function snapshotDayOrder(payload: unknown): number | null {
   const order = (payload as { routineDay?: { order?: unknown } } | null)
     ?.routineDay?.order;
-  return typeof order === 'number' ? order : null;
+  return typeof order === "number" ? order : null;
 }
 
 @Injectable()
@@ -74,44 +79,44 @@ export class RoutinesService {
   constructor(private readonly db: DatabaseService) {}
 
   private mapRoutineSetForCreate(set: RoutineSetInput) {
-    if (set.repType === 'RANGE') {
-      if (typeof set.minReps !== 'number' || typeof set.maxReps !== 'number') {
+    if (set.repType === "RANGE") {
+      if (typeof set.minReps !== "number" || typeof set.maxReps !== "number") {
         throw new BadRequestException(
-          'For RANGE repType, minReps and maxReps are required',
+          "For RANGE repType, minReps and maxReps are required",
         );
       }
       if (set.minReps > set.maxReps) {
         throw new BadRequestException(
-          'minReps must be less than or equal to maxReps',
+          "minReps must be less than or equal to maxReps",
         );
       }
-    } else if (set.repType === 'FIXED') {
-      if (typeof set.reps !== 'number') {
-        throw new BadRequestException('For FIXED repType, reps is required');
+    } else if (set.repType === "FIXED") {
+      if (typeof set.reps !== "number") {
+        throw new BadRequestException("For FIXED repType, reps is required");
       }
     }
 
-    const repTypeVal: 'RANGE' | 'FIXED' =
-      set.repType === 'RANGE' ? 'RANGE' : 'FIXED';
+    const repTypeVal: "RANGE" | "FIXED" =
+      set.repType === "RANGE" ? "RANGE" : "FIXED";
 
     return {
       setNumber: set.setNumber,
       repType: repTypeVal,
       weight: set.weight,
-      kind: set.kind ?? 'WORKING',
+      kind: set.kind ?? "WORKING",
       // LIVE-20: only a warm-up carries a share.
       warmUpShare:
-        (set.kind ?? 'WORKING') === 'WARMUP' &&
-        typeof set.warmUpShare === 'number'
+        (set.kind ?? "WORKING") === "WARMUP" &&
+        typeof set.warmUpShare === "number"
           ? set.warmUpShare
           : null,
-      ...(typeof set.rir === 'number' ? { rir: set.rir } : {}),
-      ...(repTypeVal === 'FIXED' && typeof set.reps === 'number'
+      ...(typeof set.rir === "number" ? { rir: set.rir } : {}),
+      ...(repTypeVal === "FIXED" && typeof set.reps === "number"
         ? { reps: set.reps }
         : {}),
-      ...(repTypeVal === 'RANGE' &&
-      typeof set.minReps === 'number' &&
-      typeof set.maxReps === 'number'
+      ...(repTypeVal === "RANGE" &&
+      typeof set.minReps === "number" &&
+      typeof set.maxReps === "number"
         ? { minReps: set.minReps, maxReps: set.maxReps }
         : {}),
     };
@@ -126,7 +131,7 @@ export class RoutinesService {
       order: exercise.order ?? 0,
       restSeconds: exercise.restSeconds,
       note: exercise.note,
-      progressionScheme: exercise.progressionScheme ?? 'NONE',
+      progressionScheme: exercise.progressionScheme ?? "NONE",
       minWeightIncrement: exercise.minWeightIncrement ?? 2.5,
       warmUpsFollowLoad: exercise.warmUpsFollowLoad ?? false,
       linkedToNext,
@@ -172,7 +177,7 @@ export class RoutinesService {
           author: routine.clonedFromUser
             ? {
                 id: routine.clonedFromUser.id,
-                username: routine.clonedFromUser.username ?? '',
+                username: routine.clonedFromUser.username ?? "",
                 name: routine.clonedFromUser.name,
                 lastName: routine.clonedFromUser.lastName,
                 avatarUrl: routine.clonedFromUser.avatarUrl,
@@ -205,9 +210,9 @@ export class RoutinesService {
           userId,
           routineId,
           trainingBlockSeriesId,
-          status: 'COMPLETED',
+          status: "COMPLETED",
         },
-        orderBy: [{ endedAt: 'desc' }, { id: 'desc' }],
+        orderBy: [{ endedAt: "desc" }, { id: "desc" }],
         select: {
           routineDayId: true,
           snapshot: { select: { payload: true } },
@@ -229,7 +234,7 @@ export class RoutinesService {
         const trainingBlocks = await Promise.all(
           routine.trainingBlocks.map(async (block) => {
             const plan = toTrainingBlockPlan(block);
-            return plan.scheduleMode === 'ROTATION'
+            return plan.scheduleMode === "ROTATION"
               ? {
                   ...plan,
                   nextRotationDayId: await nextDayAfterLast(
@@ -242,12 +247,14 @@ export class RoutinesService {
           }),
         );
         const next =
-          routine.scheduleMode === 'ROTATION'
+          routine.scheduleMode === "ROTATION"
             ? await nextDayAfterLast(routine.id, null, routine.days)
             : null;
         // ROUT-16: a deload continues the rotation of the plan it lightened.
-        const orderOf = (days: { id: string; order: number }[], id: string | null) =>
-          days.find((day) => day.id === id)?.order ?? null;
+        const orderOf = (
+          days: { id: string; order: number }[],
+          id: string | null,
+        ) => days.find((day) => day.id === id)?.order ?? null;
         const temporaryOverrides = routine.temporaryOverrides.map((row) => {
           const block = row.sourceTrainingBlockSeriesId
             ? trainingBlocks.find(
@@ -280,7 +287,7 @@ export class RoutinesService {
   }
 
   async create(userId: string, dto: CreateRoutineDto): Promise<Routine> {
-    const scheduleMode: RoutineScheduleMode = dto.scheduleMode ?? 'WEEKLY';
+    const scheduleMode: RoutineScheduleMode = dto.scheduleMode ?? "WEEKLY";
     const days = normalizeRoutineDays(scheduleMode, dto.days);
     // EXER-06: the catalog and the owner's own exercises only.
     await assertUsableExercises(this.db, userId, dayExerciseIds(days));
@@ -318,17 +325,17 @@ export class RoutinesService {
     filter?: { isFavorite?: boolean; isCompleted?: boolean },
   ): Promise<Routine[]> {
     const where: Prisma.RoutineWhereInput = { userId };
-    if (typeof filter?.isFavorite === 'boolean') {
+    if (typeof filter?.isFavorite === "boolean") {
       where.isFavorite = filter.isFavorite;
     }
-    if (typeof filter?.isCompleted === 'boolean') {
+    if (typeof filter?.isCompleted === "boolean") {
       where.isCompleted = filter.isCompleted;
     }
 
     const routines = await this.db.routine.findMany({
       where,
       select: ROUTINE_OWNER_SELECT,
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
     });
 
     return this.toResponses(userId, routines);
@@ -341,7 +348,7 @@ export class RoutinesService {
     });
 
     if (!routine) {
-      throw new NotFoundException('Routine not found');
+      throw new NotFoundException(apiError("ROUTINE_NOT_FOUND"));
     }
 
     return this.toResponse(userId, routine);
@@ -378,15 +385,13 @@ export class RoutinesService {
     });
 
     if (!existing) {
-      throw new NotFoundException(
-        'Routine not found or you do not have permission to edit it.',
-      );
+      throw new NotFoundException(apiError("ROUTINE_NOT_EDITABLE"));
     }
 
     const scheduleMode = dto.scheduleMode ?? existing.scheduleMode;
     if (scheduleMode !== existing.scheduleMode && !dto.days) {
       throw new BadRequestException(
-        'Changing the schedule mode requires the routine days',
+        "Changing the schedule mode requires the routine days",
       );
     }
     const days = dto.days
@@ -415,7 +420,11 @@ export class RoutinesService {
     if (dto.days) {
       // ROUT-15: the baseline only; a block's working copy is not the routine's.
       await tx.routineDay.deleteMany({
-        where: { routineId: id, trainingBlockId: null, temporaryOverrideId: null },
+        where: {
+          routineId: id,
+          trainingBlockId: null,
+          temporaryOverrideId: null,
+        },
       });
     }
 
@@ -460,7 +469,7 @@ export class RoutinesService {
         where: { id: routineId, userId },
       });
       if (!routine) {
-        throw new NotFoundException('Routine not found');
+        throw new NotFoundException(apiError("ROUTINE_NOT_FOUND"));
       }
 
       // Verify routineExercise belongs to routine
@@ -472,7 +481,7 @@ export class RoutinesService {
       });
 
       if (!re) {
-        throw new NotFoundException('Exercise not found in this routine');
+        throw new NotFoundException(apiError("ROUTINE_EXERCISE_NOT_FOUND"));
       }
 
       return tx.routineExercise.update({
@@ -489,9 +498,7 @@ export class RoutinesService {
       select: { id: true },
     });
     if (!routine) {
-      throw new NotFoundException(
-        'Routine not found or you do not have permission to modify it.',
-      );
+      throw new NotFoundException(apiError("ROUTINE_NOT_MODIFIABLE"));
     }
 
     return this.db.routine.update({
@@ -508,9 +515,7 @@ export class RoutinesService {
       select: { id: true },
     });
     if (!routine) {
-      throw new NotFoundException(
-        'Routine not found or you do not have permission to modify it.',
-      );
+      throw new NotFoundException(apiError("ROUTINE_NOT_MODIFIABLE"));
     }
 
     return this.db.routine.update({
@@ -524,7 +529,7 @@ export class RoutinesService {
     const routines = await this.db.routine.findMany({
       where: { userId, isCompleted: true },
       select: ROUTINE_OWNER_SELECT,
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
     });
     return this.toResponses(userId, routines);
   }
@@ -533,7 +538,7 @@ export class RoutinesService {
     const routines = await this.db.routine.findMany({
       where: { userId, isFavorite: true },
       select: ROUTINE_OWNER_SELECT,
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
     });
     return this.toResponses(userId, routines);
   }
@@ -543,7 +548,7 @@ export class RoutinesService {
       await lockTrainingAccount(tx, userId);
       await this.assertHistorySafe(tx, userId, id, true);
       const routine = await tx.routine.findFirst({ where: { id, userId } });
-      if (!routine) throw new NotFoundException('Routine not found');
+      if (!routine) throw new NotFoundException(apiError("ROUTINE_NOT_FOUND"));
       return tx.routine.delete({ where: { id } });
     });
   }
@@ -557,13 +562,11 @@ export class RoutinesService {
     if (
       structural &&
       (await tx.workoutSession.findFirst({
-        where: { userId, routineId, status: 'IN_PROGRESS' },
+        where: { userId, routineId, status: "IN_PROGRESS" },
         select: { id: true },
       }))
     ) {
-      throw new ConflictException(
-        'Finish the active session before changing the routine structure',
-      );
+      throw new ConflictException(apiError("ROUTINE_ACTIVE_SESSION"));
     }
     if (
       await tx.workoutSession.findFirst({
@@ -571,9 +574,7 @@ export class RoutinesService {
         select: { id: true },
       })
     ) {
-      throw new ConflictException(
-        'Historical snapshots are still being prepared; retry after analytics setup',
-      );
+      throw new ConflictException(apiError("ANALYTICS_SNAPSHOTS_PREPARING"));
     }
     if (
       structural &&
@@ -590,10 +591,10 @@ export class RoutinesService {
         UNION ALL SELECT confdeltype::text FROM pg_constraint WHERE conrelid = '"SetLog"'::regclass AND conname = 'SetLog_routineExerciseId_fkey'`;
       if (
         constraints.length !== 3 ||
-        constraints.some((c) => c.confdeltype !== 'n')
+        constraints.some((c) => c.confdeltype !== "n")
       ) {
         throw new ConflictException(
-          'History-preserving routine changes require the analytics FK cutover',
+          "History-preserving routine changes require the analytics FK cutover",
         );
       }
     }

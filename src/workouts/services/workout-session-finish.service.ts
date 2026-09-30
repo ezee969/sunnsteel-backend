@@ -1,32 +1,33 @@
-import { progressionRuns } from '../session-training-block';
+import { apiError } from "@sunsteel/contracts";
+import { progressionRuns } from "../session-training-block";
 import {
   BadRequestException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
-import type { ProgressionChange } from '@sunsteel/contracts';
-import { DatabaseService } from '../../database/database.service';
-import { lockTrainingAccount } from '../analytics/analytics-lock';
+} from "@nestjs/common";
+import type { ProgressionChange } from "@sunsteel/contracts";
+import { DatabaseService } from "../../database/database.service";
+import { lockTrainingAccount } from "../analytics/analytics-lock";
 import {
   applyContribution,
   summarizeSession,
-} from '../analytics/analytics-writer';
+} from "../analytics/analytics-writer";
 import {
   readProgressionEvents,
   writeProgressionEvents,
-} from '../analytics/progression-events';
-import { ensureSessionSnapshot } from '../analytics/session-snapshot';
-import { FinishWorkoutDto } from '../dto/finish-workout.dto';
+} from "../analytics/progression-events";
+import { ensureSessionSnapshot } from "../analytics/session-snapshot";
+import { FinishWorkoutDto } from "../dto/finish-workout.dto";
 import {
   buildProgressionOutcome,
   type ProgressionLog,
-} from '../progression-changes';
+} from "../progression-changes";
 import {
   excludeSubstitutedSlots,
   readSubstitutions,
-} from '../session-substitutions';
-import { buildWorkoutSessionSelect } from '../workout-session.selects';
-import { syncFollowingWarmUps } from '../../routines/warm-up-follow';
+} from "../session-substitutions";
+import { buildWorkoutSessionSelect } from "../workout-session.selects";
+import { syncFollowingWarmUps } from "../../routines/warm-up-follow";
 
 @Injectable()
 export class WorkoutSessionFinishService {
@@ -39,22 +40,21 @@ export class WorkoutSessionFinishService {
         const session = await tx.workoutSession.findFirst({
           where: { id, userId },
         });
-        if (!session) throw new NotFoundException('Workout session not found');
-        const status = dto.status === 'ABORTED' ? 'ABORTED' : 'COMPLETED';
+        if (!session)
+          throw new NotFoundException(apiError("WORKOUT_SESSION_NOT_FOUND"));
+        const status = dto.status === "ABORTED" ? "ABORTED" : "COMPLETED";
 
-        if (session.status !== 'IN_PROGRESS') {
+        if (session.status !== "IN_PROGRESS") {
           if (session.status !== status)
-            throw new BadRequestException(
-              'Session already finished with a different status',
-            );
+            throw new BadRequestException(apiError("SESSION_ALREADY_FINISHED"));
           const progressionChanges =
-            status === 'COMPLETED'
+            status === "COMPLETED"
               ? await readProgressionEvents(
                   tx,
                   id,
                   (
-                    (await ensureSessionSnapshot(tx, id)).routineDay.exercises ??
-                    []
+                    (await ensureSessionSnapshot(tx, id)).routineDay
+                      .exercises ?? []
                   ).map((exercise) => exercise.id),
                 )
               : [];
@@ -69,7 +69,7 @@ export class WorkoutSessionFinishService {
 
         const now = new Date();
         const claimed = await tx.workoutSession.updateMany({
-          where: { id, userId, status: 'IN_PROGRESS' },
+          where: { id, userId, status: "IN_PROGRESS" },
           data: {
             status,
             endedAt: now,
@@ -81,11 +81,11 @@ export class WorkoutSessionFinishService {
           },
         });
         if (claimed.count !== 1)
-          throw new BadRequestException('Session transition was not claimed');
+          throw new BadRequestException("Session transition was not claimed");
 
         const snapshot = await ensureSessionSnapshot(tx, id);
         let progressionChanges: ProgressionChange[] = [];
-        if (status === 'COMPLETED') {
+        if (status === "COMPLETED") {
           const logs = await tx.setLog.findMany({ where: { sessionId: id } });
           const progressionLogs: ProgressionLog[] = logs.flatMap((log) => {
             const routineExerciseId =
@@ -96,7 +96,7 @@ export class WorkoutSessionFinishService {
                 routineExerciseId,
                 setNumber: log.setNumber,
                 reps: log.reps ?? null,
-                weight: typeof log.weight === 'number' ? log.weight : null,
+                weight: typeof log.weight === "number" ? log.weight : null,
                 isCompleted: log.isCompleted,
                 kind: log.kind,
               },
@@ -135,17 +135,11 @@ export class WorkoutSessionFinishService {
             userId,
             outcome.updates.map((update) => update.routineExerciseId),
           );
-          await writeProgressionEvents(
-            tx,
-            userId,
-            id,
-            now,
-            progressionChanges,
-          );
+          await writeProgressionEvents(tx, userId, id, now, progressionChanges);
 
           const summary = await summarizeSession(tx, id);
           const active = await tx.workoutAnalyticsProjection.findFirst({
-            where: { userId, active: true, state: 'READY' },
+            where: { userId, active: true, state: "READY" },
           });
           if (active) await applyContribution(tx, active, summary);
           // BUILDING generations consume this finish through their ordered tail.

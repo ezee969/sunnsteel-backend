@@ -15,6 +15,7 @@ import {
   type RoutineTrainingBlockRevisionsResponse,
   type RoutineTrainingBlocksResponse,
   type UpsertRoutineTrainingBlockRequest,
+  apiError,
 } from "@sunsteel/contracts";
 import { DatabaseService } from "../database/database.service";
 import { localClock } from "../notifications/push/local-time";
@@ -95,11 +96,6 @@ function toCurrent(row: BlockEntity, today: string): RoutineTrainingBlock {
   };
 }
 
-const BLOCKS_FULL_MESSAGE =
-  `A routine keeps at most ${ROUTINE_TRAINING_BLOCKS_MAX} training blocks; ` +
-  "delete a future block first";
-const REVISIONS_FULL_MESSAGE = `A training block keeps at most ${ROUTINE_TRAINING_BLOCK_REVISIONS_MAX} revisions`;
-
 /**
  * ROUT-09: authored date ranges whose setup is copied at write time. ROUT-15
  * executes them: `resolveRoutinePlan` decides which one a date trains, and a
@@ -144,7 +140,9 @@ export class RoutineTrainingBlocksService {
         select: { startDate: true, endDate: true },
       });
       if (current.length >= ROUTINE_TRAINING_BLOCKS_MAX) {
-        throw new ConflictException(BLOCKS_FULL_MESSAGE);
+        throw new ConflictException(
+          apiError("TRAINING_BLOCKS_MAX", { max: ROUTINE_TRAINING_BLOCKS_MAX }),
+        );
       }
       assertNoTrainingBlockOverlap(
         normalized.startDate,
@@ -198,24 +196,25 @@ export class RoutineTrainingBlocksService {
         where: { id: blockId, routineId, supersededAt: null },
         select: BLOCK_SELECT,
       });
-      if (!block) throw new NotFoundException("Training block not found");
+      if (!block)
+        throw new NotFoundException(apiError("TRAINING_BLOCK_NOT_FOUND"));
 
       const state = trainingBlockState(block.startDate, block.endDate, today);
       if (state === "COMPLETE") {
-        throw new ConflictException("A completed training block cannot change");
+        throw new ConflictException(apiError("TRAINING_BLOCK_COMPLETED"));
       }
       if (block.revision >= ROUTINE_TRAINING_BLOCK_REVISIONS_MAX) {
-        throw new ConflictException(REVISIONS_FULL_MESSAGE);
+        throw new ConflictException(
+          apiError("TRAINING_BLOCK_REVISIONS_MAX", {
+            max: ROUTINE_TRAINING_BLOCK_REVISIONS_MAX,
+          }),
+        );
       }
       if (state === "ACTIVE" && normalized.startDate !== block.startDate) {
-        throw new BadRequestException(
-          "The start date of an active training block cannot change",
-        );
+        throw new BadRequestException(apiError("TRAINING_BLOCK_START_LOCKED"));
       }
       if (state === "ACTIVE" && normalized.endDate < today) {
-        throw new BadRequestException(
-          "An active training block cannot end before today",
-        );
+        throw new BadRequestException(apiError("TRAINING_BLOCK_END_IN_PAST"));
       }
 
       // ROUT-15: a live session of this block trains the current revision's
@@ -231,9 +230,7 @@ export class RoutineTrainingBlocksService {
           select: { id: true },
         })
       ) {
-        throw new ConflictException(
-          "Finish the active session of this training block before revising it",
-        );
+        throw new ConflictException(apiError("TRAINING_BLOCK_ACTIVE_SESSION"));
       }
 
       const others = await tx.routineTrainingBlock.findMany({
@@ -296,7 +293,8 @@ export class RoutineTrainingBlocksService {
       where: { id: blockId, routineId },
       select: { seriesId: true },
     });
-    if (!block) throw new NotFoundException("Training block not found");
+    if (!block)
+      throw new NotFoundException(apiError("TRAINING_BLOCK_NOT_FOUND"));
     const rows = await this.db.routineTrainingBlock.findMany({
       where: { routineId, seriesId: block.seriesId },
       select: BLOCK_SELECT,
@@ -319,13 +317,12 @@ export class RoutineTrainingBlocksService {
         where: { id: blockId, routineId, supersededAt: null },
         select: { seriesId: true, startDate: true, endDate: true },
       });
-      if (!block) throw new NotFoundException("Training block not found");
+      if (!block)
+        throw new NotFoundException(apiError("TRAINING_BLOCK_NOT_FOUND"));
       if (
         trainingBlockState(block.startDate, block.endDate, today) !== "FUTURE"
       ) {
-        throw new ConflictException(
-          "Only a future training block can be deleted",
-        );
+        throw new ConflictException(apiError("TRAINING_BLOCK_NOT_FUTURE"));
       }
       // ROUT-16: a planned deload lightens this block; it goes first.
       if (
@@ -335,9 +332,7 @@ export class RoutineTrainingBlocksService {
             deload.endDate >= deload.startDate,
         )
       ) {
-        throw new ConflictException(
-          "A deload lightens this training block; cancel it first",
-        );
+        throw new ConflictException(apiError("DELOAD_LIGHTENS_BLOCK"));
       }
       await tx.routineTrainingBlock.deleteMany({
         where: { routineId, seriesId: block.seriesId },
@@ -384,12 +379,16 @@ export class RoutineTrainingBlocksService {
       where: { id: versionId, routineId: routine.id },
       select: { id: true, number: true, name: true, setup: true },
     });
-    if (!version) throw new NotFoundException("Routine version not found");
+    if (!version)
+      throw new NotFoundException(apiError("ROUTINE_VERSION_NOT_FOUND"));
     const setup = readRoutineSetup(version.setup);
     // EXER-06: a custom exercise named by the version may have been deleted.
-    if ((await unusableExerciseIds(tx, routine.userId, setupExerciseIds(setup))).length) {
+    if (
+      (await unusableExerciseIds(tx, routine.userId, setupExerciseIds(setup)))
+        .length
+    ) {
       throw new ConflictException(
-        "An exercise in this version is no longer available",
+        apiError("TRAINING_BLOCK_VERSION_EXERCISE_GONE"),
       );
     }
     return {
@@ -410,7 +409,7 @@ export class RoutineTrainingBlocksService {
       where: { id: routineId, userId },
       select: ROUTINE_FOR_BLOCK_SELECT,
     });
-    if (!routine) throw new NotFoundException("Routine not found");
+    if (!routine) throw new NotFoundException(apiError("ROUTINE_NOT_FOUND"));
     return routine;
   }
 }

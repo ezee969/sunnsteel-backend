@@ -2,16 +2,17 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+} from "@nestjs/common";
+import { Prisma } from "@prisma/client";
 import {
   STARRED_EXERCISES_MAX,
   StarredExercisesResponse,
-} from '@sunsteel/contracts';
-import { DatabaseService } from '../database/database.service';
-import { usableExerciseWhere } from './exercise-access';
+  apiError,
+} from "@sunsteel/contracts";
+import { DatabaseService } from "../database/database.service";
+import { usableExerciseWhere } from "./exercise-access";
 
-type StarReader = Pick<Prisma.TransactionClient, 'starredExercise'>;
+type StarReader = Pick<Prisma.TransactionClient, "starredExercise">;
 
 const starSelect = { exerciseId: true, createdAt: true } as const;
 
@@ -22,7 +23,7 @@ async function readStars(
   const rows = await db.starredExercise.findMany({
     where: { userId },
     select: starSelect,
-    orderBy: [{ createdAt: 'desc' }, { exerciseId: 'asc' }],
+    orderBy: [{ createdAt: "desc" }, { exerciseId: "asc" }],
     take: STARRED_EXERCISES_MAX,
   });
   return {
@@ -53,7 +54,8 @@ export class ExerciseStarsService {
         where: { id: exerciseId, ...usableExerciseWhere(userId) },
         select: { id: true },
       });
-      if (!exercise) throw new NotFoundException('Exercise not found');
+      if (!exercise)
+        throw new NotFoundException(apiError("EXERCISE_NOT_FOUND"));
 
       const existing = await tx.starredExercise.findUnique({
         where: { userId_exerciseId: { userId, exerciseId } },
@@ -63,7 +65,7 @@ export class ExerciseStarsService {
         const count = await tx.starredExercise.count({ where: { userId } });
         if (count >= STARRED_EXERCISES_MAX) {
           throw new ConflictException(
-            `You can star at most ${STARRED_EXERCISES_MAX} exercises`,
+            apiError("EXERCISE_STARS_MAX", { max: STARRED_EXERCISES_MAX }),
           );
         }
         try {
@@ -73,7 +75,7 @@ export class ExerciseStarsService {
           if (
             !(
               error instanceof Prisma.PrismaClientKnownRequestError &&
-              error.code === 'P2002'
+              error.code === "P2002"
             )
           ) {
             throw error;

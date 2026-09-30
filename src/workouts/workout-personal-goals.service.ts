@@ -1,3 +1,4 @@
+import { apiError } from "@sunsteel/contracts";
 import { Injectable, ServiceUnavailableException } from "@nestjs/common";
 import { Prisma, WorkoutAnalyticsProjection } from "@prisma/client";
 import type {
@@ -91,7 +92,7 @@ export class WorkoutPersonalGoalsService {
         ]);
         if (!projection) {
           throw new ServiceUnavailableException(
-            "Workout analytics projection is not ready",
+            apiError("ANALYTICS_NOT_READY"),
           );
         }
 

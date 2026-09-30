@@ -4,11 +4,11 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
+} from "@nestjs/common";
 // Services
-import { DatabaseService } from '../database/database.service';
-import { hiddenFromViewer, isHiddenFromViewer } from './member-blocks';
-import { trainingPartnerPermissions } from './training-partner-access';
+import { DatabaseService } from "../database/database.service";
+import { hiddenFromViewer, isHiddenFromViewer } from "./member-blocks";
+import { trainingPartnerPermissions } from "./training-partner-access";
 import {
   bodyMeasurementProblems,
   isBodyMeasurementDate,
@@ -17,10 +17,11 @@ import {
   isDefaultDashboardLayout,
   normalizeDashboardLayout,
   type UpdateDashboardLayoutRequest,
-} from '@sunsteel/contracts';
-import { localDate } from '../notifications/push/local-time';
-import { isAllowedEntryDate, isSameWeight } from './body-measurement-rules';
-import { recordProfileWeight } from './body-weight-sync';
+  apiError,
+} from "@sunsteel/contracts";
+import { localDate } from "../notifications/push/local-time";
+import { isAllowedEntryDate, isSameWeight } from "./body-measurement-rules";
+import { recordProfileWeight } from "./body-weight-sync";
 import {
   PREFERRED_TRAINING_STYLE_VALUES,
   ProfileDiscoverySettings,
@@ -39,15 +40,15 @@ import {
   UpdateProfileRequest,
   UserProfile,
   UserSearchResponse,
-} from '@sunsteel/contracts';
-import { Prisma } from '@prisma/client';
-import { getUsernameValidationError, normalizeUsername } from './username';
+} from "@sunsteel/contracts";
+import { Prisma } from "@prisma/client";
+import { getUsernameValidationError, normalizeUsername } from "./username";
 import {
   mapProfilePrivacy,
   resolveProfileViewerAccess,
-} from './profile-privacy';
-import { FeaturedProfileItemsService } from './featured-profile-items.service';
-import { AchievementsService } from '../achievements/achievements.service';
+} from "./profile-privacy";
+import { FeaturedProfileItemsService } from "./featured-profile-items.service";
+import { AchievementsService } from "../achievements/achievements.service";
 
 const userProfileSelect = {
   timeZone: true,
@@ -93,7 +94,7 @@ const userProfileSelect = {
     },
   },
   favoriteExercises: {
-    orderBy: { position: 'asc' as const },
+    orderBy: { position: "asc" as const },
     select: {
       exercise: {
         select: { id: true, name: true },
@@ -208,41 +209,41 @@ export class UsersService {
     const bio = this.normalizeProfileText(
       data.bio,
       PROFILE_BIO_MAX_LENGTH,
-      'Biography',
+      "Biography",
     );
     const location = this.normalizeProfileText(
       data.location,
       PROFILE_LOCATION_MAX_LENGTH,
-      'Location',
+      "Location",
     );
     const trainingGoals = this.validateSelection(
       data.trainingGoals,
       TRAINING_GOAL_VALUES,
       PROFILE_TRAINING_GOALS_MAX,
-      'Training goals',
+      "Training goals",
     );
     const trainingExperienceLevel = this.validateOptionalChoice(
       data.trainingExperienceLevel,
       TRAINING_EXPERIENCE_LEVEL_VALUES,
-      'Training experience level',
+      "Training experience level",
     );
     const trainingDisciplines = this.validateSelection(
       data.trainingDisciplines,
       TRAINING_DISCIPLINE_VALUES,
       PROFILE_TRAINING_DISCIPLINES_MAX,
-      'Training disciplines',
+      "Training disciplines",
     );
     const preferredTrainingStyle = this.validateOptionalChoice(
       data.preferredTrainingStyle,
       PREFERRED_TRAINING_STYLE_VALUES,
-      'Preferred training style',
+      "Preferred training style",
     );
     const favoriteExerciseIds = await this.validateFavoriteExerciseIds(
       data.favoriteExerciseIds,
     );
     // PROG-12: a changed weight is also recorded as that date's measurement.
     const before =
-      typeof data.weight === 'number'
+      typeof data.weight === "number"
         ? await this.db.user.findUnique({
             where: { email },
             select: { id: true, weight: true, timeZone: true },
@@ -283,7 +284,7 @@ export class UsersService {
       });
       if (
         before &&
-        typeof data.weight === 'number' &&
+        typeof data.weight === "number" &&
         !isSameWeight(before.weight, data.weight) &&
         bodyMeasurementProblems({ weightKg: data.weight }).length === 0
       ) {
@@ -298,7 +299,7 @@ export class UsersService {
       return this.mapUserProfile(user);
     } catch (error) {
       if (this.isUniqueUsernameViolation(error)) {
-        throw new ConflictException('Username is already taken');
+        throw new ConflictException(apiError("USERNAME_TAKEN"));
       }
       throw error;
     }
@@ -309,7 +310,7 @@ export class UsersService {
     requested: string | undefined,
     timeZone: string | null,
   ): string {
-    const today = localDate(new Date(), timeZone ?? 'UTC');
+    const today = localDate(new Date(), timeZone ?? "UTC");
     return requested &&
       isBodyMeasurementDate(requested) &&
       isAllowedEntryDate(requested, today)
@@ -324,7 +325,7 @@ export class UsersService {
    */
   async updateDashboardLayout(
     email: string,
-    sections: UpdateDashboardLayoutRequest['sections'],
+    sections: UpdateDashboardLayoutRequest["sections"],
   ): Promise<UserProfile> {
     const layout = normalizeDashboardLayout(sections);
     const user = await this.db.user.update({
@@ -404,24 +405,24 @@ export class UsersService {
     excludeUserId: string,
     limit: number = 10,
   ): Promise<UserSearchResponse[]> {
-    if (!query || query.trim() === '') return [];
+    if (!query || query.trim() === "") return [];
 
     const trimmedQuery = query.trim();
     const usernameQuery = normalizeUsername(trimmedQuery);
-    if (trimmedQuery.startsWith('@') && !usernameQuery) return [];
-    const searches: Prisma.UserWhereInput[] = trimmedQuery.startsWith('@')
+    if (trimmedQuery.startsWith("@") && !usernameQuery) return [];
+    const searches: Prisma.UserWhereInput[] = trimmedQuery.startsWith("@")
       ? [
           {
             discoverableByUsername: true,
-            username: { contains: usernameQuery, mode: 'insensitive' },
+            username: { contains: usernameQuery, mode: "insensitive" },
           },
         ]
       : [
           {
             discoverableByName: true,
             OR: [
-              { name: { contains: trimmedQuery, mode: 'insensitive' } },
-              { lastName: { contains: trimmedQuery, mode: 'insensitive' } },
+              { name: { contains: trimmedQuery, mode: "insensitive" } },
+              { lastName: { contains: trimmedQuery, mode: "insensitive" } },
             ],
           },
           ...(usernameQuery
@@ -430,7 +431,7 @@ export class UsersService {
                   discoverableByUsername: true,
                   username: {
                     contains: usernameQuery,
-                    mode: 'insensitive' as const,
+                    mode: "insensitive" as const,
                   },
                 },
               ]
@@ -452,7 +453,7 @@ export class UsersService {
         avatarUrl: true,
       },
       take: limit,
-      orderBy: [{ username: 'asc' }, { name: 'asc' }],
+      orderBy: [{ username: "asc" }, { name: "asc" }],
     });
   }
 
@@ -495,7 +496,7 @@ export class UsersService {
     });
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException(apiError("USER_NOT_FOUND"));
     }
 
     const isOwner = viewerUserId === user.id;
@@ -504,7 +505,7 @@ export class UsersService {
     // the unguarded route, which has no viewer to compare against. The owner
     // keeps their own profile intact; the hide removes it from others.
     if (user.moderationHiddenAt && !isOwner) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException(apiError("USER_NOT_FOUND"));
     }
     // PROF-10: a blocked profile answers 404 in both directions, exactly as a
     // denied routine does under ROUT-04. A 403 would confirm the account
@@ -513,7 +514,7 @@ export class UsersService {
       viewerUserId && !isOwner
         ? await isHiddenFromViewer(this.db, viewerUserId, user.id)
         : false;
-    if (blocked) throw new NotFoundException('User not found');
+    if (blocked) throw new NotFoundException(apiError("USER_NOT_FOUND"));
     const partnerPermissions = await trainingPartnerPermissions(
       this.db,
       viewerUserId,
@@ -525,17 +526,18 @@ export class UsersService {
             where: { blockerId: viewerUserId, blockedId: user.id },
           })) > 0
         : false;
-    const followRelation = !viewerUserId || isOwner
-      ? null
-      : await this.db.userFollow.findUnique({
-          where: {
-            followerId_followingId: {
-              followerId: viewerUserId,
-              followingId: user.id,
+    const followRelation =
+      !viewerUserId || isOwner
+        ? null
+        : await this.db.userFollow.findUnique({
+            where: {
+              followerId_followingId: {
+                followerId: viewerUserId,
+                followingId: user.id,
+              },
             },
-          },
-          select: { followerId: true },
-        });
+            select: { followerId: true },
+          });
     const isFollower = !!followRelation;
     const privacySettings: ProfilePrivacySettings = mapProfilePrivacy(user);
     const viewerAccess = resolveProfileViewerAccess(privacySettings, {
@@ -555,74 +557,74 @@ export class UsersService {
       featuredItems,
       achievements,
     ] = await Promise.all([
-        viewerAccess.workoutHistory
-          ? this.db.workoutAnalyticsProjection.findFirst({
-              where: { userId: user.id, active: true, state: 'READY' },
-              select: {
-                completedSessions: true,
-                totalVolumeKg: true,
-                currentRun: true,
-                bestRun: true,
-              },
-            })
-          : null,
-        viewerAccess.records
-          ? this.db.personalRecord.findMany({
-              where: { userId: user.id },
-              orderBy: [{ achievedAt: 'desc' }, { id: 'desc' }],
-              select: {
-                exerciseId: true,
-                exerciseName: true,
-                weight: true,
-                reps: true,
-                estimated1rm: true,
-                achievedAt: true,
-              },
-            })
-          : [],
-        viewerAccess.bodyMetrics
-          ? this.db.user.findUnique({
-              where: { id: user.id },
-              select: { age: true, sex: true, weight: true, height: true },
-            })
-          : null,
-        viewerAccess.biography
-          ? this.db.user.findUnique({
-              where: { id: user.id },
-              select: { bio: true },
-            })
-          : null,
-        viewerAccess.location
-          ? this.db.user.findUnique({
-              where: { id: user.id },
-              select: { location: true },
-            })
-          : null,
-        viewerAccess.trainingIdentity
-          ? this.db.user.findUnique({
-              where: { id: user.id },
-              select: {
-                trainingGoals: true,
-                trainingExperienceLevel: true,
-                trainingDisciplines: true,
-                preferredTrainingStyle: true,
-                favoriteExercises: {
-                  orderBy: [{ position: 'asc' }, { exerciseId: 'asc' }],
-                  select: {
-                    exercise: { select: { id: true, name: true } },
-                  },
+      viewerAccess.workoutHistory
+        ? this.db.workoutAnalyticsProjection.findFirst({
+            where: { userId: user.id, active: true, state: "READY" },
+            select: {
+              completedSessions: true,
+              totalVolumeKg: true,
+              currentRun: true,
+              bestRun: true,
+            },
+          })
+        : null,
+      viewerAccess.records
+        ? this.db.personalRecord.findMany({
+            where: { userId: user.id },
+            orderBy: [{ achievedAt: "desc" }, { id: "desc" }],
+            select: {
+              exerciseId: true,
+              exerciseName: true,
+              weight: true,
+              reps: true,
+              estimated1rm: true,
+              achievedAt: true,
+            },
+          })
+        : [],
+      viewerAccess.bodyMetrics
+        ? this.db.user.findUnique({
+            where: { id: user.id },
+            select: { age: true, sex: true, weight: true, height: true },
+          })
+        : null,
+      viewerAccess.biography
+        ? this.db.user.findUnique({
+            where: { id: user.id },
+            select: { bio: true },
+          })
+        : null,
+      viewerAccess.location
+        ? this.db.user.findUnique({
+            where: { id: user.id },
+            select: { location: true },
+          })
+        : null,
+      viewerAccess.trainingIdentity
+        ? this.db.user.findUnique({
+            where: { id: user.id },
+            select: {
+              trainingGoals: true,
+              trainingExperienceLevel: true,
+              trainingDisciplines: true,
+              preferredTrainingStyle: true,
+              favoriteExercises: {
+                orderBy: [{ position: "asc" }, { exerciseId: "asc" }],
+                select: {
+                  exercise: { select: { id: true, name: true } },
                 },
               },
-            })
-          : null,
-        this.featuredProfileItems?.resolveForProfile(user.id, viewerAccess, {
-          isOwner,
-          isFollower: isFollower || partnerPermissions.routines,
-        }) ?? [],
-        viewerAccess.achievements && this.achievementsService
-          ? this.achievementsService.forProfile(user.id)
-          : null,
-      ]);
+            },
+          })
+        : null,
+      this.featuredProfileItems?.resolveForProfile(user.id, viewerAccess, {
+        isOwner,
+        isFollower: isFollower || partnerPermissions.routines,
+      }) ?? [],
+      viewerAccess.achievements && this.achievementsService
+        ? this.achievementsService.forProfile(user.id)
+        : null,
+    ]);
 
     return {
       id: user.id,
@@ -641,7 +643,9 @@ export class UsersService {
       viewerAccess,
       featuredItems,
       ...(viewerAccess.biography ? { bio: biography?.bio ?? null } : {}),
-      ...(viewerAccess.location ? { location: location?.location ?? null } : {}),
+      ...(viewerAccess.location
+        ? { location: location?.location ?? null }
+        : {}),
       ...(viewerAccess.trainingIdentity
         ? {
             trainingIdentity: {
@@ -649,8 +653,7 @@ export class UsersService {
               experienceLevel:
                 trainingIdentity?.trainingExperienceLevel ?? null,
               disciplines: trainingIdentity?.trainingDisciplines ?? [],
-              preferredStyle:
-                trainingIdentity?.preferredTrainingStyle ?? null,
+              preferredStyle: trainingIdentity?.preferredTrainingStyle ?? null,
               favoriteExercises:
                 trainingIdentity?.favoriteExercises.map(
                   ({ exercise }) => exercise,
@@ -695,7 +698,7 @@ export class UsersService {
     targetUserId: string,
   ): Promise<PublicUserProfile> {
     if (viewerUserId === targetUserId) {
-      throw new BadRequestException('You cannot follow yourself');
+      throw new BadRequestException(apiError("FOLLOW_SELF"));
     }
 
     const targetUser = await this.db.user.findUnique({
@@ -703,13 +706,13 @@ export class UsersService {
       select: { id: true },
     });
     if (!targetUser) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException(apiError("USER_NOT_FOUND"));
     }
     // A block prevents a follow in both directions, and a TRUST-04 hide
     // prevents one in the same way; the refusal is the same 404 the profile
     // gives, so it cannot be used to detect either.
     if (await isHiddenFromViewer(this.db, viewerUserId, targetUserId)) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException(apiError("USER_NOT_FOUND"));
     }
 
     try {
@@ -722,7 +725,7 @@ export class UsersService {
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code !== 'P2002'
+        error.code !== "P2002"
       ) {
         throw error;
       }
@@ -736,7 +739,7 @@ export class UsersService {
     targetUserId: string,
   ): Promise<PublicUserProfile> {
     if (viewerUserId === targetUserId) {
-      throw new BadRequestException('You cannot unfollow yourself');
+      throw new BadRequestException(apiError("UNFOLLOW_SELF"));
     }
 
     const targetUser = await this.db.user.findUnique({
@@ -744,7 +747,7 @@ export class UsersService {
       select: { id: true },
     });
     if (!targetUser) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException(apiError("USER_NOT_FOUND"));
     }
 
     await this.db.userFollow.deleteMany({
@@ -760,13 +763,11 @@ export class UsersService {
   private validateUsername(value: string): string {
     const username = normalizeUsername(value);
     const error = getUsernameValidationError(username);
-    if (error === 'RESERVED') {
-      throw new BadRequestException('This username is reserved');
+    if (error === "RESERVED") {
+      throw new BadRequestException(apiError("USERNAME_RESERVED"));
     }
-    if (error === 'INVALID_FORMAT') {
-      throw new BadRequestException(
-        'Username must be 3-30 characters, use letters, numbers, underscores or hyphens, and start and end with a letter or number',
-      );
+    if (error === "INVALID_FORMAT") {
+      throw new BadRequestException(apiError("USERNAME_INVALID"));
     }
     return username;
   }
@@ -805,7 +806,7 @@ export class UsersService {
         `${label} can contain at most ${maxItems} selections`,
       );
     }
-    if (unique.some(item => !allowed.includes(item))) {
+    if (unique.some((item) => !allowed.includes(item))) {
       throw new BadRequestException(`${label} contains an invalid selection`);
     }
     return unique;
@@ -828,17 +829,17 @@ export class UsersService {
   ): Promise<string[] | undefined> {
     if (value === undefined) return undefined;
     if (!Array.isArray(value)) {
-      throw new BadRequestException('Favorite exercises must be an array');
+      throw new BadRequestException("Favorite exercises must be an array");
     }
-    if (value.some(id => typeof id !== 'string' || !id.trim())) {
+    if (value.some((id) => typeof id !== "string" || !id.trim())) {
       throw new BadRequestException(
-        'Favorite exercises contains an invalid selection',
+        "Favorite exercises contains an invalid selection",
       );
     }
     const ids = [...new Set(value)];
     if (ids.length !== value.length) {
       throw new BadRequestException(
-        'Favorite exercises cannot contain duplicates',
+        "Favorite exercises cannot contain duplicates",
       );
     }
     if (ids.length > PROFILE_FAVORITE_EXERCISES_MAX) {
@@ -853,7 +854,9 @@ export class UsersService {
       select: { id: true },
     });
     if (existing.length !== ids.length) {
-      throw new BadRequestException('One or more favorite exercises do not exist');
+      throw new BadRequestException(
+        "One or more favorite exercises do not exist",
+      );
     }
     return ids;
   }
@@ -861,10 +864,10 @@ export class UsersService {
   private isUniqueUsernameViolation(error: unknown): boolean {
     return (
       error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === 'P2002' &&
+      error.code === "P2002" &&
       (Array.isArray(error.meta?.target)
-        ? error.meta.target.includes('username')
-        : String(error.meta?.target).includes('username'))
+        ? error.meta.target.includes("username")
+        : String(error.meta?.target).includes("username"))
     );
   }
 }

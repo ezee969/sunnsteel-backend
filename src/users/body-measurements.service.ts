@@ -2,16 +2,17 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
+} from "@nestjs/common";
 import {
   bodyMeasurementProblems,
   isBodyMeasurementDate,
   type BodyMeasurement,
   type BodyProgressResponse,
   type UpsertBodyMeasurementRequest,
-} from '@sunsteel/contracts';
-import { DatabaseService } from '../database/database.service';
-import { localDate } from '../notifications/push/local-time';
+  apiError,
+} from "@sunsteel/contracts";
+import { DatabaseService } from "../database/database.service";
+import { localDate } from "../notifications/push/local-time";
 import {
   BODY_MEASUREMENT_SELECT,
   buildBodyProgress,
@@ -20,10 +21,10 @@ import {
   isAllowedEntryDate,
   parseBodyProgressRange,
   toBodyMeasurement,
-} from './body-measurement-rules';
-import { syncCurrentWeight } from './body-weight-sync';
-import { isHiddenFromViewer } from './member-blocks';
-import { canViewProfileSection } from './profile-privacy';
+} from "./body-measurement-rules";
+import { syncCurrentWeight } from "./body-weight-sync";
+import { isHiddenFromViewer } from "./member-blocks";
+import { canViewProfileSection } from "./profile-privacy";
 
 /**
  * PROG-12: dated body weight and measurements. The owner reads and writes
@@ -63,7 +64,7 @@ export class BodyMeasurementsService {
         moderationHiddenAt: true,
       },
     });
-    if (!owner) throw new NotFoundException('Member not found');
+    if (!owner) throw new NotFoundException(apiError("MEMBER_NOT_FOUND"));
     const isOwner = viewerId === owner.id;
     if (!isOwner) {
       // TRUST-04 and PROF-10: a hidden or blocked member reads as missing.
@@ -71,7 +72,7 @@ export class BodyMeasurementsService {
         viewerId === null
           ? owner.moderationHiddenAt !== null
           : await isHiddenFromViewer(this.db, viewerId, owner.id);
-      if (hidden) throw new NotFoundException('Member not found');
+      if (hidden) throw new NotFoundException(apiError("MEMBER_NOT_FOUND"));
     }
     const isFollower =
       !isOwner &&
@@ -86,7 +87,7 @@ export class BodyMeasurementsService {
         isFollower,
       })
     ) {
-      throw new NotFoundException('Member not found');
+      throw new NotFoundException(apiError("MEMBER_NOT_FOUND"));
     }
     return this.progressOf(owner.id, range, owner.timeZone);
   }
@@ -117,29 +118,31 @@ export class BodyMeasurementsService {
 
   async remove(userId: string, date: string): Promise<void> {
     if (!isBodyMeasurementDate(date)) {
-      throw new BadRequestException('Date must be YYYY-MM-DD');
+      throw new BadRequestException("Date must be YYYY-MM-DD");
     }
     await this.db.$transaction(async (tx) => {
       const { count } = await tx.bodyMeasurement.deleteMany({
         where: { userId, date: columnDate(date) },
       });
-      if (count === 0) throw new NotFoundException('No entry on that date');
+      if (count === 0)
+        throw new NotFoundException(apiError("BODY_ENTRY_NOT_FOUND"));
       await syncCurrentWeight(tx, userId);
     });
   }
 
   private range(input: string | undefined) {
     const range = parseBodyProgressRange(input);
-    if (!range) throw new BadRequestException('Range must be 30D, 90D, 1Y or ALL');
+    if (!range)
+      throw new BadRequestException("Range must be 30D, 90D, 1Y or ALL");
     return range;
   }
 
   private assertDate(date: string, today: string) {
     if (!isBodyMeasurementDate(date)) {
-      throw new BadRequestException('Date must be YYYY-MM-DD');
+      throw new BadRequestException("Date must be YYYY-MM-DD");
     }
     if (!isAllowedEntryDate(date, today)) {
-      throw new BadRequestException('An entry cannot be dated in the future');
+      throw new BadRequestException(apiError("BODY_ENTRY_IN_FUTURE"));
     }
   }
 
@@ -148,19 +151,23 @@ export class BodyMeasurementsService {
       where: { id: userId },
       select: { timeZone: true },
     });
-    return localDate(new Date(), user?.timeZone ?? 'UTC');
+    return localDate(new Date(), user?.timeZone ?? "UTC");
   }
 
   private async progressOf(
     userId: string,
-    range: ReturnType<BodyMeasurementsService['range']>,
+    range: ReturnType<BodyMeasurementsService["range"]>,
     timeZone: string | null,
   ): Promise<BodyProgressResponse> {
     const rows = await this.db.bodyMeasurement.findMany({
       where: { userId },
-      orderBy: { date: 'asc' },
+      orderBy: { date: "asc" },
       select: BODY_MEASUREMENT_SELECT,
     });
-    return buildBodyProgress(rows, range, localDate(new Date(), timeZone ?? 'UTC'));
+    return buildBodyProgress(
+      rows,
+      range,
+      localDate(new Date(), timeZone ?? "UTC"),
+    );
   }
 }

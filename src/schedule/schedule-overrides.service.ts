@@ -1,28 +1,28 @@
-import { resolveRoutinePlan } from '@sunsteel/contracts';
+import { resolveRoutinePlan, apiError } from "@sunsteel/contracts";
 import {
   BASELINE_DAY_WEEKDAYS_SELECT,
   PLAN_BLOCKS_SELECT,
   PLAN_OVERRIDES_SELECT,
   toPlanBlocks,
   toPlanOverrides,
-} from '../routines/routine-plan';
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+} from "../routines/routine-plan";
+import { Injectable, NotFoundException } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
 import {
   ScheduleOverride,
   ScheduleOverridesResponse,
-} from '@sunsteel/contracts';
-import { DatabaseService } from '../database/database.service';
-import { lockTrainingAccount } from '../workouts/analytics/analytics-lock';
+} from "@sunsteel/contracts";
+import { DatabaseService } from "../database/database.service";
+import { lockTrainingAccount } from "../workouts/analytics/analytics-lock";
 import {
   MoveOccurrenceDto,
   SkipOccurrenceDto,
-} from './dto/move-occurrence.dto';
+} from "./dto/move-occurrence.dto";
 import {
   assertMovable,
   assertOverrideRange,
   assertSkippable,
-} from './schedule-overrides';
+} from "./schedule-overrides";
 
 const OVERRIDE_SELECT = {
   id: true,
@@ -72,7 +72,7 @@ export class ScheduleOverridesService {
         ],
       },
       select: OVERRIDE_SELECT,
-      orderBy: [{ date: 'asc' }, { routineId: 'asc' }],
+      orderBy: [{ date: "asc" }, { routineId: "asc" }],
     });
     return { overrides: rows.map(toScheduleOverride) };
   }
@@ -109,7 +109,7 @@ export class ScheduleOverridesService {
         others,
       });
       return this.upsert(tx, userId, dto.routineId, dto.date, {
-        kind: 'MOVE',
+        kind: "MOVE",
         toDate: dto.toDate,
       });
     });
@@ -130,7 +130,7 @@ export class ScheduleOverridesService {
       );
       assertSkippable({ date: dto.date, now, routine });
       return this.upsert(tx, userId, dto.routineId, dto.date, {
-        kind: 'SKIP',
+        kind: "SKIP",
         toDate: null,
       });
     });
@@ -140,7 +140,8 @@ export class ScheduleOverridesService {
     const { count } = await this.db.scheduleOverride.deleteMany({
       where: { id, userId },
     });
-    if (count === 0) throw new NotFoundException('Override not found');
+    if (count === 0)
+      throw new NotFoundException(apiError("OVERRIDE_NOT_FOUND"));
   }
 
   /**
@@ -164,7 +165,7 @@ export class ScheduleOverridesService {
         temporaryOverrides: PLAN_OVERRIDES_SELECT,
       },
     });
-    if (!routine) throw new NotFoundException('Routine not found');
+    if (!routine) throw new NotFoundException(apiError("ROUTINE_NOT_FOUND"));
     const plan = resolveRoutinePlan(
       {
         ...routine,
@@ -188,7 +189,7 @@ export class ScheduleOverridesService {
     date: string,
     change: Pick<
       Prisma.ScheduleOverrideUncheckedCreateInput,
-      'kind' | 'toDate'
+      "kind" | "toDate"
     >,
   ): Promise<ScheduleOverride> {
     const row = await tx.scheduleOverride.upsert({

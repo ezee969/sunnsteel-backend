@@ -1,13 +1,14 @@
-import { BadRequestException, ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from "@nestjs/common";
 import {
   DELOAD_MAX_DAYS,
   deloadLengthDays,
   resolveActiveTrainingBlock,
-} from '@sunsteel/contracts';
+  apiError,
+} from "@sunsteel/contracts";
 import {
   addCalendarDays,
   calendarDateMs,
-} from '../schedule/schedule-overrides';
+} from "../schedule/schedule-overrides";
 
 /**
  * ROUT-16: the rules a deload's dates must meet, pure so they are tested on
@@ -31,14 +32,14 @@ export function assertDeloadDates({
   calendarDateMs(startDate);
   calendarDateMs(endDate);
   if (endDate < startDate) {
-    throw new BadRequestException('The deload ends before it starts');
+    throw new BadRequestException(apiError("DELOAD_ENDS_BEFORE_START"));
   }
   if (startDate < today) {
-    throw new BadRequestException('A deload starts today or later');
+    throw new BadRequestException(apiError("DELOAD_STARTS_IN_PAST"));
   }
   if (deloadLengthDays(startDate, endDate) > DELOAD_MAX_DAYS) {
     throw new BadRequestException(
-      `A deload lasts at most ${DELOAD_MAX_DAYS} days`,
+      apiError("DELOAD_TOO_LONG", { max: DELOAD_MAX_DAYS }),
     );
   }
   if (
@@ -46,14 +47,12 @@ export function assertDeloadDates({
       (other) => startDate <= other.endDate && endDate >= other.startDate,
     )
   ) {
-    throw new ConflictException('Deloads of one routine cannot overlap');
+    throw new ConflictException(apiError("DELOAD_OVERLAP"));
   }
   const first = resolveActiveTrainingBlock(blocks, startDate);
   for (let date = startDate; date <= endDate; date = addCalendarDays(date, 1)) {
     if (resolveActiveTrainingBlock(blocks, date)?.id !== first?.id) {
-      throw new ConflictException(
-        'A deload stays inside one plan: it cannot cross the start or end of a training block',
-      );
+      throw new ConflictException(apiError("DELOAD_CROSSES_BLOCK"));
     }
   }
   return first;
@@ -96,9 +95,7 @@ export function assertBlockLeavesDeloads({
       startDate <= deload.startDate &&
       deload.endDate <= endDate;
     if (!ownAndInside) {
-      throw new ConflictException(
-        'A deload is planned in those dates; end or cancel it first',
-      );
+      throw new ConflictException(apiError("DELOAD_PLANNED_IN_RANGE"));
     }
   }
 }

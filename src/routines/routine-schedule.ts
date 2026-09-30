@@ -1,9 +1,10 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException } from "@nestjs/common";
 import {
   ROUTINE_DAY_NAME_MAX,
   ROUTINE_DAYS_MAX,
   type RoutineScheduleMode,
-} from '@sunsteel/contracts';
+  apiError,
+} from "@sunsteel/contracts";
 
 interface DayScheduleInput {
   dayOfWeek?: number | null;
@@ -23,35 +24,40 @@ export function normalizeRoutineDays<T extends DayScheduleInput>(
 ): Array<T & { dayOfWeek: number | null; name: string | null; order: number }> {
   if (days.length > ROUTINE_DAYS_MAX) {
     throw new BadRequestException(
-      `A routine has at most ${ROUTINE_DAYS_MAX} days`,
+      apiError("ROUTINE_DAYS_MAX", { max: ROUTINE_DAYS_MAX }),
     );
   }
   const named = days.map((day, index) => {
     const name = day.name?.trim() || null;
     if (name && name.length > ROUTINE_DAY_NAME_MAX) {
       throw new BadRequestException(
-        `Day names have at most ${ROUTINE_DAY_NAME_MAX} characters`,
+        apiError("ROUTINE_DAY_NAME_TOO_LONG", { max: ROUTINE_DAY_NAME_MAX }),
       );
     }
     return { day, name, order: day.order ?? index, index };
   });
 
-  if (mode === 'ROTATION') {
-    if (named.some(({ day }) => typeof day.dayOfWeek === 'number')) {
-      throw new BadRequestException('Rotation days have no weekday');
+  if (mode === "ROTATION") {
+    if (named.some(({ day }) => typeof day.dayOfWeek === "number")) {
+      throw new BadRequestException("Rotation days have no weekday");
     }
     return [...named]
       .sort((a, b) => a.order - b.order || a.index - b.index)
-      .map(({ day, name }, order) => ({ ...day, dayOfWeek: null, name, order }));
+      .map(({ day, name }, order) => ({
+        ...day,
+        dayOfWeek: null,
+        name,
+        order,
+      }));
   }
 
   const seen = new Set<number>();
   for (const { day } of named) {
-    if (typeof day.dayOfWeek !== 'number') {
-      throw new BadRequestException('Every weekly day needs a weekday');
+    if (typeof day.dayOfWeek !== "number") {
+      throw new BadRequestException("Every weekly day needs a weekday");
     }
     if (seen.has(day.dayOfWeek)) {
-      throw new BadRequestException('Each weekday can appear only once');
+      throw new BadRequestException("Each weekday can appear only once");
     }
     seen.add(day.dayOfWeek);
   }
@@ -87,7 +93,7 @@ export function nextRotationDayId(
     ? sorted.findIndex((day) => day.id === last.routineDayId)
     : -1;
   if (index >= 0) return sorted[(index + 1) % sorted.length].id;
-  if (typeof last.order === 'number') {
+  if (typeof last.order === "number") {
     const lastOrder = last.order;
     return (sorted.find((day) => day.order > lastOrder) ?? sorted[0]).id;
   }
@@ -106,15 +112,15 @@ export function normalizeRestDays(
   requested: readonly number[] | undefined,
   kept: readonly number[] = [],
 ): number[] {
-  if (mode === 'ROTATION') {
+  if (mode === "ROTATION") {
     if (requested?.length) {
-      throw new BadRequestException('Rotation routines have no rest days');
+      throw new BadRequestException("Rotation routines have no rest days");
     }
     return [];
   }
   const training = new Set(days.map((day) => day.dayOfWeek));
   if (requested && requested.some((weekday) => training.has(weekday))) {
-    throw new BadRequestException('A rest day cannot also be a training day');
+    throw new BadRequestException("A rest day cannot also be a training day");
   }
   const source = requested ?? kept.filter((weekday) => !training.has(weekday));
   return [...new Set(source)].sort((a, b) => a - b);
@@ -131,10 +137,10 @@ export function normalizeRotationWeekdays(
   requested: readonly number[] | undefined,
   kept: readonly number[] = [],
 ): number[] {
-  if (mode === 'WEEKLY') {
+  if (mode === "WEEKLY") {
     if (requested?.length) {
       throw new BadRequestException(
-        'Weekly routines train on the weekdays of their days',
+        "Weekly routines train on the weekdays of their days",
       );
     }
     return [];

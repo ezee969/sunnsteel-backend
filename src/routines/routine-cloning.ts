@@ -1,10 +1,10 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException } from "@nestjs/common";
 import {
-  CLONE_ROUTINE_REFUSALS,
   type CloneRoutineRequest,
   type RoutineVersionSetup,
-} from '@sunsteel/contracts';
-import { setupToRoutineUpdate } from './routine-versions';
+  apiError,
+} from "@sunsteel/contracts";
+import { setupToRoutineUpdate } from "./routine-versions";
 
 /**
  * ROUT-05. A clone is the prescription somebody was allowed to read, saved as
@@ -18,8 +18,8 @@ import { setupToRoutineUpdate } from './routine-versions';
  */
 
 export type CloneSource =
-  | { kind: 'LINK'; token: string }
-  | { kind: 'VISIBILITY'; routineId: string };
+  | { kind: "LINK"; token: string }
+  | { kind: "VISIBILITY"; routineId: string };
 
 /**
  * Exactly one source. Both at once is rejected rather than silently preferring
@@ -30,13 +30,11 @@ export function readCloneSource(request: CloneRoutineRequest): CloneSource {
   const token = request.token?.trim();
   const routineId = request.routineId?.trim();
   if (!!token === !!routineId) {
-    throw new BadRequestException(
-      `${CLONE_ROUTINE_REFUSALS.SOURCE_REQUIRED}: send either a share token or a routine id`,
-    );
+    throw new BadRequestException(apiError("CLONE_SOURCE_REQUIRED"));
   }
   return token
-    ? { kind: 'LINK', token }
-    : { kind: 'VISIBILITY', routineId: routineId! };
+    ? { kind: "LINK", token }
+    : { kind: "VISIBILITY", routineId: routineId! };
 }
 
 /**

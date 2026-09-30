@@ -1,36 +1,37 @@
-import { lockTrainingAccount } from '../analytics/analytics-lock';
+import { apiError } from "@sunsteel/contracts";
+import { lockTrainingAccount } from "../analytics/analytics-lock";
 import {
   BadRequestException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
-import { Prisma, WorkoutSessionStatus } from '@prisma/client';
-import type { UpsertSetLogResponse } from '@sunsteel/contracts';
-import { DatabaseService } from '../../database/database.service';
-import { UpsertSetLogDto } from '../dto/upsert-set-log.dto';
+} from "@nestjs/common";
+import { Prisma, WorkoutSessionStatus } from "@prisma/client";
+import type { UpsertSetLogResponse } from "@sunsteel/contracts";
+import { DatabaseService } from "../../database/database.service";
+import { UpsertSetLogDto } from "../dto/upsert-set-log.dto";
 import {
   earnedPersonalRecords,
   recordFrontier,
   type RecordSet,
-} from '../live-personal-records';
+} from "../live-personal-records";
 import {
   expectedExerciseId,
   readSubstitutions,
   substitutionFor,
-} from '../session-substitutions';
+} from "../session-substitutions";
 import {
   extraSetRefusal,
   prescribedSetCount,
   prescribedSetKind,
   removeSetRefusal,
-} from '../session-extra-sets';
-import { toSetLogResponse } from '../workout-session.mapper';
+} from "../session-extra-sets";
+import { toSetLogResponse } from "../workout-session.mapper";
 
 // Narrow unknown error objects that include a Prisma error code
 const isPrismaErrorWithCode = (e: unknown): e is { code: string } => {
-  if (typeof e !== 'object' || e === null) return false;
+  if (typeof e !== "object" || e === null) return false;
   const maybe = e as { code?: unknown };
-  return typeof maybe.code === 'string';
+  return typeof maybe.code === "string";
 };
 
 const highestLoggedSet = async (
@@ -41,7 +42,7 @@ const highestLoggedSet = async (
   (
     await tx.setLog.findFirst({
       where: { sessionId, routineExerciseId },
-      orderBy: { setNumber: 'desc' },
+      orderBy: { setNumber: "desc" },
       select: { setNumber: true },
     })
   )?.setNumber ?? 0;
@@ -69,12 +70,10 @@ export class WorkoutSessionLogService {
         },
       });
       if (!session) {
-        throw new NotFoundException('Workout session not found');
+        throw new NotFoundException(apiError("WORKOUT_SESSION_NOT_FOUND"));
       }
       if (session.status !== WorkoutSessionStatus.IN_PROGRESS) {
-        throw new BadRequestException(
-          'Cannot modify set logs for a finished session',
-        );
+        throw new BadRequestException(apiError("SESSION_FINISHED"));
       }
 
       // Validate routineExercise belongs to the session's routineDay
@@ -92,7 +91,7 @@ export class WorkoutSessionLogService {
       });
       if (!routineExercise) {
         throw new BadRequestException(
-          'Routine exercise does not belong to this session',
+          "Routine exercise does not belong to this session",
         );
       }
 
@@ -103,13 +102,10 @@ export class WorkoutSessionLogService {
       );
       if (
         dto.exerciseId !==
-        expectedExerciseId(
-          routineExercise,
-          substitution ? [substitution] : [],
-        )
+        expectedExerciseId(routineExercise, substitution ? [substitution] : [])
       ) {
         throw new BadRequestException(
-          'exerciseId does not match the exercise for this slot',
+          "exerciseId does not match the exercise for this slot",
         );
       }
 
@@ -255,12 +251,10 @@ export class WorkoutSessionLogService {
         },
       });
       if (!session) {
-        throw new NotFoundException('Workout session not found');
+        throw new NotFoundException(apiError("WORKOUT_SESSION_NOT_FOUND"));
       }
       if (session.status !== WorkoutSessionStatus.IN_PROGRESS) {
-        throw new BadRequestException(
-          'Cannot modify set logs for a finished session',
-        );
+        throw new BadRequestException(apiError("SESSION_FINISHED"));
       }
 
       // LIVE-15: only the last extra set can be taken back.
@@ -301,8 +295,8 @@ export class WorkoutSessionLogService {
         return deleted;
       } catch (err: unknown) {
         // P2025 = Record not found
-        if (isPrismaErrorWithCode(err) && err.code === 'P2025') {
-          throw new NotFoundException('Set log not found');
+        if (isPrismaErrorWithCode(err) && err.code === "P2025") {
+          throw new NotFoundException(apiError("SET_LOG_NOT_FOUND"));
         }
         throw err;
       }

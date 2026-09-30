@@ -1,3 +1,4 @@
+import { apiError } from "@sunsteel/contracts";
 import {
   BadRequestException,
   Injectable,
@@ -104,9 +105,7 @@ export class WorkoutExercisePerformanceService {
             ) ?? null)
           : (exercises[0] ?? null);
         if (query.exerciseId && !selectedExercise) {
-          throw new NotFoundException(
-            "No completed performance found for this exercise",
-          );
+          throw new NotFoundException(apiError("NO_EXERCISE_PERFORMANCE"));
         }
         if (!selectedExercise) {
           return { exercises, selectedExercise: null, items: [] };
@@ -229,8 +228,7 @@ export class WorkoutExercisePerformanceService {
                 : [];
             }),
             prescriptions,
-            progressionChanges:
-              progressionBySession.get(session.id) ?? [],
+            progressionChanges: progressionBySession.get(session.id) ?? [],
           };
         });
         return {

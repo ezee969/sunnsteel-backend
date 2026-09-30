@@ -4,8 +4,8 @@ import {
   HttpStatus,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+} from "@nestjs/common";
+import { Prisma } from "@prisma/client";
 import {
   ACTIVITY_COMMENT_MAX_LENGTH,
   ACTIVITY_COMMENTS_PER_DAY_MAX,
@@ -47,19 +47,20 @@ import {
   type SetActivityReactionResponse,
   type SharedRoutineOwner,
   type UpdateActivitySharingRequest,
-} from '@sunsteel/contracts';
-import { comebackRecognitionSummary } from '../achievements/comeback-recognition';
-import { DatabaseService } from '../database/database.service';
-import { canViewRoutine } from '../routines/routine-visibility';
-import { readSnapshot } from '../workouts/analytics/session-snapshot';
-import { routineDayName } from '../workouts/workout-session.selects';
-import { hiddenFromViewer, isHiddenFromViewer } from '../users/member-blocks';
-import { trainingPartnerPermissions } from '../users/training-partner-access';
+  apiError,
+} from "@sunsteel/contracts";
+import { comebackRecognitionSummary } from "../achievements/comeback-recognition";
+import { DatabaseService } from "../database/database.service";
+import { canViewRoutine } from "../routines/routine-visibility";
+import { readSnapshot } from "../workouts/analytics/session-snapshot";
+import { routineDayName } from "../workouts/workout-session.selects";
+import { hiddenFromViewer, isHiddenFromViewer } from "../users/member-blocks";
+import { trainingPartnerPermissions } from "../users/training-partner-access";
 import {
   mapProfilePrivacy,
   resolveProfileViewerAccess,
-} from '../users/profile-privacy';
-import { normalizeUsername } from '../users/username';
+} from "../users/profile-privacy";
+import { normalizeUsername } from "../users/username";
 import {
   EVENT_ACTIVITY_TYPES,
   comebackToEntry,
@@ -93,7 +94,7 @@ import {
   encodeCommentCursor,
   normalizeCommentBody,
   summarizeComments,
-} from './activity-rules';
+} from "./activity-rules";
 
 const AUTHOR_SELECT = {
   id: true,
@@ -145,12 +146,19 @@ const ROUTINE_SELECT = {
  */
 const ELIGIBLE_EVENT_WHERE: Prisma.TrainingEventWhereInput = {
   OR: [
-    { type: { in: ['SESSION_COMPLETED', 'PERSONAL_RECORD', 'PROGRESSION_CHANGED'] } },
-    { type: 'STREAK_MILESTONE', payload: { path: ['backfilled'], equals: false } },
     {
-      type: 'ACHIEVEMENT_UNLOCKED',
-      payload: { path: ['backfilled'], equals: false },
-      NOT: { payload: { path: ['category'], equals: 'STREAK_DAYS' } },
+      type: {
+        in: ["SESSION_COMPLETED", "PERSONAL_RECORD", "PROGRESSION_CHANGED"],
+      },
+    },
+    {
+      type: "STREAK_MILESTONE",
+      payload: { path: ["backfilled"], equals: false },
+    },
+    {
+      type: "ACHIEVEMENT_UNLOCKED",
+      payload: { path: ["backfilled"], equals: false },
+      NOT: { payload: { path: ["category"], equals: "STREAK_DAYS" } },
     },
   ],
 };
@@ -242,7 +250,7 @@ function toActivityComment(
     entryId: row.entryKey,
     author: {
       id: row.user.id,
-      username: row.user.username ?? '',
+      username: row.user.username ?? "",
       name: row.user.name,
       lastName: row.user.lastName,
       avatarUrl: row.user.avatarUrl,
@@ -268,7 +276,7 @@ export class ActivityService {
       hiddenFromViewer(this.db, viewerId),
       this.db.userFollow.findMany({
         where: { followerId: viewerId },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: "desc" },
         select: { followingId: true },
       }),
     ]);
@@ -284,7 +292,10 @@ export class ActivityService {
         })
       : [];
     const authors = await this.loadAuthors(
-      rows.map((row) => ({ row, context: { isOwner: false, isFollower: true } })),
+      rows.map((row) => ({
+        row,
+        context: { isOwner: false, isFollower: true },
+      })),
     );
     const page = await this.read(authors, query, viewerId);
     return {
@@ -306,12 +317,12 @@ export class ActivityService {
       },
       select: AUTHOR_SELECT,
     });
-    if (!row) throw new NotFoundException('User not found');
+    if (!row) throw new NotFoundException(apiError("USER_NOT_FOUND"));
     const isOwner = row.id === viewerId;
     // A block or a TRUST-04 hide answers 404 before any activity is read,
     // exactly as the profile does and for the same reason.
     if (!isOwner && (await isHiddenFromViewer(this.db, viewerId, row.id))) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException(apiError("USER_NOT_FOUND"));
     }
     const [follow, partnerPermissions] = isOwner
       ? [null, null]
@@ -357,7 +368,8 @@ export class ActivityService {
             type: read.type,
             privacy: author.privacy,
             defaultAudience: defaultAudienceFor(author.choices, read.type),
-            override: author.choices.overrides.get(read.entry.id)?.audience ?? null,
+            override:
+              author.choices.overrides.get(read.entry.id)?.audience ?? null,
             routineVisibility: read.routineVisibility,
           }),
         }),
@@ -379,7 +391,7 @@ export class ActivityService {
     const authors = await this.loadAuthors([
       {
         row,
-        context: { isOwner: false, isFollower: query.audience === 'FOLLOWERS' },
+        context: { isOwner: false, isFollower: query.audience === "FOLLOWERS" },
       },
     ]);
     const page = await this.read(authors, query, ownerId);
@@ -405,7 +417,7 @@ export class ActivityService {
           type,
           stored.get(type) ?? ACTIVITY_DEFAULT_AUDIENCE,
         ]),
-      ) as ActivitySharingSettings['defaults'],
+      ) as ActivitySharingSettings["defaults"],
       sections: {
         workoutHistory: privacy.workoutHistory,
         records: privacy.records,
@@ -422,13 +434,15 @@ export class ActivityService {
   ): Promise<ActivitySharingSettings> {
     const entries = Object.entries(request.defaults ?? {});
     if (entries.length === 0) {
-      throw new BadRequestException('Choose an audience for at least one type');
+      throw new BadRequestException(apiError("ACTIVITY_AUDIENCE_REQUIRED"));
     }
     for (const [type, audience] of entries) {
       if (!(ACTIVITY_TYPES as readonly string[]).includes(type)) {
         throw new BadRequestException(`Unknown activity type: ${type}`);
       }
-      if (!(PROFILE_VISIBILITY_VALUES as readonly unknown[]).includes(audience)) {
+      if (
+        !(PROFILE_VISIBILITY_VALUES as readonly unknown[]).includes(audience)
+      ) {
         throw new BadRequestException(`Invalid audience for ${type}`);
       }
     }
@@ -461,7 +475,7 @@ export class ActivityService {
   ): Promise<SetActivityEntryAudienceResponse> {
     const row = await this.ownerRow(ownerId);
     const entry = await this.resolveOwnEntry(ownerId, request.entryId);
-    if (!entry) throw new NotFoundException('Activity entry not found');
+    if (!entry) throw new NotFoundException(apiError("ACTIVITY_NOT_FOUND"));
     if (request.audience === null) {
       await this.db.activityEntryOverride.deleteMany({
         where: { userId: ownerId, entryKey: request.entryId },
@@ -503,7 +517,7 @@ export class ActivityService {
       where: { id: ownerId },
       select: AUTHOR_SELECT,
     });
-    if (!row) throw new NotFoundException('User not found');
+    if (!row) throw new NotFoundException(apiError("USER_NOT_FOUND"));
     return row;
   }
 
@@ -599,7 +613,7 @@ export class ActivityService {
       if (!author || !routine.sharedAt) continue;
       const key = routineEntryKey(routine.id);
       if (
-        !planAllows(author.plan, 'ROUTINE_SHARED', key) ||
+        !planAllows(author.plan, "ROUTINE_SHARED", key) ||
         !canViewRoutine(
           author.privacy.routines,
           routine.visibility,
@@ -618,7 +632,7 @@ export class ActivityService {
             { ...routine, sharedAt },
             { author: author.identity, isOwner: author.context.isOwner },
           ),
-          type: 'ROUTINE_SHARED',
+          type: "ROUTINE_SHARED",
           userId: author.row.id,
           routineVisibility: routine.visibility,
         }),
@@ -634,7 +648,7 @@ export class ActivityService {
             author: author.identity,
             isOwner: author.context.isOwner,
           }),
-          type: 'COMEBACK',
+          type: "COMEBACK",
           userId: author.row.id,
         }),
       });
@@ -666,9 +680,7 @@ export class ActivityService {
           `${event.userId}:${String(payload.exerciseId)}:${String(payload.setLogId)}`,
         ),
       });
-      return entry
-        ? [{ entry, type: entry.type, userId: event.userId }]
-        : [];
+      return entry ? [{ entry, type: entry.type, userId: event.userId }] : [];
     });
     const entryIds = entries.map((read) => read.entry.id);
     const [reactions, comments] = await Promise.all([
@@ -716,7 +728,10 @@ export class ActivityService {
       byEntry.set(row.entryKey, list);
     }
     return new Map(
-      [...byEntry].map(([key, list]) => [key, summarizeReactions(list, viewerId)]),
+      [...byEntry].map(([key, list]) => [
+        key,
+        summarizeReactions(list, viewerId),
+      ]),
     );
   }
 
@@ -783,7 +798,7 @@ export class ActivityService {
     entryId: string,
   ): Promise<string> {
     const authorId = await this.resolveEntryAuthor(entryId);
-    if (!authorId) throw new NotFoundException('Activity entry not found');
+    if (!authorId) throw new NotFoundException(apiError("ACTIVITY_NOT_FOUND"));
     const isOwner = authorId === viewerId;
     const [row, hidden] = await Promise.all([
       this.db.user.findUnique({
@@ -794,7 +809,8 @@ export class ActivityService {
         ? Promise.resolve(false)
         : isHiddenFromViewer(this.db, viewerId, authorId),
     ]);
-    if (!row || hidden) throw new NotFoundException('Activity entry not found');
+    if (!row || hidden)
+      throw new NotFoundException(apiError("ACTIVITY_NOT_FOUND"));
     const [follow, partnerPermissions] = isOwner
       ? [null, null]
       : await Promise.all([
@@ -815,7 +831,7 @@ export class ActivityService {
       { row, context: { isOwner, isFollower } },
     ]);
     const visible = await this.isEntryVisible(author, entryId);
-    if (!visible) throw new NotFoundException('Activity entry not found');
+    if (!visible) throw new NotFoundException(apiError("ACTIVITY_NOT_FOUND"));
     return authorId;
   }
 
@@ -824,7 +840,10 @@ export class ActivityService {
     viewerId: string,
     query: ActivityCommentsQuery,
   ): Promise<ActivityCommentsResponse> {
-    const authorId = await this.resolveCommentableEntry(viewerId, query.entryId);
+    const authorId = await this.resolveCommentableEntry(
+      viewerId,
+      query.entryId,
+    );
     const take = commentPageSize(query.limit);
     const cursor = decodeCommentCursor(query.cursor);
     const hiddenIds = await hiddenFromViewer(this.db, viewerId);
@@ -849,17 +868,22 @@ export class ActivityService {
             : []),
         ],
       },
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       take: take + 1,
       select: COMMENT_SELECT,
     });
 
     const page = rows.slice(0, take);
     const last = page.at(-1);
-    const summaries = await this.readCommentSummaries([query.entryId], viewerId);
+    const summaries = await this.readCommentSummaries(
+      [query.entryId],
+      viewerId,
+    );
     return {
       entryId: query.entryId,
-      comments: page.map((row) => toActivityComment(row, { viewerId, authorId })),
+      comments: page.map((row) =>
+        toActivityComment(row, { viewerId, authorId }),
+      ),
       nextCursor:
         rows.length > take && last
           ? encodeCommentCursor({ at: last.createdAt, id: last.id })
@@ -884,12 +908,12 @@ export class ActivityService {
     const body = normalizeCommentBody(request.body);
     if (!body) {
       throw new BadRequestException(
-        `A comment must not be empty and may be at most ${ACTIVITY_COMMENT_MAX_LENGTH} characters.`,
+        apiError("COMMENT_LENGTH", { max: ACTIVITY_COMMENT_MAX_LENGTH }),
       );
     }
     if ((await this.commentsToday(viewerId)) >= ACTIVITY_COMMENTS_PER_DAY_MAX) {
       throw new HttpException(
-        `You can write at most ${ACTIVITY_COMMENTS_PER_DAY_MAX} comments a day.`,
+        apiError("COMMENTS_PER_DAY", { max: ACTIVITY_COMMENTS_PER_DAY_MAX }),
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
@@ -926,7 +950,7 @@ export class ActivityService {
       select: { id: true, entryKey: true, userId: true, authorId: true },
     });
     if (!comment || !canDeleteComment(comment, viewerId)) {
-      throw new NotFoundException('Comment not found');
+      throw new NotFoundException(apiError("COMMENT_NOT_FOUND"));
     }
     await this.db.activityComment.delete({ where: { id: comment.id } });
     const summaries = await this.readCommentSummaries(
@@ -971,7 +995,7 @@ export class ActivityService {
           ...(cursor ? [{ occurredAt: { lte: cursor.at } }] : []),
         ],
       },
-      orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
+      orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
       take: sourceTake(limit, cursor),
       select: EVENT_SELECT,
     });
@@ -993,13 +1017,13 @@ export class ActivityService {
       );
       if (readable.length === 0) continue;
       const excluded = [...author.plan.exclude]
-        .filter((key) => key.startsWith('routine:'))
-        .map((key) => key.slice('routine:'.length));
+        .filter((key) => key.startsWith("routine:"))
+        .map((key) => key.slice("routine:".length));
       const included = [...author.plan.include]
-        .filter(([, type]) => type === 'ROUTINE_SHARED')
-        .map(([key]) => key.slice('routine:'.length));
+        .filter(([, type]) => type === "ROUTINE_SHARED")
+        .map(([key]) => key.slice("routine:".length));
       const parts: Prisma.RoutineWhereInput[] = [];
-      if (author.plan.visibleTypes.has('ROUTINE_SHARED')) {
+      if (author.plan.visibleTypes.has("ROUTINE_SHARED")) {
         parts.push(excluded.length ? { id: { notIn: excluded } } : {});
       }
       if (included.length) parts.push({ id: { in: included } });
@@ -1021,9 +1045,15 @@ export class ActivityService {
         sharedAt: { not: null, ...(cursor ? { lte: cursor.at } : {}) },
         // A routine with nothing programmed is not a programme anyone can
         // follow, so sharing one is not news, as `ROUT-07` decided.
-        days: { some: { trainingBlockId: null, temporaryOverrideId: null, exercises: { some: {} } } },
+        days: {
+          some: {
+            trainingBlockId: null,
+            temporaryOverrideId: null,
+            exercises: { some: {} },
+          },
+        },
       },
-      orderBy: [{ sharedAt: 'desc' }, { id: 'desc' }],
+      orderBy: [{ sharedAt: "desc" }, { id: "desc" }],
       take: sourceTake(limit, cursor),
       select: ROUTINE_SELECT,
     });
@@ -1040,15 +1070,15 @@ export class ActivityService {
   ): Promise<{ author: Author; recognition: ComebackRecognition }[]> {
     const eligible = authors.filter(
       (author) =>
-        author.plan.visibleTypes.has('COMEBACK') ||
-        [...author.plan.include.values()].includes('COMEBACK'),
+        author.plan.visibleTypes.has("COMEBACK") ||
+        [...author.plan.include.values()].includes("COMEBACK"),
     );
     const results = await Promise.all(
       eligible.map(async (author) => {
         const recognitions = await this.comebackRecognitions(author.row.id);
         return recognitions
           .filter((recognition) =>
-            planAllows(author.plan, 'COMEBACK', recognition.id),
+            planAllows(author.plan, "COMEBACK", recognition.id),
           )
           .filter((recognition) =>
             isAfterCursor(
@@ -1066,13 +1096,13 @@ export class ActivityService {
     userId: string,
   ): Promise<ComebackRecognition[]> {
     const projection = await this.db.workoutAnalyticsProjection.findFirst({
-      where: { userId, active: true, state: 'READY' },
+      where: { userId, active: true, state: "READY" },
       select: { timeZone: true },
     });
     if (!projection) return [];
     const events = await this.db.trainingEvent.findMany({
-      where: { userId, type: 'SESSION_COMPLETED' },
-      orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
+      where: { userId, type: "SESSION_COMPLETED" },
+      orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
       take: COMEBACK_SESSION_LOOKBACK + 1,
       select: { id: true, sessionId: true, occurredAt: true },
     });
@@ -1090,7 +1120,7 @@ export class ActivityService {
     const ids = [
       ...new Set(
         events.flatMap((event) =>
-          event.type === 'SESSION_COMPLETED' && event.sessionId
+          event.type === "SESSION_COMPLETED" && event.sessionId
             ? [event.sessionId]
             : [],
         ),
@@ -1121,7 +1151,7 @@ export class ActivityService {
           session.id,
           {
             routineName:
-              snapshot?.routine.name ?? session.routine?.name ?? 'Workout',
+              snapshot?.routine.name ?? session.routine?.name ?? "Workout",
             dayName: routineDayName(snapshot?.routineDay ?? session.routineDay),
             durationSec: session.durationSec,
           },
@@ -1139,10 +1169,10 @@ export class ActivityService {
     authors: Map<string, Author>,
   ): Promise<Set<string>> {
     const pairs = events.flatMap((event) => {
-      if (event.type !== 'PERSONAL_RECORD') return [];
+      if (event.type !== "PERSONAL_RECORD") return [];
       if (authors.get(event.userId)?.context.isOwner) return [];
       const payload = (event.payload ?? {}) as Record<string, unknown>;
-      return typeof payload.exerciseId === 'string'
+      return typeof payload.exerciseId === "string"
         ? [{ userId: event.userId, exerciseId: payload.exerciseId }]
         : [];
     });
@@ -1171,33 +1201,38 @@ export class ActivityService {
     request: SetActivityReactionRequest,
   ): Promise<SetActivityReactionResponse> {
     const authorId = await this.resolveEntryAuthor(request.entryId);
-    if (!authorId) throw new NotFoundException('Activity entry not found');
+    if (!authorId) throw new NotFoundException(apiError("ACTIVITY_NOT_FOUND"));
     if (authorId === viewerId) {
-      throw new BadRequestException('You cannot react to your own activity');
+      throw new BadRequestException(apiError("REACTION_OWN_ACTIVITY"));
     }
     const [row, hidden] = await Promise.all([
-      this.db.user.findUnique({ where: { id: authorId }, select: AUTHOR_SELECT }),
+      this.db.user.findUnique({
+        where: { id: authorId },
+        select: AUTHOR_SELECT,
+      }),
       isHiddenFromViewer(this.db, viewerId, authorId),
     ]);
     if (!row || hidden) {
-      throw new NotFoundException('Activity entry not found');
+      throw new NotFoundException(apiError("ACTIVITY_NOT_FOUND"));
     }
     const [follow, partnerPermissions] = await Promise.all([
       this.db.userFollow.findUnique({
         where: {
-          followerId_followingId: { followerId: viewerId, followingId: authorId },
+          followerId_followingId: {
+            followerId: viewerId,
+            followingId: authorId,
+          },
         },
         select: { followerId: true },
       }),
       trainingPartnerPermissions(this.db, viewerId, authorId),
     ]);
-    const isFollower =
-      Boolean(follow) || partnerPermissions.activity === true;
+    const isFollower = Boolean(follow) || partnerPermissions.activity === true;
     const [author] = await this.loadAuthors([
       { row, context: { isOwner: false, isFollower } },
     ]);
     const visible = await this.isEntryVisible(author, request.entryId);
-    if (!visible) throw new NotFoundException('Activity entry not found');
+    if (!visible) throw new NotFoundException(apiError("ACTIVITY_NOT_FOUND"));
 
     const current = await this.db.activityEntryReaction.findUnique({
       where: {
@@ -1233,28 +1268,34 @@ export class ActivityService {
 
   /** Who an entry belongs to, or null when no such entry exists. */
   private async resolveEntryAuthor(entryId: string): Promise<string | null> {
-    if (entryId.startsWith('routine:')) {
+    if (entryId.startsWith("routine:")) {
       const routine = await this.db.routine.findFirst({
         where: {
-          id: entryId.slice('routine:'.length),
+          id: entryId.slice("routine:".length),
           sharedAt: { not: null },
-          days: { some: { trainingBlockId: null, temporaryOverrideId: null, exercises: { some: {} } } },
+          days: {
+            some: {
+              trainingBlockId: null,
+              temporaryOverrideId: null,
+              exercises: { some: {} },
+            },
+          },
         },
         select: { userId: true },
       });
       return routine?.userId ?? null;
     }
-    if (entryId.startsWith('comeback:')) {
+    if (entryId.startsWith("comeback:")) {
       // `comeback:<returnEventId>:<recognitionEventId>:v1`; both belong to the
       // member whose return it was, and the derivation below confirms it.
-      const recognitionEventId = entryId.split(':')[2];
+      const recognitionEventId = entryId.split(":")[2];
       const event = recognitionEventId
         ? await this.db.trainingEvent.findUnique({
             where: { id: recognitionEventId },
             select: { userId: true, type: true },
           })
         : null;
-      if (!event || event.type !== 'SESSION_COMPLETED') return null;
+      if (!event || event.type !== "SESSION_COMPLETED") return null;
       const recognitions = await this.comebackRecognitions(event.userId);
       return recognitions.some((recognition) => recognition.id === entryId)
         ? event.userId
@@ -1274,14 +1315,14 @@ export class ActivityService {
     entryId: string,
   ): Promise<boolean> {
     if (isPlanEmpty(author.plan)) return false;
-    if (entryId.startsWith('routine:')) {
+    if (entryId.startsWith("routine:")) {
       const routine = await this.db.routine.findUnique({
-        where: { id: entryId.slice('routine:'.length) },
+        where: { id: entryId.slice("routine:".length) },
         select: { visibility: true, moderationHiddenAt: true },
       });
       return (
         !!routine &&
-        planAllows(author.plan, 'ROUTINE_SHARED', entryId) &&
+        planAllows(author.plan, "ROUTINE_SHARED", entryId) &&
         canViewRoutine(
           author.privacy.routines,
           routine.visibility,
@@ -1290,8 +1331,8 @@ export class ActivityService {
         )
       );
     }
-    if (entryId.startsWith('comeback:')) {
-      return planAllows(author.plan, 'COMEBACK', entryId);
+    if (entryId.startsWith("comeback:")) {
+      return planAllows(author.plan, "COMEBACK", entryId);
     }
     const event = await this.db.trainingEvent.findUnique({
       where: { eventKey: entryId },
@@ -1305,24 +1346,27 @@ export class ActivityService {
   private async resolveOwnEntry(
     ownerId: string,
     entryId: string,
-  ): Promise<{ type: ActivityType; routineVisibility?: RoutineVisibility } | null> {
-    if (entryId.startsWith('routine:')) {
+  ): Promise<{
+    type: ActivityType;
+    routineVisibility?: RoutineVisibility;
+  } | null> {
+    if (entryId.startsWith("routine:")) {
       const routine = await this.db.routine.findFirst({
         where: {
-          id: entryId.slice('routine:'.length),
+          id: entryId.slice("routine:".length),
           userId: ownerId,
           sharedAt: { not: null },
         },
         select: { visibility: true },
       });
       return routine
-        ? { type: 'ROUTINE_SHARED', routineVisibility: routine.visibility }
+        ? { type: "ROUTINE_SHARED", routineVisibility: routine.visibility }
         : null;
     }
-    if (entryId.startsWith('comeback:')) {
+    if (entryId.startsWith("comeback:")) {
       const recognitions = await this.comebackRecognitions(ownerId);
       return recognitions.some((recognition) => recognition.id === entryId)
-        ? { type: 'COMEBACK' }
+        ? { type: "COMEBACK" }
         : null;
     }
     const event = await this.db.trainingEvent.findUnique({

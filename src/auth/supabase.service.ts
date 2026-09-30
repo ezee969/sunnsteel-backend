@@ -1,3 +1,4 @@
+import { apiError } from "@sunsteel/contracts";
 import {
   ConflictException,
   Injectable,
@@ -5,39 +6,43 @@ import {
   Logger,
   ServiceUnavailableException,
   UnauthorizedException,
-} from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { Prisma } from '@prisma/client';
-import { DatabaseService } from '../database/database.service';
-import { createInitialUsername } from '../users/username';
+} from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { Prisma } from "@prisma/client";
+import { DatabaseService } from "../database/database.service";
+import { createInitialUsername } from "../users/username";
 import {
   identityFromClaims,
   SupabaseIdentity,
   supabaseIssuer,
-} from './access-token-claims';
+} from "./access-token-claims";
 
 /**
  * Where the Settings avatar upload writes: `avatars/<supabase uid>/<file>`.
  * The bucket and its RLS policies are the frontend repository's
  * `supabase/migrations/*_avatars_bucket.sql`; see `removeStoredAvatars`.
  */
-export const AVATAR_BUCKET = 'avatars';
+export const AVATAR_BUCKET = "avatars";
 
-function isMissing(error: { status?: number; statusCode?: string; message?: string }) {
+function isMissing(error: {
+  status?: number;
+  statusCode?: string;
+  message?: string;
+}) {
   return (
     error.status === 404 ||
-    error.statusCode === '404' ||
-    /not found/i.test(error.message ?? '')
+    error.statusCode === "404" ||
+    /not found/i.test(error.message ?? "")
   );
 }
 
 function isUniqueEmailViolation(error: unknown): boolean {
   return (
     error instanceof Prisma.PrismaClientKnownRequestError &&
-    error.code === 'P2002' &&
+    error.code === "P2002" &&
     Array.isArray(error.meta?.target) &&
-    error.meta.target.includes('email')
+    error.meta.target.includes("email")
   );
 }
 
@@ -51,13 +56,13 @@ export class SupabaseService {
     private readonly databaseService: DatabaseService,
     private readonly configService: ConfigService,
   ) {
-    const supabaseUrl = this.configService.get<string>('SUPABASE_URL');
+    const supabaseUrl = this.configService.get<string>("SUPABASE_URL");
     const supabaseServiceKey = this.configService.get<string>(
-      'SUPABASE_SERVICE_ROLE_KEY',
+      "SUPABASE_SERVICE_ROLE_KEY",
     );
 
     if (!supabaseUrl || !supabaseServiceKey) {
-      throw new InternalServerErrorException('Missing Supabase configuration');
+      throw new InternalServerErrorException("Missing Supabase configuration");
     }
 
     this.supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -84,14 +89,14 @@ export class SupabaseService {
       const { data, error } = await this.supabase.auth.getClaims(token);
 
       if (error || !data) {
-        throw new UnauthorizedException('Invalid token');
+        throw new UnauthorizedException("Invalid token");
       }
 
       return identityFromClaims(data.claims, this.issuer);
     } catch {
       // Malformed and expired tokens throw from inside getClaims rather than
       // returning an error; every failure is the same 401.
-      throw new UnauthorizedException('Token verification failed');
+      throw new UnauthorizedException("Token verification failed");
     }
   }
 
@@ -110,13 +115,13 @@ export class SupabaseService {
   async getOrCreateUser(supabaseUser: SupabaseIdentity, token: string) {
     const metadataName = (key: string) => {
       const value = supabaseUser.user_metadata[key];
-      return typeof value === 'string' ? value : undefined;
+      return typeof value === "string" ? value : undefined;
     };
     const userName =
-      metadataName('name') ||
-      metadataName('full_name') ||
-      supabaseUser.email?.split('@')[0] ||
-      'User';
+      metadataName("name") ||
+      metadataName("full_name") ||
+      supabaseUser.email?.split("@")[0] ||
+      "User";
 
     const existingBySupabaseId = await this.databaseService.user.findUnique({
       where: { supabaseUserId: supabaseUser.id },
@@ -152,7 +157,7 @@ export class SupabaseService {
         return existingByEmail;
       }
 
-      throw new ConflictException('Account conflict for this email');
+      throw new ConflictException(apiError("ACCOUNT_CONFLICT"));
     }
 
     try {
@@ -182,14 +187,16 @@ export class SupabaseService {
             return existing;
           }
 
-          throw new ConflictException('Account conflict for this email');
+          throw new ConflictException(apiError("ACCOUNT_CONFLICT"));
         }
       }
 
       this.logger.error(
-        `Failed to synchronize user for ${supabaseUser.email}: ${error instanceof Error ? error.message : 'unknown error'}`,
+        `Failed to synchronize user for ${supabaseUser.email}: ${error instanceof Error ? error.message : "unknown error"}`,
       );
-      throw new InternalServerErrorException('Failed to synchronize user account');
+      throw new InternalServerErrorException(
+        "Failed to synchronize user account",
+      );
     }
   }
 
@@ -207,7 +214,7 @@ export class SupabaseService {
       userId = undefined;
     }
     if (userId !== supabaseUserId) {
-      throw new UnauthorizedException('This sign-in no longer exists');
+      throw new UnauthorizedException("This sign-in no longer exists");
     }
   }
 
@@ -221,7 +228,7 @@ export class SupabaseService {
     if (error && !isMissing(error)) {
       this.logger.error(`Failed to delete a Supabase user: ${error.message}`);
       throw new ServiceUnavailableException(
-        'Your account could not be deleted right now. Nothing was removed; try again shortly.',
+        apiError("ACCOUNT_DELETE_UNAVAILABLE"),
       );
     }
   }
@@ -243,7 +250,7 @@ export class SupabaseService {
       if (isMissing(listError)) return 0;
       this.logger.error(`Failed to list stored avatars: ${listError.message}`);
       throw new ServiceUnavailableException(
-        'Your account could not be deleted right now. Nothing was removed; try again shortly.',
+        apiError("ACCOUNT_DELETE_UNAVAILABLE"),
       );
     }
     const paths = (data ?? []).map(
@@ -254,7 +261,7 @@ export class SupabaseService {
     if (error) {
       this.logger.error(`Failed to remove stored avatars: ${error.message}`);
       throw new ServiceUnavailableException(
-        'Your account could not be deleted right now. Nothing was removed; try again shortly.',
+        apiError("ACCOUNT_DELETE_UNAVAILABLE"),
       );
     }
     return paths.length;

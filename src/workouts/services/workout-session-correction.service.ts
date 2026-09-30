@@ -1,11 +1,11 @@
-import { progressionRuns } from '../session-training-block';
+import { progressionRuns } from "../session-training-block";
 import {
   ConflictException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
-import { Prisma } from '@prisma/client';
+} from "@nestjs/common";
+import { randomUUID } from "node:crypto";
+import { Prisma } from "@prisma/client";
 import {
   type CorrectSessionResponse,
   type SessionCorrection,
@@ -13,26 +13,28 @@ import {
   type SessionCorrectionWindow,
   type SessionSetCorrection,
   sessionCorrectionWindow,
-} from '@sunsteel/contracts';
-import { DatabaseService } from '../../database/database.service';
+  apiError,
+  type ApiErrorCode,
+} from "@sunsteel/contracts";
+import { DatabaseService } from "../../database/database.service";
 import {
   achievementTotals,
   awardMilestoneAchievements,
   reachedAchievements,
-} from '../../achievements/achievement-events';
-import { lockTrainingAccount } from '../analytics/analytics-lock';
+} from "../../achievements/achievement-events";
+import { lockTrainingAccount } from "../analytics/analytics-lock";
 import {
   contributionChecksum,
   localDate,
   sessionContribution,
   weekDate,
-} from '../analytics/analytics-contribution';
-import { ensureSessionSnapshot } from '../analytics/session-snapshot';
-import { CorrectSessionDto } from '../dto/correct-session.dto';
+} from "../analytics/analytics-contribution";
+import { ensureSessionSnapshot } from "../analytics/session-snapshot";
+import { CorrectSessionDto } from "../dto/correct-session.dto";
 import {
   buildProgressionOutcome,
   type ProgressionLog,
-} from '../progression-changes';
+} from "../progression-changes";
 import {
   applySetCorrections,
   beatsRecord,
@@ -41,25 +43,26 @@ import {
   type CorrectableLog,
   planSetCorrections,
   prescriptionIntact,
-} from '../session-correction-rules';
+} from "../session-correction-rules";
 import {
   excludeSubstitutedSlots,
   readSubstitutions,
-} from '../session-substitutions';
-import { COUNTED_SET_LOG } from '../counted-sets';
-import { syncFollowingWarmUps } from '../../routines/warm-up-follow';
+} from "../session-substitutions";
+import { COUNTED_SET_LOG } from "../counted-sets";
+import { syncFollowingWarmUps } from "../../routines/warm-up-follow";
 
 type Tx = Prisma.TransactionClient;
 
 const json = (value: unknown) =>
   JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 
-const CLOSED_MESSAGES: Record<string, string> = {
-  NOT_COMPLETED: 'Only a completed workout can be corrected',
-  NOT_LATEST: 'Only your most recent workout can be corrected',
-  LATER_SESSION: 'This workout can no longer be corrected: another one has started since',
-  WINDOW_PASSED: 'This workout can no longer be corrected: the correction window has passed',
-  LIMIT_REACHED: 'This workout has been corrected as many times as allowed',
+/** I18N-06: each closed window's refusal, by the code the client translates. */
+const CLOSED_CODES: Record<string, ApiErrorCode> = {
+  NOT_COMPLETED: "CORRECTION_NOT_COMPLETED",
+  NOT_LATEST: "CORRECTION_NOT_LATEST",
+  LATER_SESSION: "CORRECTION_LATER_SESSION",
+  WINDOW_PASSED: "CORRECTION_WINDOW_PASSED",
+  LIMIT_REACHED: "CORRECTION_LIMIT_REACHED",
 };
 
 const progressionKey = (sessionId: string, routineExerciseId: string) =>
@@ -91,7 +94,7 @@ async function readWindow(
           where: {
             userId,
             id: { not: session.id },
-            status: 'COMPLETED',
+            status: "COMPLETED",
             endedAt: { gt: session.endedAt },
           },
         }),
@@ -135,10 +138,11 @@ export class WorkoutSessionCorrectionService {
       where: { id: sessionId, userId },
       select: { id: true, status: true, endedAt: true },
     });
-    if (!session) throw new NotFoundException('Workout session not found');
+    if (!session)
+      throw new NotFoundException(apiError("WORKOUT_SESSION_NOT_FOUND"));
     const rows = await this.db.sessionCorrection.findMany({
       where: { sessionId },
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     });
     return {
       window: await readWindow(this.db, userId, session, rows.length),
@@ -157,42 +161,43 @@ export class WorkoutSessionCorrectionService {
         const session = await tx.workoutSession.findFirst({
           where: { id: sessionId, userId },
         });
-        if (!session) throw new NotFoundException('Workout session not found');
+        if (!session)
+          throw new NotFoundException(apiError("WORKOUT_SESSION_NOT_FOUND"));
         const correctionCount = await tx.sessionCorrection.count({
           where: { sessionId },
         });
         const window = await readWindow(tx, userId, session, correctionCount);
         if (window.closedReason)
-          throw new ConflictException({
-            code: window.closedReason,
-            message: CLOSED_MESSAGES[window.closedReason],
-          });
+          throw new ConflictException(
+            apiError(CLOSED_CODES[window.closedReason]),
+          );
         const endedAt = session.endedAt!;
 
         // A rebuilding generation replays sessions from its own cursor and
         // could have consumed this one already; correcting underneath it would
         // leave the new generation with the old numbers.
         const projections = await tx.workoutAnalyticsProjection.findMany({
-          where: { userId, state: { in: ['READY', 'BUILDING'] } },
+          where: { userId, state: { in: ["READY", "BUILDING"] } },
         });
         const projection = projections.find(
-          (item) => item.active && item.state === 'READY',
+          (item) => item.active && item.state === "READY",
         );
-        if (!projection || projections.some((item) => item.state === 'BUILDING'))
-          throw new ConflictException({
-            code: 'ANALYTICS_REBUILDING',
-            message:
-              'Your training history is being rebuilt. Try again in a few minutes.',
-          });
+        if (
+          !projection ||
+          projections.some((item) => item.state === "BUILDING")
+        )
+          throw new ConflictException(apiError("ANALYTICS_REBUILDING"));
 
         const logs: CorrectableLog[] = await tx.setLog.findMany({
           where: { sessionId },
-          orderBy: { id: 'asc' },
+          orderBy: { id: "asc" },
         });
         const exerciseNames = new Map(
           (
             await tx.exercise.findMany({
-              where: { id: { in: [...new Set(logs.map((log) => log.exerciseId))] } },
+              where: {
+                id: { in: [...new Set(logs.map((log) => log.exerciseId))] },
+              },
               select: { id: true, name: true },
             })
           ).map((exercise) => [exercise.id, exercise.name]),
@@ -202,7 +207,12 @@ export class WorkoutSessionCorrectionService {
 
         const snapshot = await ensureSessionSnapshot(tx, sessionId);
         const substitutions = readSubstitutions(session.exerciseSubstitutions);
-        const before = sessionContribution(logs, snapshot, endedAt, substitutions);
+        const before = sessionContribution(
+          logs,
+          snapshot,
+          endedAt,
+          substitutions,
+        );
         const after = sessionContribution(
           corrected,
           snapshot,
@@ -276,16 +286,16 @@ export class WorkoutSessionCorrectionService {
         const progressionKept = !progressionRuns(session)
           ? []
           : await this.rederiveProgression(
-          tx,
-          userId,
-          sessionId,
-          endedAt,
-          snapshot.routineDay.exercises ?? [],
-          logs,
-          corrected,
-          substitutions,
-          removedEntryKeys,
-        );
+              tx,
+              userId,
+              sessionId,
+              endedAt,
+              snapshot.routineDay.exercises ?? [],
+              logs,
+              corrected,
+              substitutions,
+              removedEntryKeys,
+            );
         await this.refreshSessionNotification(tx, userId, sessionId);
         await this.removeActivityEntries(tx, userId, removedEntryKeys);
 
@@ -320,8 +330,8 @@ export class WorkoutSessionCorrectionService {
     const delta = contributionDelta(before, after);
     const date = localDate(endedAt, projection.timeZone);
     for (const periodDate of [
-      ['DAY', date],
-      ['WEEK', weekDate(date)],
+      ["DAY", date],
+      ["WEEK", weekDate(date)],
     ] as const) {
       const key = {
         projectionId: projection.id,
@@ -392,12 +402,12 @@ export class WorkoutSessionCorrectionService {
           weight: { gt: 0 },
           reps: { gt: 0 },
           sessionId: { not: sessionId },
-          session: { userId, status: 'COMPLETED' },
+          session: { userId, status: "COMPLETED" },
         },
         orderBy: [
-          { weight: 'desc' },
-          { reps: 'desc' },
-          { completedAt: { sort: 'asc', nulls: 'last' } },
+          { weight: "desc" },
+          { reps: "desc" },
+          { completedAt: { sort: "asc", nulls: "last" } },
         ],
         select: {
           id: true,
@@ -426,7 +436,7 @@ export class WorkoutSessionCorrectionService {
             eventKey,
             userId,
             sessionId,
-            type: 'PERSONAL_RECORD',
+            type: "PERSONAL_RECORD",
             occurredAt: current.achievedAt,
             payload,
           },
@@ -434,7 +444,11 @@ export class WorkoutSessionCorrectionService {
         });
         await tx.analyticsRecordFrontier.upsert({
           where: { projectionId_exerciseId: frontierKey },
-          create: { ...frontierKey, weight: current.weight, reps: current.reps },
+          create: {
+            ...frontierKey,
+            weight: current.weight,
+            reps: current.reps,
+          },
           update: { weight: current.weight, reps: current.reps },
         });
         const values = { ...current, userId, sessionId };
@@ -446,7 +460,9 @@ export class WorkoutSessionCorrectionService {
         continue;
       }
 
-      const removed = await tx.trainingEvent.deleteMany({ where: { eventKey } });
+      const removed = await tx.trainingEvent.deleteMany({
+        where: { eventKey },
+      });
       if (removed.count) removedEntryKeys.push(eventKey);
       if (!prior) {
         await tx.analyticsRecordFrontier.deleteMany({ where: frontierKey });
@@ -469,7 +485,7 @@ export class WorkoutSessionCorrectionService {
               select: { name: true },
             })
           )?.name ??
-          'Exercise',
+          "Exercise",
         sessionId: prior.sessionId,
         setLogId: prior.id,
         weight: prior.weight!,
@@ -501,14 +517,14 @@ export class WorkoutSessionCorrectionService {
     removedEntryKeys: string[],
   ) {
     const recordCount = await tx.trainingEvent.count({
-      where: { userId, type: 'PERSONAL_RECORD', occurredAt: { lte: endedAt } },
+      where: { userId, type: "PERSONAL_RECORD", occurredAt: { lte: endedAt } },
     });
     const totals = achievementTotals(projection, recordCount);
     const reached = new Set(
       reachedAchievements(totals).map((definition) => definition.id),
     );
     const unlocked = await tx.trainingEvent.findMany({
-      where: { userId, sessionId, type: 'ACHIEVEMENT_UNLOCKED' },
+      where: { userId, sessionId, type: "ACHIEVEMENT_UNLOCKED" },
       select: { eventKey: true, payload: true },
     });
     for (const event of unlocked) {
@@ -557,7 +573,7 @@ export class WorkoutSessionCorrectionService {
               routineExerciseId,
               setNumber: log.setNumber,
               reps: log.reps ?? null,
-              weight: typeof log.weight === 'number' ? log.weight : null,
+              weight: typeof log.weight === "number" ? log.weight : null,
               isCompleted: log.isCompleted,
               kind: log.kind,
             },
@@ -566,8 +582,11 @@ export class WorkoutSessionCorrectionService {
         substitutions,
       );
     const finish = buildProgressionOutcome(exercises, toProgressionLogs(logs));
-    const now = buildProgressionOutcome(exercises, toProgressionLogs(corrected));
-    const kept: CorrectSessionResponse['progressionKept'] = [];
+    const now = buildProgressionOutcome(
+      exercises,
+      toProgressionLogs(corrected),
+    );
+    const kept: CorrectSessionResponse["progressionKept"] = [];
 
     for (const exercise of exercises) {
       const finishUpdates = finish.updates.filter(
@@ -584,14 +603,15 @@ export class WorkoutSessionCorrectionService {
       );
       if (
         JSON.stringify(finishUpdates) === JSON.stringify(nowUpdates) &&
-        JSON.stringify(finishChange ?? null) === JSON.stringify(nowChange ?? null)
+        JSON.stringify(finishChange ?? null) ===
+          JSON.stringify(nowChange ?? null)
       )
         continue;
 
       // LIVE-20: warm-up loads are not progression's -- a following warm-up
       // is recalculated after it -- so they are neither compared nor written.
       const notWarmUp = <T extends { kind?: string | null }>(sets: T[]) =>
-        sets.filter((set) => (set.kind ?? 'WORKING') !== 'WARMUP');
+        sets.filter((set) => (set.kind ?? "WORKING") !== "WARMUP");
       const current = notWarmUp(
         await tx.routineExerciseSet.findMany({
           where: { routineExerciseId: exercise.id },
@@ -601,7 +621,7 @@ export class WorkoutSessionCorrectionService {
       const prescribed = notWarmUp(exercise.sets);
       if (!prescriptionIntact(prescribed, current, finishUpdates)) {
         kept.push({
-          exerciseId: exercise.exerciseId ?? exercise.exercise.id ?? '',
+          exerciseId: exercise.exerciseId ?? exercise.exercise.id ?? "",
           exerciseName: exercise.exercise.name,
         });
         continue;
@@ -610,7 +630,8 @@ export class WorkoutSessionCorrectionService {
         current.map((set) => [set.setNumber, set.weight]),
       );
       for (const set of correctedPrescription(prescribed, nowUpdates)) {
-        if ((currentWeights.get(set.setNumber) ?? null) === set.weight) continue;
+        if ((currentWeights.get(set.setNumber) ?? null) === set.weight)
+          continue;
         await tx.routineExerciseSet.update({
           where: {
             routineExerciseId_setNumber: {
@@ -633,7 +654,7 @@ export class WorkoutSessionCorrectionService {
             eventKey,
             userId,
             sessionId,
-            type: 'PROGRESSION_CHANGED',
+            type: "PROGRESSION_CHANGED",
             occurredAt: endedAt,
             payload,
           },
@@ -660,15 +681,17 @@ export class WorkoutSessionCorrectionService {
     sessionId: string,
   ) {
     const note = await tx.notification.findUnique({
-      where: { userId_sourceKey: { userId, sourceKey: `session:${sessionId}` } },
+      where: {
+        userId_sourceKey: { userId, sourceKey: `session:${sessionId}` },
+      },
     });
     if (!note) return;
     const [records, progressions] = await Promise.all([
       tx.trainingEvent.count({
-        where: { userId, sessionId, type: 'PERSONAL_RECORD' },
+        where: { userId, sessionId, type: "PERSONAL_RECORD" },
       }),
       tx.trainingEvent.count({
-        where: { userId, sessionId, type: 'PROGRESSION_CHANGED' },
+        where: { userId, sessionId, type: "PROGRESSION_CHANGED" },
       }),
     ]);
     if (records === 0 && progressions === 0) {

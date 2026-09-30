@@ -5,6 +5,7 @@ import {
   type RestAlertPushPayload,
   type ScheduleRestAlertRequest,
   type ScheduleRestAlertResponse,
+  apiError,
 } from "@sunsteel/contracts";
 import { DatabaseService } from "../../database/database.service";
 import { recipientLocale, serverCopy } from "../../i18n/server-copy";
@@ -124,6 +125,7 @@ export class RestAlertService {
       where: { id: sessionId, userId },
       select: { id: true },
     });
-    if (!session) throw new NotFoundException("Workout session not found");
+    if (!session)
+      throw new NotFoundException(apiError("WORKOUT_SESSION_NOT_FOUND"));
   }
 }

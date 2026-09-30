@@ -1,6 +1,14 @@
-import { setKindOf, type SetKind } from '@sunsteel/contracts';
+import {
+  apiError,
+  setKindOf,
+  type ApiErrorBody,
+  type SetKind,
+} from "@sunsteel/contracts";
 
-import { readSnapshot } from './analytics/session-snapshot';
+/** A refusal as the exception body: its code, its English and its params. */
+type Refusal = Pick<ApiErrorBody, "code" | "message" | "params">;
+
+import { readSnapshot } from "./analytics/session-snapshot";
 
 /**
  * LIVE-15: a slot's prescribed sets are the ones in the session snapshot.
@@ -62,12 +70,12 @@ export function extraSetRefusal(
   setNumber: number,
   prescribed: number,
   highestLogged: number,
-): string | null {
+): Refusal | null {
   if (setNumber <= prescribed) return null;
   if (setNumber > prescribed + MAX_EXTRA_SETS)
-    return `An exercise can take at most ${MAX_EXTRA_SETS} extra sets`;
+    return apiError("EXTRA_SETS_MAX", { max: MAX_EXTRA_SETS });
   if (setNumber !== Math.max(prescribed, highestLogged) + 1)
-    return 'Extra sets are added after the last set';
+    return apiError("EXTRA_SET_NOT_NEXT");
   return null;
 }
 
@@ -76,9 +84,9 @@ export function removeSetRefusal(
   setNumber: number,
   prescribed: number,
   highestLogged: number,
-): string | null {
-  if (setNumber <= prescribed) return 'A prescribed set cannot be removed';
+): Refusal | null {
+  if (setNumber <= prescribed) return apiError("PRESCRIBED_SET_NOT_REMOVABLE");
   if (setNumber !== highestLogged)
-    return 'Only the last added set can be removed';
+    return apiError("ONLY_LAST_EXTRA_SET_REMOVABLE");
   return null;
 }

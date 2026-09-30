@@ -1,3 +1,4 @@
+import { apiError } from "@sunsteel/contracts";
 import {
   BadRequestException,
   Injectable,
@@ -99,9 +100,7 @@ export class WorkoutStrengthTrendService {
             ) ?? null)
           : (exercises[0] ?? null);
         if (query.exerciseId && !selectedExercise) {
-          throw new NotFoundException(
-            "No strength records found for this exercise",
-          );
+          throw new NotFoundException(apiError("NO_STRENGTH_RECORDS"));
         }
         if (!selectedExercise) {
           return {

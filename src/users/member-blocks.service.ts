@@ -3,18 +3,15 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
+} from "@nestjs/common";
 import {
   BLOCKED_MEMBERS_MAX,
   type BlockedMembersResponse,
-} from '@sunsteel/contracts';
-import { DatabaseService } from '../database/database.service';
-import {
-  blockPairWhere,
-  blockedIdsWhere,
-  otherPartyId,
-} from './member-blocks';
-import { trainingPartnerPairKey } from './training-partner-access';
+  apiError,
+} from "@sunsteel/contracts";
+import { DatabaseService } from "../database/database.service";
+import { blockPairWhere, blockedIdsWhere, otherPartyId } from "./member-blocks";
+import { trainingPartnerPairKey } from "./training-partner-access";
 
 const MEMBER_SELECT = {
   id: true,
@@ -46,14 +43,16 @@ export class MemberBlocksService {
   /** True when either account has blocked the other. */
   async isBlockedPair(a: string, b: string): Promise<boolean> {
     if (a === b) return false;
-    const count = await this.db.userBlock.count({ where: blockPairWhere(a, b) });
+    const count = await this.db.userBlock.count({
+      where: blockPairWhere(a, b),
+    });
     return count > 0;
   }
 
   async list(viewerId: string): Promise<BlockedMembersResponse> {
     const rows = await this.db.userBlock.findMany({
       where: { blockerId: viewerId },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
       select: { createdAt: true, blocked: { select: MEMBER_SELECT } },
     });
     return {
@@ -70,20 +69,22 @@ export class MemberBlocksService {
   ): Promise<BlockedMembersResponse> {
     const target = await this.resolve(targetIdentifier);
     if (target === viewerId) {
-      throw new BadRequestException('You cannot block yourself');
+      throw new BadRequestException(apiError("BLOCK_SELF"));
     }
     const existing = await this.db.userBlock.count({
       where: { blockerId: viewerId },
     });
     if (existing >= BLOCKED_MEMBERS_MAX) {
       throw new ConflictException(
-        `You can block at most ${BLOCKED_MEMBERS_MAX} members.`,
+        apiError("BLOCKS_MAX", { max: BLOCKED_MEMBERS_MAX }),
       );
     }
 
     await this.db.$transaction([
       this.db.userBlock.upsert({
-        where: { blockerId_blockedId: { blockerId: viewerId, blockedId: target } },
+        where: {
+          blockerId_blockedId: { blockerId: viewerId, blockedId: target },
+        },
         create: { blockerId: viewerId, blockedId: target },
         update: {},
       }),
@@ -131,7 +132,7 @@ export class MemberBlocksService {
       },
       select: { id: true },
     });
-    if (!user) throw new NotFoundException('Member not found');
+    if (!user) throw new NotFoundException(apiError("MEMBER_NOT_FOUND"));
     return user.id;
   }
 }

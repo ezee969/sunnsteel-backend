@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException } from "@nestjs/common";
 import {
   REP_TYPES,
   ROUTINE_SCHEDULE_MODES,
@@ -7,8 +7,9 @@ import {
   type RoutineVersionDay,
   type RoutineVersionExercise,
   type RoutineVersionSetup,
-} from '@sunsteel/contracts';
-import type { RoutineWithDaysEntity } from './routine.mapper';
+  apiError,
+} from "@sunsteel/contracts";
+import type { RoutineWithDaysEntity } from "./routine.mapper";
 
 /**
  * ROUT-08: what a version preserves — everything a routine edit can change —
@@ -31,7 +32,10 @@ export function captureRoutineSetup(
         order: day.order,
         exercises: day.exercises.map(
           (exercise): RoutineVersionExercise => ({
-            exercise: { id: exercise.exercise.id, name: exercise.exercise.name },
+            exercise: {
+              id: exercise.exercise.id,
+              name: exercise.exercise.name,
+            },
             order: exercise.order,
             restSeconds: exercise.restSeconds,
             note: exercise.note ?? null,
@@ -50,7 +54,7 @@ export function captureRoutineSetup(
                 rir: set.rir,
                 // LIVE-12: absent in setups captured before it.
                 ...(set.kind ? { kind: set.kind } : {}),
-                ...(typeof set.warmUpShare === 'number'
+                ...(typeof set.warmUpShare === "number"
                   ? { warmUpShare: set.warmUpShare }
                   : {}),
               }),
@@ -63,7 +67,7 @@ export function captureRoutineSetup(
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
+  typeof value === "object" && value !== null && !Array.isArray(value);
 
 /**
  * A stored setup, checked before it is served or restored. Versions are
@@ -73,7 +77,7 @@ export function readRoutineSetup(payload: unknown): RoutineVersionSetup {
   const setup = payload as RoutineVersionSetup;
   const valid =
     isRecord(payload) &&
-    typeof setup.name === 'string' &&
+    typeof setup.name === "string" &&
     (ROUTINE_SCHEDULE_MODES as readonly string[]).includes(
       setup.scheduleMode,
     ) &&
@@ -90,7 +94,7 @@ export function readRoutineSetup(payload: unknown): RoutineVersionSetup {
           (exercise) =>
             isRecord(exercise) &&
             isRecord(exercise.exercise) &&
-            typeof exercise.exercise.id === 'string' &&
+            typeof exercise.exercise.id === "string" &&
             Array.isArray(exercise.sets) &&
             exercise.sets.every(
               (set) =>
@@ -99,7 +103,7 @@ export function readRoutineSetup(payload: unknown): RoutineVersionSetup {
             ),
         ),
     );
-  if (!valid) throw new Error('Unreadable routine version setup');
+  if (!valid) throw new Error("Unreadable routine version setup");
   return setup;
 }
 
@@ -109,9 +113,9 @@ export function setupToRoutineUpdate(setup: RoutineVersionSetup) {
     name: setup.name,
     description: setup.description ?? undefined,
     scheduleMode: setup.scheduleMode,
-    restDays: setup.scheduleMode === 'WEEKLY' ? [...setup.restDays] : [],
+    restDays: setup.scheduleMode === "WEEKLY" ? [...setup.restDays] : [],
     rotationWeekdays:
-      setup.scheduleMode === 'ROTATION'
+      setup.scheduleMode === "ROTATION"
         ? [...(setup.rotationWeekdays ?? [])]
         : [],
     days: setup.days.map((day) => ({
@@ -149,7 +153,9 @@ export function normalizeVersionName(name: string | null | undefined) {
   const trimmed = name?.trim() || null;
   if (trimmed && trimmed.length > ROUTINE_VERSION_NAME_MAX) {
     throw new BadRequestException(
-      `Version names have at most ${ROUTINE_VERSION_NAME_MAX} characters`,
+      apiError("ROUTINE_VERSION_NAME_TOO_LONG", {
+        max: ROUTINE_VERSION_NAME_MAX,
+      }),
     );
   }
   return trimmed;

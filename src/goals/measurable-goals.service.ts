@@ -6,7 +6,7 @@ import type {
   MeasurableGoalInput,
   MeasurableGoalType,
 } from "@sunsteel/contracts";
-import { MEASURABLE_GOALS_MAX } from "@sunsteel/contracts";
+import { MEASURABLE_GOALS_MAX, apiError } from "@sunsteel/contracts";
 import { DatabaseService } from "../database/database.service";
 import { usableExerciseWhere } from "../exercises/exercise-access";
 
@@ -49,7 +49,7 @@ export function normalizeMeasurableGoalInputs(
 ): NormalizedGoalInput[] {
   if (inputs.length > MEASURABLE_GOALS_MAX) {
     throw new BadRequestException(
-      `No more than ${MEASURABLE_GOALS_MAX} measurable goals are allowed`,
+      apiError("GOALS_MAX", { max: MEASURABLE_GOALS_MAX }),
     );
   }
   const keys = new Set<string>();
@@ -73,7 +73,7 @@ export function normalizeMeasurableGoalInputs(
     if (needsExercise !== Boolean(input.exerciseId)) {
       throw new BadRequestException(
         needsExercise
-          ? "Strength goals require an exercise"
+          ? apiError("GOAL_STRENGTH_NEEDS_EXERCISE")
           : "Only strength goals may reference an exercise",
       );
     }
@@ -85,7 +85,7 @@ export function normalizeMeasurableGoalInputs(
     }
     const key = `${input.type}:${input.exerciseId ?? ""}`;
     if (keys.has(key)) {
-      throw new BadRequestException("Duplicate measurable goal");
+      throw new BadRequestException(apiError("GOAL_DUPLICATE"));
     }
     keys.add(key);
     return {

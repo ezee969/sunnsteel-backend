@@ -2,8 +2,8 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+} from "@nestjs/common";
+import { Prisma } from "@prisma/client";
 import {
   FOLLOW_SUGGESTIONS_DEFAULT_LIMIT,
   FOLLOW_SUGGESTIONS_MAX_LIMIT,
@@ -15,11 +15,12 @@ import {
   RelationshipListQuery,
   RelationshipListResponse,
   RelationshipMember,
-} from '@sunsteel/contracts';
+  apiError,
+} from "@sunsteel/contracts";
 
-import { DatabaseService } from '../database/database.service';
-import { hiddenFromViewer } from './member-blocks';
-import { normalizeUsername } from './username';
+import { DatabaseService } from "../database/database.service";
+import { hiddenFromViewer } from "./member-blocks";
+import { normalizeUsername } from "./username";
 
 // Identity-only projection shared by every relationship surface. It matches
 // `UserSearchResponse`, so a list can never leak email or any private section.
@@ -50,17 +51,17 @@ export const FOLLOW_SUGGESTION_CANDIDATE_CAP = 200;
 export function encodeRelationshipCursor(cursor: RelationshipCursor): string {
   return Buffer.from(
     `${cursor.createdAt.toISOString()}|${cursor.userId}`,
-    'utf8',
-  ).toString('base64url');
+    "utf8",
+  ).toString("base64url");
 }
 
 export function decodeRelationshipCursor(value: string): RelationshipCursor {
-  const decoded = Buffer.from(value, 'base64url').toString('utf8');
-  const separator = decoded.indexOf('|');
+  const decoded = Buffer.from(value, "base64url").toString("utf8");
+  const separator = decoded.indexOf("|");
   const createdAt = new Date(decoded.slice(0, separator));
   const userId = decoded.slice(separator + 1);
   if (separator <= 0 || !userId || Number.isNaN(createdAt.getTime())) {
-    throw new BadRequestException('Invalid cursor');
+    throw new BadRequestException("Invalid cursor");
   }
   return { createdAt, userId };
 }
@@ -138,13 +139,13 @@ export class UserRelationshipsService {
       select: { id: true },
     });
     if (!profile) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException(apiError("USER_NOT_FOUND"));
     }
     // PROF-10: a blocked profile is not readable, and answers as one that does
     // not exist -- a 403 would confirm both the account and the block.
     const hidden = await this.hiddenMemberIds(viewerId);
     if (hidden.includes(profile.id)) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException(apiError("USER_NOT_FOUND"));
     }
 
     const limit = clampLimit(
@@ -152,15 +153,13 @@ export class UserRelationshipsService {
       RELATIONSHIP_LIST_DEFAULT_LIMIT,
       RELATIONSHIP_LIST_MAX_LIMIT,
     );
-    const cursor = query.cursor
-      ? decodeRelationshipCursor(query.cursor)
-      : null;
+    const cursor = query.cursor ? decodeRelationshipCursor(query.cursor) : null;
     const rows =
-      kind === 'following'
+      kind === "following"
         ? await this.readFollowing(profile.id, cursor, limit + 1)
         : await this.readFollowers(
             profile.id,
-            kind === 'mutuals' ? viewerId : null,
+            kind === "mutuals" ? viewerId : null,
             cursor,
             limit + 1,
           );
@@ -173,7 +172,9 @@ export class UserRelationshipsService {
         viewerId,
         // A blocked member is absent from somebody else's list too: the list
         // is a discovery surface, and the block is symmetric.
-        page.map(row => row.member).filter(member => !hidden.includes(member.id)),
+        page
+          .map((row) => row.member)
+          .filter((member) => !hidden.includes(member.id)),
       ),
       ...(rows.length > limit && last
         ? {
@@ -205,7 +206,7 @@ export class UserRelationshipsService {
       where: { followerId: viewerId },
       select: { followingId: true },
     });
-    const followedIds = followed.map(row => row.followingId);
+    const followedIds = followed.map((row) => row.followingId);
     // PROF-10: blocked in either direction is never a suggestion.
     const hidden = await this.hiddenMemberIds(viewerId);
     const excludedIds = [...followedIds, ...hidden, viewerId];
@@ -214,14 +215,14 @@ export class UserRelationshipsService {
       this.readNetworkCounts(followedIds, excludedIds),
       this.db.userFollow.findMany({
         where: { followingId: viewerId, followerId: { notIn: excludedIds } },
-        orderBy: [{ createdAt: 'desc' }, { followerId: 'desc' }],
+        orderBy: [{ createdAt: "desc" }, { followerId: "desc" }],
         take: FOLLOW_SUGGESTION_CANDIDATE_CAP,
         select: { followerId: true },
       }),
     ]);
 
     const ranked = rankFollowSuggestions(
-      fans.map(row => row.followerId),
+      fans.map((row) => row.followerId),
       networkCounts,
       limit,
     );
@@ -229,11 +230,11 @@ export class UserRelationshipsService {
 
     const members = await this.db.user.findMany({
       where: {
-        id: { in: ranked.map(candidate => candidate.id), notIn: hidden },
+        id: { in: ranked.map((candidate) => candidate.id), notIn: hidden },
       },
       select: memberSelect,
     });
-    const membersById = new Map(members.map(member => [member.id, member]));
+    const membersById = new Map(members.map((member) => [member.id, member]));
 
     return {
       items: ranked.flatMap((candidate): FollowSuggestion[] => {
@@ -245,8 +246,8 @@ export class UserRelationshipsService {
             isFollowedByMe: false,
             followsMe: candidate.followsMe,
             reason: candidate.followsMe
-              ? 'FOLLOWS_YOU'
-              : 'FOLLOWED_BY_PEOPLE_YOU_FOLLOW',
+              ? "FOLLOWS_YOU"
+              : "FOLLOWED_BY_PEOPLE_YOU_FOLLOW",
             mutualCount: candidate.mutualCount,
           },
         ];
@@ -261,7 +262,7 @@ export class UserRelationshipsService {
   ): Promise<Map<string, number>> {
     if (followedIds.length === 0) return new Map();
     const groups = await this.db.userFollow.groupBy({
-      by: ['followingId'],
+      by: ["followingId"],
       where: {
         followerId: { in: followedIds },
         followingId: { notIn: excludedIds },
@@ -270,7 +271,7 @@ export class UserRelationshipsService {
         },
       },
       _count: { followingId: true },
-      orderBy: [{ _count: { followingId: 'desc' } }, { followingId: 'asc' }],
+      orderBy: [{ _count: { followingId: "desc" } }, { followingId: "asc" }],
       take: FOLLOW_SUGGESTION_CANDIDATE_CAP,
     });
     return new Map(
@@ -292,7 +293,9 @@ export class UserRelationshipsService {
         followingId: profileId,
         // Mutuals: followers of the profile whom the viewer also follows.
         ...(mutualViewerId
-          ? { follower: { followers: { some: { followerId: mutualViewerId } } } }
+          ? {
+              follower: { followers: { some: { followerId: mutualViewerId } } },
+            }
           : {}),
         ...(cursor
           ? {
@@ -306,11 +309,14 @@ export class UserRelationshipsService {
             }
           : {}),
       },
-      orderBy: [{ createdAt: 'desc' }, { followerId: 'desc' }],
+      orderBy: [{ createdAt: "desc" }, { followerId: "desc" }],
       take,
       select: { createdAt: true, follower: { select: memberSelect } },
     });
-    return rows.map(row => ({ createdAt: row.createdAt, member: row.follower }));
+    return rows.map((row) => ({
+      createdAt: row.createdAt,
+      member: row.follower,
+    }));
   }
 
   private async readFollowing(
@@ -333,11 +339,11 @@ export class UserRelationshipsService {
             }
           : {}),
       },
-      orderBy: [{ createdAt: 'desc' }, { followingId: 'desc' }],
+      orderBy: [{ createdAt: "desc" }, { followingId: "desc" }],
       take,
       select: { createdAt: true, following: { select: memberSelect } },
     });
-    return rows.map(row => ({
+    return rows.map((row) => ({
       createdAt: row.createdAt,
       member: row.following,
     }));
@@ -348,7 +354,7 @@ export class UserRelationshipsService {
     members: MemberRecord[],
   ): Promise<RelationshipMember[]> {
     if (members.length === 0) return [];
-    const ids = members.map(member => member.id);
+    const ids = members.map((member) => member.id);
     const [followedByViewer, followingViewer] = await Promise.all([
       this.db.userFollow.findMany({
         where: { followerId: viewerId, followingId: { in: ids } },
@@ -359,9 +365,9 @@ export class UserRelationshipsService {
         select: { followerId: true },
       }),
     ]);
-    const followedIds = new Set(followedByViewer.map(row => row.followingId));
-    const followerIds = new Set(followingViewer.map(row => row.followerId));
-    return members.map(member => ({
+    const followedIds = new Set(followedByViewer.map((row) => row.followingId));
+    const followerIds = new Set(followingViewer.map((row) => row.followerId));
+    return members.map((member) => ({
       ...member,
       isFollowedByMe: followedIds.has(member.id),
       followsMe: followerIds.has(member.id),

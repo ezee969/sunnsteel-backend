@@ -4,6 +4,7 @@ import {
   MUSCLE_GROUPS,
   type MuscleGroup,
   type MuscleGroupHeatmapResponse,
+  apiError,
 } from "@sunsteel/contracts";
 import { DatabaseService } from "../database/database.service";
 import { localDate, weekDate } from "./analytics/analytics-contribution";
@@ -47,7 +48,7 @@ export class WorkoutMuscleHeatmapService {
           WHERE "userId" = ${userId} AND "active" AND "state" = 'READY' AND "timeZone" = ${query.timeZone} LIMIT 1`;
         if (!projection)
           throw new ServiceUnavailableException(
-            "Workout analytics projection is not ready",
+            apiError("ANALYTICS_NOT_READY"),
           );
 
         const rows = await tx.workoutMuscleRollup.findMany({

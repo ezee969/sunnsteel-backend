@@ -2,27 +2,28 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+} from "@nestjs/common";
+import { Prisma } from "@prisma/client";
 import {
   ROUTINE_VERSIONS_MAX,
   RestoreRoutineVersionResponse,
   RoutineVersion,
   RoutineVersionsResponse,
-} from '@sunsteel/contracts';
-import { DatabaseService } from '../database/database.service';
-import { lockTrainingAccount } from '../workouts/analytics/analytics-lock';
-import { UpdateRoutineDto } from './dto/update-routine.dto';
-import { ROUTINE_WITH_DAYS_SELECT } from './routine.selects';
+  apiError,
+} from "@sunsteel/contracts";
+import { DatabaseService } from "../database/database.service";
+import { lockTrainingAccount } from "../workouts/analytics/analytics-lock";
+import { UpdateRoutineDto } from "./dto/update-routine.dto";
+import { ROUTINE_WITH_DAYS_SELECT } from "./routine.selects";
 import {
   captureRoutineSetup,
   normalizeVersionName,
   readRoutineSetup,
   setupExerciseIds,
   setupToRoutineUpdate,
-} from './routine-versions';
-import { RoutinesService } from './routines.service';
-import { usableExerciseWhere } from '../exercises/exercise-access';
+} from "./routine-versions";
+import { RoutinesService } from "./routines.service";
+import { usableExerciseWhere } from "../exercises/exercise-access";
 
 const VERSION_SELECT = {
   id: true,
@@ -52,8 +53,6 @@ function toRoutineVersion(row: VersionEntity): RoutineVersion {
   };
 }
 
-const FULL_MESSAGE = `A routine keeps at most ${ROUTINE_VERSIONS_MAX} versions; delete one first`;
-
 /**
  * ROUT-08: intentional, immutable copies of a routine's setup. Saving copies
  * the routine as it is now; restoring first saves the current setup as a
@@ -75,7 +74,7 @@ export class RoutineVersionsService {
     const rows = await this.db.routineVersion.findMany({
       where: { routineId },
       select: VERSION_SELECT,
-      orderBy: { number: 'desc' },
+      orderBy: { number: "desc" },
       take: ROUTINE_VERSIONS_MAX,
     });
     return { versions: rows.map(toRoutineVersion), max: ROUTINE_VERSIONS_MAX };
@@ -91,7 +90,7 @@ export class RoutineVersionsService {
       await lockTrainingAccount(tx, userId);
       return this.saveCurrent(tx, userId, routineId, {
         name: versionName,
-        kind: 'SAVED',
+        kind: "SAVED",
         restoredVersionNumber: null,
       });
     });
@@ -109,7 +108,7 @@ export class RoutineVersionsService {
         where: { id: versionId, routineId },
         select: VERSION_SELECT,
       });
-      if (!version) throw new NotFoundException('Version not found');
+      if (!version) throw new NotFoundException(apiError("VERSION_NOT_FOUND"));
       const setup = readRoutineSetup(version.setup);
 
       const ids = setupExerciseIds(setup);
@@ -117,14 +116,12 @@ export class RoutineVersionsService {
         where: { id: { in: ids }, ...usableExerciseWhere(userId) },
       });
       if (known !== ids.length) {
-        throw new ConflictException(
-          'An exercise in this version is no longer in the catalog',
-        );
+        throw new ConflictException(apiError("ROUTINE_VERSION_EXERCISE_GONE"));
       }
 
       const savedVersion = await this.saveCurrent(tx, userId, routineId, {
         name: null,
-        kind: 'BEFORE_RESTORE',
+        kind: "BEFORE_RESTORE",
         restoredVersionNumber: version.number,
       });
       // Stored setups were valid routines; the update checks them again.
@@ -143,7 +140,7 @@ export class RoutineVersionsService {
     const { count } = await this.db.routineVersion.deleteMany({
       where: { id: versionId, routineId },
     });
-    if (count === 0) throw new NotFoundException('Version not found');
+    if (count === 0) throw new NotFoundException(apiError("VERSION_NOT_FOUND"));
   }
 
   private async saveCurrent(
@@ -152,17 +149,20 @@ export class RoutineVersionsService {
     routineId: string,
     data: Pick<
       Prisma.RoutineVersionUncheckedCreateInput,
-      'name' | 'kind' | 'restoredVersionNumber'
+      "name" | "kind" | "restoredVersionNumber"
     >,
   ): Promise<RoutineVersion> {
     const routine = await tx.routine.findFirst({
       where: { id: routineId, userId },
       select: ROUTINE_WITH_DAYS_SELECT,
     });
-    if (!routine) throw new NotFoundException('Routine not found');
+    if (!routine) throw new NotFoundException(apiError("ROUTINE_NOT_FOUND"));
 
     const count = await tx.routineVersion.count({ where: { routineId } });
-    if (count >= ROUTINE_VERSIONS_MAX) throw new ConflictException(FULL_MESSAGE);
+    if (count >= ROUTINE_VERSIONS_MAX)
+      throw new ConflictException(
+        apiError("ROUTINE_VERSIONS_MAX", { max: ROUTINE_VERSIONS_MAX }),
+      );
     // A per-routine counter, so a deleted version's number is never reused.
     const { lastVersionNumber } = await tx.routine.update({
       where: { id: routineId },
@@ -183,7 +183,7 @@ export class RoutineVersionsService {
   }
 
   private async assertOwned(
-    db: Pick<Prisma.TransactionClient, 'routine'>,
+    db: Pick<Prisma.TransactionClient, "routine">,
     userId: string,
     routineId: string,
   ) {
@@ -191,6 +191,6 @@ export class RoutineVersionsService {
       where: { id: routineId, userId },
       select: { id: true },
     });
-    if (!routine) throw new NotFoundException('Routine not found');
+    if (!routine) throw new NotFoundException(apiError("ROUTINE_NOT_FOUND"));
   }
 }

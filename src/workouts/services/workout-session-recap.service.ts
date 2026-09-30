@@ -1,21 +1,22 @@
+import { apiError } from "@sunsteel/contracts";
 import {
   BadRequestException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
-import { WorkoutSessionStatus } from '@prisma/client';
+} from "@nestjs/common";
+import { WorkoutSessionStatus } from "@prisma/client";
 import type {
   PreviousSessionRecap,
   WorkoutSessionRecap,
-} from '@sunsteel/contracts';
-import { DatabaseService } from '../../database/database.service';
-import { readProgressionEvents } from '../analytics/progression-events';
-import { readSnapshot } from '../analytics/session-snapshot';
-import { buildSessionRecapRecords, summarizeRecapSets } from '../session-recap';
-import { readExerciseNotes, recapExerciseNotes } from '../session-notes';
-import { readSubstitutions } from '../session-substitutions';
-import { routineDayName } from '../workout-session.selects';
-import { COUNTED_SET_LOG } from '../counted-sets';
+} from "@sunsteel/contracts";
+import { DatabaseService } from "../../database/database.service";
+import { readProgressionEvents } from "../analytics/progression-events";
+import { readSnapshot } from "../analytics/session-snapshot";
+import { buildSessionRecapRecords, summarizeRecapSets } from "../session-recap";
+import { readExerciseNotes, recapExerciseNotes } from "../session-notes";
+import { readSubstitutions } from "../session-substitutions";
+import { routineDayName } from "../workout-session.selects";
+import { COUNTED_SET_LOG } from "../counted-sets";
 
 @Injectable()
 export class WorkoutSessionRecapService {
@@ -55,15 +56,16 @@ export class WorkoutSessionRecapService {
             completedAt: true,
             exercise: { select: { name: true } },
           },
-          orderBy: [{ completedAt: 'asc' }, { id: 'asc' }],
+          orderBy: [{ completedAt: "asc" }, { id: "asc" }],
         },
       },
     });
 
-    if (!session) throw new NotFoundException('Workout session not found');
+    if (!session)
+      throw new NotFoundException(apiError("WORKOUT_SESSION_NOT_FOUND"));
     if (session.status !== WorkoutSessionStatus.COMPLETED || !session.endedAt) {
       throw new BadRequestException(
-        'Session recap requires a completed session',
+        "Session recap requires a completed session",
       );
     }
 
@@ -88,7 +90,7 @@ export class WorkoutSessionRecapService {
                   { sourceRoutineDayId: null, routineDayId },
                 ],
               },
-              orderBy: [{ endedAt: 'desc' }, { id: 'desc' }],
+              orderBy: [{ endedAt: "desc" }, { id: "desc" }],
               select: {
                 id: true,
                 endedAt: true,
@@ -175,7 +177,7 @@ export class WorkoutSessionRecapService {
 
     return {
       sessionId: session.id,
-      routineName: snapshot?.routine.name ?? session.routine?.name ?? 'Workout',
+      routineName: snapshot?.routine.name ?? session.routine?.name ?? "Workout",
       dayName: routineDayName(snapshot?.routineDay ?? session.routineDay),
       startedAt: session.startedAt.toISOString(),
       endedAt: session.endedAt.toISOString(),

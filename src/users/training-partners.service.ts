@@ -4,7 +4,7 @@ import {
   PLAN_OVERRIDES_SELECT,
   toPlanBlocks,
   toPlanOverrides,
-} from '../routines/routine-plan';
+} from "../routines/routine-plan";
 import {
   BadRequestException,
   ConflictException,
@@ -12,9 +12,9 @@ import {
   HttpStatus,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
-import { Prisma } from '@prisma/client';
-import { randomUUID } from 'node:crypto';
+} from "@nestjs/common";
+import { Prisma } from "@prisma/client";
+import { randomUUID } from "node:crypto";
 import {
   TRAINING_PARTNER_REQUESTS_PER_DAY_MAX,
   TRAINING_PARTNER_ENCOURAGEMENTS_PER_24_HOURS_MAX,
@@ -25,15 +25,16 @@ import {
   type TrainingPartnerScheduleResponse,
   type TrainingPartnership,
   type TrainingPartnershipsResponse,
-} from '@sunsteel/contracts';
-import { DatabaseService } from '../database/database.service';
-import { localClock } from '../notifications/push/local-time';
-import { routinesPlannedOn } from '../notifications/push/training-days';
-import { isHiddenFromViewer } from './member-blocks';
+  apiError,
+} from "@sunsteel/contracts";
+import { DatabaseService } from "../database/database.service";
+import { localClock } from "../notifications/push/local-time";
+import { routinesPlannedOn } from "../notifications/push/training-days";
+import { isHiddenFromViewer } from "./member-blocks";
 import {
   NO_TRAINING_PARTNER_PERMISSIONS,
   trainingPartnerPairKey,
-} from './training-partner-access';
+} from "./training-partner-access";
 
 const MEMBER_SELECT = {
   id: true,
@@ -69,7 +70,7 @@ type PartnershipRow = Prisma.TrainingPartnershipGetPayload<{
 }>;
 
 const grantPermissions = (
-  grant: PartnershipRow['grants'][number] | undefined,
+  grant: PartnershipRow["grants"][number] | undefined,
 ): TrainingPartnerPermissions =>
   grant
     ? {
@@ -99,9 +100,7 @@ export function mapTrainingPartnership(
       row.grants.find((grant) => grant.grantorId === member.id),
     ),
     createdAt: row.createdAt.toISOString(),
-    ...(row.acceptedAt
-      ? { acceptedAt: row.acceptedAt.toISOString() }
-      : {}),
+    ...(row.acceptedAt ? { acceptedAt: row.acceptedAt.toISOString() } : {}),
   };
 }
 
@@ -121,7 +120,7 @@ export class TrainingPartnersService {
   async list(viewerId: string): Promise<TrainingPartnershipsResponse> {
     const rows = await this.db.trainingPartnership.findMany({
       where: { OR: [{ requesterId: viewerId }, { recipientId: viewerId }] },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       select: PARTNERSHIP_SELECT,
     });
     return { items: rows.map((row) => mapTrainingPartnership(row, viewerId)) };
@@ -134,12 +133,10 @@ export class TrainingPartnersService {
   ): Promise<TrainingPartnership> {
     const target = await this.resolve(targetIdentifier);
     if (target.id === requesterId) {
-      throw new BadRequestException(
-        'You cannot send a training-partner request to yourself',
-      );
+      throw new BadRequestException(apiError("PARTNER_REQUEST_SELF"));
     }
     if (await isHiddenFromViewer(this.db, requesterId, target.id)) {
-      throw new NotFoundException('Member not found');
+      throw new NotFoundException(apiError("MEMBER_NOT_FOUND"));
     }
     await this.assertPartnerCapacity(requesterId);
 
@@ -150,7 +147,9 @@ export class TrainingPartnersService {
     });
     if (requestsToday >= TRAINING_PARTNER_REQUESTS_PER_DAY_MAX) {
       throw new ConflictException(
-        `You can send at most ${TRAINING_PARTNER_REQUESTS_PER_DAY_MAX} training-partner requests per day.`,
+        apiError("PARTNER_REQUESTS_PER_DAY", {
+          max: TRAINING_PARTNER_REQUESTS_PER_DAY_MAX,
+        }),
       );
     }
 
@@ -167,11 +166,9 @@ export class TrainingPartnersService {
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2002'
+        error.code === "P2002"
       ) {
-        throw new ConflictException(
-          'A training-partner relationship already exists with this member.',
-        );
+        throw new ConflictException(apiError("PARTNER_ALREADY_EXISTS"));
       }
       throw error;
     }
@@ -183,12 +180,13 @@ export class TrainingPartnersService {
     now = new Date(),
   ): Promise<TrainingPartnership> {
     const row = await this.db.trainingPartnership.findFirst({
-      where: { id: partnershipId, recipientId: viewerId, status: 'PENDING' },
+      where: { id: partnershipId, recipientId: viewerId, status: "PENDING" },
       select: { requesterId: true },
     });
-    if (!row) throw new NotFoundException('Training-partner request not found');
+    if (!row)
+      throw new NotFoundException(apiError("PARTNER_REQUEST_NOT_FOUND"));
     if (await isHiddenFromViewer(this.db, viewerId, row.requesterId)) {
-      throw new NotFoundException('Training-partner request not found');
+      throw new NotFoundException(apiError("PARTNER_REQUEST_NOT_FOUND"));
     }
     await Promise.all([
       this.assertPartnerCapacity(viewerId),
@@ -197,11 +195,11 @@ export class TrainingPartnersService {
 
     await this.db.$transaction(async (tx) => {
       const changed = await tx.trainingPartnership.updateMany({
-        where: { id: partnershipId, recipientId: viewerId, status: 'PENDING' },
-        data: { status: 'ACTIVE', acceptedAt: now },
+        where: { id: partnershipId, recipientId: viewerId, status: "PENDING" },
+        data: { status: "ACTIVE", acceptedAt: now },
       });
       if (changed.count === 0) {
-        throw new NotFoundException('Training-partner request not found');
+        throw new NotFoundException(apiError("PARTNER_REQUEST_NOT_FOUND"));
       }
       await tx.trainingPartnerGrant.createMany({
         data: [
@@ -225,7 +223,7 @@ export class TrainingPartnersService {
       },
     });
     if (removed.count === 0) {
-      throw new NotFoundException('Training-partner relationship not found');
+      throw new NotFoundException(apiError("PARTNER_RELATIONSHIP_NOT_FOUND"));
     }
     return this.list(viewerId);
   }
@@ -238,16 +236,18 @@ export class TrainingPartnersService {
     const partnership = await this.db.trainingPartnership.findFirst({
       where: {
         id: partnershipId,
-        status: 'ACTIVE',
+        status: "ACTIVE",
         OR: [{ requesterId: viewerId }, { recipientId: viewerId }],
       },
       select: { id: true },
     });
     if (!partnership) {
-      throw new NotFoundException('Training partnership not found');
+      throw new NotFoundException(apiError("PARTNERSHIP_NOT_FOUND"));
     }
     await this.db.trainingPartnerGrant.upsert({
-      where: { partnershipId_grantorId: { partnershipId, grantorId: viewerId } },
+      where: {
+        partnershipId_grantorId: { partnershipId, grantorId: viewerId },
+      },
       update: permissions,
       create: { partnershipId, grantorId: viewerId, ...permissions },
     });
@@ -262,7 +262,7 @@ export class TrainingPartnersService {
     const partnership = await this.db.trainingPartnership.findFirst({
       where: {
         id: partnershipId,
-        status: 'ACTIVE',
+        status: "ACTIVE",
         OR: [{ requesterId: viewerId }, { recipientId: viewerId }],
       },
       select: {
@@ -275,22 +275,23 @@ export class TrainingPartnersService {
       },
     });
     if (!partnership) {
-      throw new NotFoundException('Shared schedule not found');
+      throw new NotFoundException(apiError("SHARED_SCHEDULE_NOT_FOUND"));
     }
     const ownerId =
       partnership.requesterId === viewerId
         ? partnership.recipientId
         : partnership.requesterId;
     if (!partnership.grants.some((grant) => grant.grantorId === ownerId)) {
-      throw new NotFoundException('Shared schedule not found');
+      throw new NotFoundException(apiError("SHARED_SCHEDULE_NOT_FOUND"));
     }
 
     const owner = await this.db.user.findUnique({
       where: { id: ownerId },
       select: { timeZone: true },
     });
-    if (!owner) throw new NotFoundException('Shared schedule not found');
-    const timeZone = owner.timeZone ?? 'UTC';
+    if (!owner)
+      throw new NotFoundException(apiError("SHARED_SCHEDULE_NOT_FOUND"));
+    const timeZone = owner.timeZone ?? "UTC";
     const today = localClock(now, timeZone).date;
     const dates = Array.from({ length: 7 }, (_, index) =>
       addUtcDays(today, index),
@@ -339,13 +340,13 @@ export class TrainingPartnersService {
     );
     const normalizedRoutines = routines.map((routine) => ({
       ...routine,
-      scheduleMode: routine.scheduleMode as 'WEEKLY' | 'ROTATION',
+      scheduleMode: routine.scheduleMode as "WEEKLY" | "ROTATION",
       trainingBlocks: toPlanBlocks(routine.trainingBlocks),
       temporaryOverrides: toPlanOverrides(routine.temporaryOverrides),
     }));
     const normalizedOverrides = overrides.map((override) => ({
       ...override,
-      kind: override.kind as 'MOVE' | 'SKIP',
+      kind: override.kind as "MOVE" | "SKIP",
     }));
 
     return {
@@ -380,7 +381,7 @@ export class TrainingPartnersService {
             const partnership = await tx.trainingPartnership.findFirst({
               where: {
                 id: partnershipId,
-                status: 'ACTIVE',
+                status: "ACTIVE",
                 OR: [{ requesterId: viewerId }, { recipientId: viewerId }],
               },
               select: {
@@ -393,7 +394,7 @@ export class TrainingPartnersService {
               },
             });
             if (!partnership) {
-              throw new NotFoundException('Training partnership not found');
+              throw new NotFoundException(apiError("PARTNERSHIP_NOT_FOUND"));
             }
             const recipientId =
               partnership.requesterId === viewerId
@@ -405,7 +406,7 @@ export class TrainingPartnersService {
               ) ||
               (await isHiddenFromViewer(tx, viewerId, recipientId))
             ) {
-              throw new NotFoundException('Training partnership not found');
+              throw new NotFoundException(apiError("PARTNERSHIP_NOT_FOUND"));
             }
 
             const since = new Date(now.getTime() - ENCOURAGEMENT_WINDOW_MS);
@@ -413,13 +414,15 @@ export class TrainingPartnersService {
               where: {
                 userId: recipientId,
                 actorId: viewerId,
-                kind: 'TRAINING_PARTNER_ENCOURAGEMENT',
+                kind: "TRAINING_PARTNER_ENCOURAGEMENT",
                 createdAt: { gte: since },
               },
             });
             if (sent >= TRAINING_PARTNER_ENCOURAGEMENTS_PER_24_HOURS_MAX) {
               throw new HttpException(
-                `You can send this partner at most ${TRAINING_PARTNER_ENCOURAGEMENTS_PER_24_HOURS_MAX} encouragements in 24 hours.`,
+                apiError("ENCOURAGEMENTS_MAX", {
+                  max: TRAINING_PARTNER_ENCOURAGEMENTS_PER_24_HOURS_MAX,
+                }),
                 HttpStatus.TOO_MANY_REQUESTS,
               );
             }
@@ -428,7 +431,7 @@ export class TrainingPartnersService {
               data: {
                 userId: recipientId,
                 actorId: viewerId,
-                kind: 'TRAINING_PARTNER_ENCOURAGEMENT',
+                kind: "TRAINING_PARTNER_ENCOURAGEMENT",
                 sourceKey: `encouragement:${randomUUID()}`,
                 payload: { encouragementKind: kind },
                 createdAt: now,
@@ -445,15 +448,15 @@ export class TrainingPartnersService {
       } catch (error) {
         if (
           error instanceof Prisma.PrismaClientKnownRequestError &&
-          error.code === 'P2034'
+          error.code === "P2034"
         ) {
           if (attempt + 1 < SERIALIZABLE_RETRIES) continue;
-          throw new ConflictException('Please retry the encouragement.');
+          throw new ConflictException(apiError("ENCOURAGEMENT_RETRY"));
         }
         throw error;
       }
     }
-    throw new ConflictException('Please retry the encouragement.');
+    throw new ConflictException(apiError("ENCOURAGEMENT_RETRY"));
   }
 
   private async getForViewer(
@@ -468,7 +471,7 @@ export class TrainingPartnersService {
       select: PARTNERSHIP_SELECT,
     });
     if (!row) {
-      throw new NotFoundException('Training-partner relationship not found');
+      throw new NotFoundException(apiError("PARTNER_RELATIONSHIP_NOT_FOUND"));
     }
     return mapTrainingPartnership(row, viewerId);
   }
@@ -476,23 +479,25 @@ export class TrainingPartnersService {
   private async assertPartnerCapacity(userId: string): Promise<void> {
     const active = await this.db.trainingPartnership.count({
       where: {
-        status: 'ACTIVE',
+        status: "ACTIVE",
         OR: [{ requesterId: userId }, { recipientId: userId }],
       },
     });
     if (active >= TRAINING_PARTNERS_MAX) {
       throw new ConflictException(
-        `An account can have at most ${TRAINING_PARTNERS_MAX} training partners.`,
+        apiError("PARTNERS_MAX", { max: TRAINING_PARTNERS_MAX }),
       );
     }
   }
 
   private async resolve(identifier: string) {
     const member = await this.db.user.findFirst({
-      where: { OR: [{ id: identifier }, { username: identifier.toLowerCase() }] },
+      where: {
+        OR: [{ id: identifier }, { username: identifier.toLowerCase() }],
+      },
       select: MEMBER_SELECT,
     });
-    if (!member) throw new NotFoundException('Member not found');
+    if (!member) throw new NotFoundException(apiError("MEMBER_NOT_FOUND"));
     return member;
   }
 }

@@ -1,29 +1,29 @@
-import { lockTrainingAccount } from '../analytics/analytics-lock';
-import { ensureSessionSnapshot } from '../analytics/session-snapshot';
+import { lockTrainingAccount } from "../analytics/analytics-lock";
+import { ensureSessionSnapshot } from "../analytics/session-snapshot";
 import {
   BadRequestException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
-import { WorkoutSessionStatus } from '@prisma/client';
-import { resolveActiveTrainingBlock } from '@sunsteel/contracts';
-import { localClock } from '../../notifications/push/local-time';
+} from "@nestjs/common";
+import { WorkoutSessionStatus } from "@prisma/client";
+import { resolveActiveTrainingBlock, apiError } from "@sunsteel/contracts";
+import { localClock } from "../../notifications/push/local-time";
 import {
   assertDayInPlan,
   temporaryOverrideColumns,
   trainingBlockColumns,
-} from '../session-training-block';
-import { DatabaseService } from '../../database/database.service';
-import { StartWorkoutDto } from '../dto/start-workout.dto';
-import { StartWorkoutResponseDto } from '../dto/start-workout-response.dto';
-import { buildWorkoutSessionSelect } from '../workout-session.selects';
-import { WorkoutSessionReadService } from '../workout-session-read.service';
+} from "../session-training-block";
+import { DatabaseService } from "../../database/database.service";
+import { StartWorkoutDto } from "../dto/start-workout.dto";
+import { StartWorkoutResponseDto } from "../dto/start-workout-response.dto";
+import { buildWorkoutSessionSelect } from "../workout-session.selects";
+import { WorkoutSessionReadService } from "../workout-session-read.service";
 
 // Narrow unknown error objects that include a Prisma error code
 const isPrismaErrorWithCode = (e: unknown): e is { code: string } => {
-  if (typeof e !== 'object' || e === null) return false;
+  if (typeof e !== "object" || e === null) return false;
   const maybe = e as { code?: unknown };
-  return typeof maybe.code === 'string';
+  return typeof maybe.code === "string";
 };
 
 type StartSessionEntity = {
@@ -132,15 +132,13 @@ export class WorkoutSessionStartService {
           },
         });
         if (!routineDay) {
-          throw new NotFoundException(
-            'Routine day not found for this user/routine',
-          );
+          throw new NotFoundException(apiError("ROUTINE_DAY_NOT_FOUND"));
         }
         // ROUT-15: the plan in force on the owner's local date decides which
         // days may start, and the session records the block it trains.
         const today = localClock(
           new Date(),
-          routineDay.routine.user.timeZone ?? 'UTC',
+          routineDay.routine.user.timeZone ?? "UTC",
         ).date;
         const active = resolveActiveTrainingBlock(
           routineDay.routine.trainingBlocks,
@@ -177,7 +175,7 @@ export class WorkoutSessionStartService {
           },
           select: buildWorkoutSessionSelect(),
         });
-        await ensureSessionSnapshot(tx, result.id, 'CAPTURED');
+        await ensureSessionSnapshot(tx, result.id, "CAPTURED");
         return result;
       });
       created = createdSession;
@@ -186,18 +184,18 @@ export class WorkoutSessionStartService {
         await this.heartbeatSession(created.id);
       } catch {}
     } catch (e: unknown) {
-      if (isPrismaErrorWithCode(e) && e.code === 'P2002') {
+      if (isPrismaErrorWithCode(e) && e.code === "P2002") {
         const existing = await this.workoutSessionRead.getActiveSession(userId);
         if (existing) {
           return this.toStartWorkoutResponse(existing, true);
         }
-        throw new BadRequestException('Active workout session already exists');
+        throw new BadRequestException(apiError("SESSION_ALREADY_ACTIVE"));
       }
       throw e;
     }
 
     if (!created) {
-      throw new BadRequestException('Failed to create workout session');
+      throw new BadRequestException("Failed to create workout session");
     }
 
     return this.toStartWorkoutResponse(created, false);

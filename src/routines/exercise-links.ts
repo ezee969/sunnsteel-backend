@@ -1,9 +1,10 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException } from "@nestjs/common";
 import {
   EXERCISE_GROUP_MAX,
   hasOversizedGroup,
   normalizeExerciseLinks,
-} from '@sunsteel/contracts';
+  apiError,
+} from "@sunsteel/contracts";
 
 type LinkedExercise = { order?: number; linkedToNext?: boolean };
 
@@ -19,7 +20,9 @@ function trainingOrder(exercises: readonly LinkedExercise[]): number[] {
  * ROUT-12: each exercise's stored link, by its position in the input. Links
  * are read in training order and the day's last exercise never links.
  */
-export function dayExerciseLinks(exercises: readonly LinkedExercise[]): boolean[] {
+export function dayExerciseLinks(
+  exercises: readonly LinkedExercise[],
+): boolean[] {
   const order = trainingOrder(exercises);
   const normalized = normalizeExerciseLinks(order.map((i) => exercises[i]));
   const links = new Array<boolean>(exercises.length).fill(false);
@@ -37,7 +40,7 @@ export function assertExerciseLinks(
     const ordered = trainingOrder(day.exercises).map((i) => day.exercises[i]);
     if (hasOversizedGroup(ordered)) {
       throw new BadRequestException(
-        `A superset or circuit has at most ${EXERCISE_GROUP_MAX} exercises`,
+        apiError("EXERCISE_GROUP_TOO_LARGE", { max: EXERCISE_GROUP_MAX }),
       );
     }
   }

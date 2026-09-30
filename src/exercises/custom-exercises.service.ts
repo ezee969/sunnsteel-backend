@@ -3,40 +3,37 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
-} from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+} from "@nestjs/common";
+import { Prisma } from "@prisma/client";
 import {
-  CLONE_ROUTINE_REFUSALS,
-  CUSTOM_EXERCISE_REFUSALS,
   CUSTOM_EXERCISES_MAX,
   exerciseNameKey,
   type CustomExerciseInput,
   type Exercise,
   type RoutineVersionSetup,
   type UpdateCustomExerciseRequest,
-} from '@sunsteel/contracts';
-import { DatabaseService } from '../database/database.service';
+  apiError,
+} from "@sunsteel/contracts";
+import { DatabaseService } from "../database/database.service";
 import {
   customExerciseData,
   customExerciseRefusal,
   mergeCustomExercise,
-} from './custom-exercise-rules';
+} from "./custom-exercise-rules";
 import {
   customExercisesInUse,
   exerciseSelect,
   mapExercise,
-} from './exercises.service';
+} from "./exercises.service";
 
 type Tx = Prisma.TransactionClient;
 
 const isUniqueViolation = (error: unknown) =>
   error instanceof Prisma.PrismaClientKnownRequestError &&
-  error.code === 'P2002';
+  error.code === "P2002";
 
 const nameTaken = () =>
-  new ConflictException(
-    `${CUSTOM_EXERCISE_REFUSALS.NAME_TAKEN}: you already have an exercise by that name, or the catalog does`,
-  );
+  new ConflictException(apiError("CUSTOM_EXERCISE_NAME_TAKEN"));
 
 /**
  * EXER-06: exercises a member creates for themselves. Only the owner is ever
@@ -57,7 +54,9 @@ export class CustomExercisesService {
         const count = await tx.exercise.count({ where: { ownerId: userId } });
         if (count >= CUSTOM_EXERCISES_MAX) {
           throw new ConflictException(
-            `${CUSTOM_EXERCISE_REFUSALS.LIMIT_REACHED}: you can keep up to ${CUSTOM_EXERCISES_MAX} custom exercises, archived ones included`,
+            apiError("CUSTOM_EXERCISE_LIMIT_REACHED", {
+              max: CUSTOM_EXERCISES_MAX,
+            }),
           );
         }
         await this.assertNameFree(tx, userId, data.name);
@@ -102,7 +101,11 @@ export class CustomExercisesService {
   }
 
   /** Out of the catalog and pickers; routines, workouts and records keep it. */
-  setArchived(userId: string, id: string, archived: boolean): Promise<Exercise> {
+  setArchived(
+    userId: string,
+    id: string,
+    archived: boolean,
+  ): Promise<Exercise> {
     return this.db.$transaction(async (tx) => {
       await this.owned(tx, userId, id);
       const updated = await tx.exercise.update({
@@ -120,9 +123,7 @@ export class CustomExercisesService {
       await this.owned(tx, userId, id);
       const inUse = await customExercisesInUse(tx, [id]);
       if (inUse.size > 0) {
-        throw new ConflictException(
-          `${CUSTOM_EXERCISE_REFUSALS.IN_USE}: a routine or a workout uses this exercise, so it can be archived but not deleted`,
-        );
+        throw new ConflictException(apiError("CUSTOM_EXERCISE_IN_USE"));
       }
       await tx.exercise.delete({ where: { id } });
     });
@@ -150,9 +151,7 @@ export class CustomExercisesService {
       select: exerciseSelect,
     });
     if (rows.length !== ids.length) {
-      throw new ConflictException(
-        `${CLONE_ROUTINE_REFUSALS.UNKNOWN_EXERCISE}: an exercise in this routine is no longer in the catalog`,
-      );
+      throw new ConflictException(apiError("CLONE_UNKNOWN_EXERCISE"));
     }
     const foreign = rows.filter(
       (row) => row.ownerId !== null && row.ownerId !== userId,
@@ -182,7 +181,7 @@ export class CustomExercisesService {
         }
         if (owned >= CUSTOM_EXERCISES_MAX) {
           throw new ConflictException(
-            `${CUSTOM_EXERCISE_REFUSALS.LIMIT_REACHED}: this routine needs custom exercises you have no room for (up to ${CUSTOM_EXERCISES_MAX})`,
+            apiError("CUSTOM_EXERCISE_NO_ROOM", { max: CUSTOM_EXERCISES_MAX }),
           );
         }
         const copy = await tx.exercise.create({
@@ -232,7 +231,7 @@ export class CustomExercisesService {
         note: true,
       },
     });
-    if (!stored) throw new NotFoundException('Exercise not found');
+    if (!stored) throw new NotFoundException(apiError("EXERCISE_NOT_FOUND"));
     return stored;
   }
 
@@ -244,7 +243,7 @@ export class CustomExercisesService {
   ) {
     const clash = await tx.exercise.findFirst({
       where: {
-        name: { equals: name, mode: 'insensitive' },
+        name: { equals: name, mode: "insensitive" },
         OR: [{ ownerId: null }, { ownerId: userId }],
         ...(exceptId ? { NOT: { id: exceptId } } : {}),
       },

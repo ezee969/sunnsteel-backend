@@ -1,11 +1,12 @@
-import { BadRequestException, ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from "@nestjs/common";
 import {
   SCHEDULE_MOVE_MAX_DAYS,
   SCHEDULE_OVERRIDES_MAX_RANGE_DAYS,
   SCHEDULE_SKIP_PAST_DAYS,
   type RoutineScheduleMode,
   type ScheduleOverrideKind,
-} from '@sunsteel/contracts';
+  apiError,
+} from "@sunsteel/contracts";
 
 const CALENDAR_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const DAY_MS = 86_400_000;
@@ -35,7 +36,7 @@ export const addCalendarDays = (date: string, days: number) =>
 export function assertOverrideRange(from: string, to: string) {
   const span = daysBetween(from, to);
   if (span < 0)
-    throw new BadRequestException('The range ends before it starts');
+    throw new BadRequestException("The range ends before it starts");
   if (span > SCHEDULE_OVERRIDES_MAX_RANGE_DAYS) {
     throw new BadRequestException(
       `Read at most ${SCHEDULE_OVERRIDES_MAX_RANGE_DAYS} days of overrides at once`,
@@ -59,13 +60,11 @@ type OtherOverride = {
 const utcToday = (now: Date) => now.toISOString().slice(0, 10);
 
 function assertOccurrence(date: string, routine: OccurrenceRoutine) {
-  if (routine.scheduleMode !== 'WEEKLY') {
-    throw new BadRequestException(
-      'Only weekly routines have dated workouts to change',
-    );
+  if (routine.scheduleMode !== "WEEKLY") {
+    throw new BadRequestException(apiError("SCHEDULE_NOT_WEEKLY"));
   }
   if (!routine.trainingWeekdays.includes(weekdayOf(date))) {
-    throw new BadRequestException('The routine is not planned on that date');
+    throw new BadRequestException(apiError("SCHEDULE_NOT_PLANNED"));
   }
 }
 
@@ -99,19 +98,19 @@ export function assertMovable({
   assertOccurrence(date, routine);
   const distance = daysBetween(date, toDate);
   if (distance === 0) {
-    throw new BadRequestException('Choose a different date');
+    throw new BadRequestException(apiError("SCHEDULE_SAME_DATE"));
   }
   if (Math.abs(distance) > SCHEDULE_MOVE_MAX_DAYS) {
     throw new BadRequestException(
-      `A workout moves at most ${SCHEDULE_MOVE_MAX_DAYS} days`,
+      apiError("SCHEDULE_MOVE_TOO_FAR", { max: SCHEDULE_MOVE_MAX_DAYS }),
     );
   }
   const earliest = addCalendarDays(utcToday(now), -1);
   if (date < earliest || toDate < earliest) {
-    throw new BadRequestException('Past workouts cannot be moved');
+    throw new BadRequestException(apiError("SCHEDULE_PAST_MOVE"));
   }
   const freed = others.some(
-    (o) => o.date === toDate && (o.kind === 'SKIP' || o.toDate),
+    (o) => o.date === toDate && (o.kind === "SKIP" || o.toDate),
   );
   // ROUT-15: the target is judged by the plan in force on the target date,
   // which a training block boundary can make different from the source's.
@@ -119,14 +118,10 @@ export function assertMovable({
     (targetRoutine ?? routine).trainingWeekdays.includes(weekdayOf(toDate)) &&
     !freed
   ) {
-    throw new ConflictException(
-      'That date already has a workout of this routine',
-    );
+    throw new ConflictException(apiError("SCHEDULE_DATE_TAKEN"));
   }
   if (others.some((o) => o.toDate === toDate)) {
-    throw new ConflictException(
-      'Another workout of this routine already moved to that date',
-    );
+    throw new ConflictException(apiError("SCHEDULE_DATE_MOVED_INTO"));
   }
 }
 
@@ -147,7 +142,7 @@ export function assertSkippable({
   assertOccurrence(date, routine);
   if (date < addCalendarDays(utcToday(now), -(SCHEDULE_SKIP_PAST_DAYS + 1))) {
     throw new BadRequestException(
-      `A workout can be marked skipped up to ${SCHEDULE_SKIP_PAST_DAYS} days back`,
+      apiError("SCHEDULE_SKIP_TOO_OLD", { max: SCHEDULE_SKIP_PAST_DAYS }),
     );
   }
 }

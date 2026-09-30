@@ -1,3 +1,4 @@
+import { apiError } from "@sunsteel/contracts";
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma, WorkoutSessionStatus } from "@prisma/client";
 import type {
@@ -118,7 +119,7 @@ export class WorkoutSessionComparisonService {
 
         if (query.routineDayId && !selectedRoutineDay) {
           throw new NotFoundException(
-            "No completed sessions found for this routine day",
+            apiError("NO_COMPLETED_SESSIONS_FOR_DAY"),
           );
         }
         if (!selectedRoutineDay) {

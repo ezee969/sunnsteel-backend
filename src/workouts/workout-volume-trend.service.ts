@@ -6,6 +6,7 @@ import {
   type VolumeTrendPoint,
   type VolumeTrendResponse,
   type VolumeTrendSeries,
+  apiError,
 } from "@sunsteel/contracts";
 import { DatabaseService } from "../database/database.service";
 import { localDate, weekDate } from "./analytics/analytics-contribution";
@@ -107,7 +108,7 @@ export class WorkoutVolumeTrendService {
           WHERE "userId" = ${userId} AND "active" AND "state" = 'READY' AND "timeZone" = ${query.timeZone} LIMIT 1`;
         if (!projection)
           throw new ServiceUnavailableException(
-            "Workout analytics projection is not ready",
+            apiError("ANALYTICS_NOT_READY"),
           );
 
         const overallRows = await tx.workoutRollup.findMany({

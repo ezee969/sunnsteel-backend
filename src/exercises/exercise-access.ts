@@ -1,7 +1,8 @@
-import { NotFoundException } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+import { apiError } from "@sunsteel/contracts";
+import { NotFoundException } from "@nestjs/common";
+import type { Prisma } from "@prisma/client";
 
-type Db = Pick<Prisma.TransactionClient, 'exercise'>;
+type Db = Pick<Prisma.TransactionClient, "exercise">;
 
 /**
  * EXER-06: the exercises a member may put in a routine, swap in, star or aim
@@ -35,9 +36,8 @@ export async function assertUsableExercises(
   db: Db,
   userId: string,
   ids: readonly string[],
-  message = 'Exercise not found',
 ): Promise<void> {
   if ((await unusableExerciseIds(db, userId, ids)).length > 0) {
-    throw new NotFoundException(message);
+    throw new NotFoundException(apiError("EXERCISE_NOT_FOUND"));
   }
 }
