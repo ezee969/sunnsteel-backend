@@ -16,6 +16,15 @@ const dbWith = (user: unknown) =>
   }) as unknown as DatabaseService;
 
 describe("I18N-06 server-written copy", () => {
+  it("lists what the export leaves out in the account's language", () => {
+    const en = serverCopy("en").exportOmitted;
+    const es = serverCopy("es").exportOmitted;
+    assert.equal(es.length, en.length);
+    assert.match(es[1], /credenciales/);
+    assert.match(en[1], /credentials/);
+    assert.equal(serverCopy(null).exportOmitted, en);
+  });
+
   it("writes every push in Spanish when the account chose it", () => {
     const es = serverCopy("es");
     assert.equal(es.restOverTitle, "Terminó el descanso");

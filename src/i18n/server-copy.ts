@@ -8,7 +8,7 @@ import type { DatabaseService } from "../database/database.service";
 
 /**
  * I18N-06: the words the server writes with nobody's page open -- push
- * notifications. Everything a page renders is translated in the frontend; only
+ * notifications and the account export's `omitted` list. Everything a page renders is translated in the frontend; only
  * what leaves this process as finished text lives here. English is the source
  * and the fallback, and every other language must hold the same keys (the
  * type enforces it).
@@ -25,6 +25,8 @@ interface ServerCopy {
   partnerAchievementTitle: (name: string) => string;
   workoutFallback: string;
   achievementFallback: string;
+  /** EXPORT-01: what the export leaves out on purpose, and why. */
+  exportOmitted: readonly string[];
 }
 
 const englishList = (names: string[]) =>
@@ -55,6 +57,12 @@ export const SERVER_COPY: Record<AppLocale, ServerCopy> = {
     partnerAchievementTitle: (name) => `${name} earned an achievement`,
     workoutFallback: "Workout",
     achievementFallback: "Achievement",
+    exportOmitted: [
+      "Other members' details beyond their username and name; no email of anyone but you.",
+      "Share-link tokens and push-notification device endpoints: they are credentials, not data.",
+      "Analytics rollups, the dashboard projection and the notification feed: all are derived from the workouts and events included here.",
+      "Moderation records: they are the moderator’s record, not yours.",
+    ],
   },
   es: {
     restOverTitle: "Terminó el descanso",
@@ -70,6 +78,12 @@ export const SERVER_COPY: Record<AppLocale, ServerCopy> = {
     partnerAchievementTitle: (name) => `${name} obtuvo un logro`,
     workoutFallback: "Entrenamiento",
     achievementFallback: "Logro",
+    exportOmitted: [
+      "Los datos de otros miembros más allá de su nombre de usuario y su nombre; ningún correo salvo el tuyo.",
+      "Los tokens de los enlaces compartidos y los endpoints de notificaciones push de tus dispositivos: son credenciales, no datos.",
+      "Los resúmenes de analíticas, la proyección del inicio y el feed de notificaciones: todos se derivan de los entrenamientos y eventos incluidos aquí.",
+      "Los registros de moderación: son el registro del moderador, no el tuyo.",
+    ],
   },
 };
 

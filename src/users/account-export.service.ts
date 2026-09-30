@@ -7,6 +7,7 @@ import {
   type SessionSetCorrection,
 } from '@sunsteel/contracts';
 import { DatabaseService } from '../database/database.service';
+import { SERVER_COPY, serverCopy } from '../i18n/server-copy';
 import { ROUTINE_WITH_DAYS_SELECT } from '../routines/routine.selects';
 import { toRoutineResponse } from '../routines/routine.mapper';
 import { readRoutineSetup } from '../routines/routine-versions';
@@ -23,14 +24,10 @@ const MEMBER_SELECT = { username: true, name: true } as const;
 
 /**
  * What the export leaves out on purpose, written into the file so a reader
- * does not have to guess whether something is missing or was never kept.
+ * does not have to guess whether something is missing or was never kept. In
+ * the account's language (I18N-06); this is the English source.
  */
-export const ACCOUNT_EXPORT_OMITTED = [
-  "Other members' details beyond their username and name; no email of anyone but you.",
-  'Share-link tokens and push-notification device endpoints: they are credentials, not data.',
-  'Analytics rollups, the dashboard projection and the notification feed: all are derived from the workouts and events included here.',
-  'Moderation records: they are the moderator’s record, not yours.',
-] as const;
+export const ACCOUNT_EXPORT_OMITTED = SERVER_COPY.en.exportOmitted;
 
 const iso = (date: Date) => date.toISOString();
 
@@ -56,6 +53,7 @@ export class AccountExportService {
       where: { id: userId },
       select: {
         email: true,
+        locale: true,
         timeZone: true,
         plateauMinSessions: true,
         notifyRestAlert: true,
@@ -404,7 +402,7 @@ export class AccountExportService {
           createdAt: iso(report.createdAt),
         })),
       },
-      omitted: [...ACCOUNT_EXPORT_OMITTED],
+      omitted: [...serverCopy(user.locale).exportOmitted],
     };
   }
 }
