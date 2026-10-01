@@ -14,6 +14,7 @@ export interface StoredProfilePrivacy {
   achievementsVisibility: ProfileVisibility;
   bodyMetricsVisibility: ProfileVisibility;
   bodyProgressVisibility: ProfileVisibility;
+  rankVisibility: ProfileVisibility;
 }
 
 export function mapProfilePrivacy(
@@ -29,6 +30,7 @@ export function mapProfilePrivacy(
     achievements: stored.achievementsVisibility,
     bodyMetrics: stored.bodyMetricsVisibility,
     bodyProgress: stored.bodyProgressVisibility,
+    rank: stored.rankVisibility,
   };
 }
 
@@ -78,5 +80,7 @@ export function resolveProfileViewerAccess(
     bodyMetrics: canViewProfileSection(settings.bodyMetrics, context),
     // PROG-12: like body metrics, a training partner never widens it.
     bodyProgress: canViewProfileSection(settings.bodyProgress, context),
+    // ACH-10: a partner's progress grant widens the rank, as it does achievements.
+    rank: canViewProfileSection(settings.rank, progressContext),
   };
 }

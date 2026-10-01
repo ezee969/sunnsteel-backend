@@ -123,7 +123,7 @@ export class FeaturedProfileItemsService {
    */
   async resolveForProfile(
     userId: string,
-    access: Pick<ProfileViewerAccess, "records" | "achievements">,
+    access: Pick<ProfileViewerAccess, "records" | "achievements" | "rank">,
     viewer: { isOwner: boolean; isFollower: boolean },
   ): Promise<FeaturedProfileItem[]> {
     const { items } = await this.list(userId);
@@ -136,8 +136,8 @@ export class FeaturedProfileItemsService {
         achievements:
           access.achievements &&
           items.some((item) => item.kind === "ACHIEVEMENT"),
-        ranks:
-          access.achievements && items.some((item) => item.kind === "RANK"),
+        // ACH-10: a featured rank follows the rank rule, not achievements.
+        ranks: access.rank && items.some((item) => item.kind === "RANK"),
         routines: items.some((item) => item.kind === "ROUTINE"),
       },
       { kind: "VIEWER", ...viewer },

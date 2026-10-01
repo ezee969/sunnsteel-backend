@@ -36,4 +36,8 @@ export class UpdateProfilePrivacyDto implements UpdateProfilePrivacyRequest {
   @IsOptional()
   @IsIn(PROFILE_VISIBILITY_VALUES)
   bodyProgress?: ProfileVisibility;
+
+  @IsOptional()
+  @IsIn(PROFILE_VISIBILITY_VALUES)
+  rank?: ProfileVisibility;
 }

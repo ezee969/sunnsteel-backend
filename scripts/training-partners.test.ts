@@ -31,6 +31,7 @@ describe('SOC-08 training partnership rules', () => {
       achievements: 'FOLLOWERS',
       bodyMetrics: 'FOLLOWERS',
       bodyProgress: 'FOLLOWERS',
+      rank: 'FOLLOWERS',
     };
     assert.deepEqual(
       resolveProfileViewerAccess(settings, {
@@ -49,6 +50,8 @@ describe('SOC-08 training partnership rules', () => {
         achievements: true,
         bodyMetrics: false,
         bodyProgress: false,
+        // ACH-10: the progress grant widens the rank, as it does achievements.
+        rank: true,
       },
     );
   });
@@ -65,6 +68,7 @@ describe('SOC-08 training partnership rules', () => {
         'achievements',
         'bodyMetrics',
         'bodyProgress',
+        'rank',
       ].map((key) => [key, 'PRIVATE']),
     ) as unknown as ProfilePrivacySettings;
     const access = resolveProfileViewerAccess(settings, {

@@ -354,6 +354,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20260928190000_user_locale/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// ACH-10: who may see the rank.
+				readFileSync(
+					'prisma/migrations/20261001100000_rank_visibility/migration.sql',
+					'utf8',
 				),
     );
     prisma(

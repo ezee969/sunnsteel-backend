@@ -8,6 +8,7 @@ import {
   COMEBACK_SESSION_LOOKBACK,
   EarnedAchievement,
   PublicProfileAchievements,
+  RenaissanceRankDefinition,
 } from '@sunsteel/contracts';
 import { DatabaseService } from '../database/database.service';
 import { lockTrainingAccount } from '../workouts/analytics/analytics-lock';
@@ -55,6 +56,32 @@ export function parseAchievementEvent(
 @Injectable()
 export class AchievementsService {
   constructor(private readonly db: DatabaseService) {}
+
+  /**
+   * ACH-10: the current rank alone, for a profile the rank rule allows. It
+   * reads only what `renaissanceRankProgress` needs -- the READY projection's
+   * completed sessions and its active weeks -- so a member who hides their
+   * achievements can still show a rank without the ledger's reconcile.
+   * Null until the projection is ready.
+   */
+  async rankForProfile(
+    userId: string,
+  ): Promise<RenaissanceRankDefinition | null> {
+    const projection = await this.db.workoutAnalyticsProjection.findFirst({
+      where: { userId, active: true, state: 'READY' },
+      select: { id: true, completedSessions: true },
+    });
+    if (!projection) return null;
+    const activeWeeks = await this.db.workoutRollup.count({
+      where: {
+        projectionId: projection.id,
+        period: 'WEEK',
+        sessions: { gt: 0 },
+      },
+    });
+    return renaissanceRankProgress(projection.completedSessions, activeWeeks)
+      .currentRank;
+  }
 
   async forProfile(userId: string): Promise<PublicProfileAchievements> {
     const response = await this.list(userId);

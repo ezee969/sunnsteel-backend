@@ -78,6 +78,7 @@ const userProfileSelect = {
   achievementsVisibility: true,
   bodyMetricsVisibility: true,
   bodyProgressVisibility: true,
+  rankVisibility: true,
   discoverableByName: true,
   discoverableByUsername: true,
   discoverableByContacts: true,
@@ -146,6 +147,7 @@ export class UsersService {
       achievementsVisibility,
       bodyMetricsVisibility,
       bodyProgressVisibility,
+      rankVisibility,
       discoverableByName,
       discoverableByUsername,
       discoverableByContacts,
@@ -166,6 +168,7 @@ export class UsersService {
         achievementsVisibility,
         bodyMetricsVisibility,
         bodyProgressVisibility,
+        rankVisibility,
       }),
       discoverySettings: {
         discoverableByName,
@@ -381,6 +384,7 @@ export class UsersService {
         ...(data.bodyProgress === undefined
           ? {}
           : { bodyProgressVisibility: data.bodyProgress }),
+        ...(data.rank === undefined ? {} : { rankVisibility: data.rank }),
       },
       select: userProfileSelect,
     });
@@ -485,6 +489,7 @@ export class UsersService {
         achievementsVisibility: true,
         bodyMetricsVisibility: true,
         bodyProgressVisibility: true,
+        rankVisibility: true,
         moderationHiddenAt: true,
         _count: {
           select: {
@@ -555,7 +560,8 @@ export class UsersService {
       location,
       trainingIdentity,
       featuredItems,
-      achievements,
+      ledger,
+      rank,
     ] = await Promise.all([
       viewerAccess.workoutHistory
         ? this.db.workoutAnalyticsProjection.findFirst({
@@ -624,7 +630,16 @@ export class UsersService {
       viewerAccess.achievements && this.achievementsService
         ? this.achievementsService.forProfile(user.id)
         : null,
+      // ACH-10: the rank has its own rule, read without the ledger.
+      viewerAccess.rank && this.achievementsService
+        ? this.achievementsService.rankForProfile(user.id)
+        : null,
     ]);
+    // The ledger names the rank too, so it carries one only where the rank
+    // rule allows: hiding the rank must not leave it readable there.
+    const achievements = ledger
+      ? { ...ledger, rank: viewerAccess.rank ? ledger.rank : null }
+      : null;
 
     return {
       id: user.id,
@@ -680,6 +695,7 @@ export class UsersService {
           }
         : {}),
       ...(viewerAccess.achievements && achievements ? { achievements } : {}),
+      ...(viewerAccess.rank ? { rank } : {}),
       ...(viewerAccess.bodyMetrics
         ? {
             bodyMetrics: {

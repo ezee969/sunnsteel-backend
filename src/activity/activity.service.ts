@@ -111,6 +111,7 @@ const AUTHOR_SELECT = {
   achievementsVisibility: true,
   bodyMetricsVisibility: true,
   bodyProgressVisibility: true,
+  rankVisibility: true,
 } as const;
 
 type AuthorRow = Prisma.UserGetPayload<{ select: typeof AUTHOR_SELECT }>;

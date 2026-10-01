@@ -209,7 +209,7 @@ describe('FeaturedProfileItemsService', () => {
 
     const result = await new FeaturedProfileItemsService(db).resolveForProfile(
       'user-1',
-      { records: false, achievements: true },
+      { records: false, achievements: true, rank: true },
       { isOwner: false, isFollower: true },
     );
 
@@ -219,6 +219,28 @@ describe('FeaturedProfileItemsService', () => {
         ['ACHIEVEMENT', achievement.id, 1],
         ['RANK', 'APPRENTICE', 2],
       ],
+    );
+
+    // ACH-10: a featured rank follows the rank rule, not achievements.
+    const withoutRank = await new FeaturedProfileItemsService(
+      db,
+    ).resolveForProfile(
+      'user-1',
+      { records: false, achievements: true, rank: false },
+      { isOwner: false, isFollower: true },
+    );
+    assert.deepEqual(
+      withoutRank.map(item => item.kind),
+      ['ACHIEVEMENT'],
+    );
+    const rankOnly = await new FeaturedProfileItemsService(db).resolveForProfile(
+      'user-1',
+      { records: false, achievements: false, rank: true },
+      { isOwner: false, isFollower: true },
+    );
+    assert.deepEqual(
+      rankOnly.map(item => item.kind),
+      ['RANK'],
     );
   });
   it('offers only routines somebody else could reach, capped by the account rule', async () => {
@@ -305,7 +327,7 @@ describe('FeaturedProfileItemsService', () => {
       } as unknown as DatabaseService;
       return new FeaturedProfileItemsService(db).resolveForProfile(
         'user-1',
-        { records: false, achievements: false },
+        { records: false, achievements: false, rank: false },
         viewer,
       );
     };

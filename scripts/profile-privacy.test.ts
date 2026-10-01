@@ -19,6 +19,7 @@ const privateSettings = {
   achievements: 'PRIVATE',
   bodyMetrics: 'PRIVATE',
   bodyProgress: 'PRIVATE',
+  rank: 'PRIVATE',
 } as const;
 
 const storedProfile = {
@@ -52,6 +53,7 @@ const storedProfile = {
   achievementsVisibility: 'PRIVATE' as const,
   bodyMetricsVisibility: 'PRIVATE' as const,
   bodyProgressVisibility: 'PRIVATE' as const,
+  rankVisibility: 'PRIVATE' as const,
   discoverableByName: true,
   discoverableByUsername: true,
   discoverableByContacts: false,
@@ -137,6 +139,7 @@ describe('profile privacy rules', () => {
           achievements: 'PUBLIC',
           bodyMetrics: 'PRIVATE',
           bodyProgress: 'FOLLOWERS',
+          rank: 'PRIVATE',
         },
         { isOwner: false, isFollower: true },
       ),
@@ -150,6 +153,7 @@ describe('profile privacy rules', () => {
         achievements: true,
         bodyMetrics: false,
         bodyProgress: true,
+        rank: false,
       },
     );
   });
@@ -301,7 +305,9 @@ describe('UsersService privacy boundary', () => {
       achievements: false,
       bodyMetrics: false,
       bodyProgress: false,
+      rank: false,
     });
+    assert.equal('rank' in result, false);
     assert.equal('trainingSummary' in result, false);
     assert.equal('bio' in result, false);
     assert.equal('location' in result, false);
@@ -324,6 +330,7 @@ describe('UsersService privacy boundary', () => {
           bioVisibility: 'PUBLIC',
           locationVisibility: 'FOLLOWERS',
           achievementsVisibility: 'PUBLIC',
+          rankVisibility: 'PUBLIC',
         }),
         count: async () => 0,
         findUnique: async (args: { select: Record<string, boolean> }) => {
@@ -359,6 +366,7 @@ describe('UsersService privacy boundary', () => {
           achievementReads += 1;
           return publicAchievementLedger;
         },
+        rankForProfile: async () => publicAchievementLedger.rank,
       } as unknown as AchievementsService,
     );
 
@@ -380,6 +388,66 @@ describe('UsersService privacy boundary', () => {
     assert.equal('email' in result, false);
   });
 
+  it('shows the rank by its own rule, apart from the achievements (ACH-10)', async () => {
+    const profileWith = (visibility: {
+      rankVisibility: 'PUBLIC' | 'PRIVATE';
+      achievementsVisibility: 'PUBLIC' | 'PRIVATE';
+    }) => {
+      const reads = { ledger: 0, rank: 0 };
+      const db = {
+        user: {
+          findFirst: async () => ({ ...storedProfile, ...visibility }),
+          count: async () => 0,
+          findUnique: async () => null,
+        },
+        userFollow: { findUnique: async () => null },
+        workoutAnalyticsProjection: { findFirst: async () => null },
+        personalRecord: { findMany: async () => [] },
+        userBlock: { findMany: async () => [], count: async () => 0 },
+      } as unknown as DatabaseService;
+      const service = new UsersService(db, undefined, {
+        forProfile: async () => {
+          reads.ledger += 1;
+          return publicAchievementLedger;
+        },
+        rankForProfile: async () => {
+          reads.rank += 1;
+          return publicAchievementLedger.rank;
+        },
+      } as unknown as AchievementsService);
+      return { service, reads };
+    };
+
+    // A rank shown with the achievements hidden reads no ledger at all.
+    const shown = profileWith({
+      rankVisibility: 'PUBLIC',
+      achievementsVisibility: 'PRIVATE',
+    });
+    const visible = await shown.service.getPublicProfile(null, 'owner_handle');
+    assert.equal(visible.viewerAccess.rank, true);
+    assert.deepEqual(visible.rank, publicAchievementLedger.rank);
+    assert.equal('achievements' in visible, false);
+    assert.deepEqual(shown.reads, { ledger: 0, rank: 1 });
+
+    // A hidden rank is not left readable in the ledger either.
+    const hidden = profileWith({
+      rankVisibility: 'PRIVATE',
+      achievementsVisibility: 'PUBLIC',
+    });
+    const ledgerOnly = await hidden.service.getPublicProfile(
+      'viewer-1',
+      'owner_handle',
+    );
+    assert.equal(ledgerOnly.viewerAccess.rank, false);
+    assert.equal('rank' in ledgerOnly, false);
+    assert.equal(ledgerOnly.achievements?.rank, null);
+    assert.deepEqual(
+      ledgerOnly.achievements?.achievements,
+      publicAchievementLedger.achievements,
+    );
+    assert.deepEqual(hidden.reads, { ledger: 1, rank: 0 });
+  });
+
   it('returns only sections allowed to a follower and keeps dates serialized', async () => {
     const db = {
       user: {
@@ -394,6 +462,7 @@ describe('UsersService privacy boundary', () => {
           achievementsVisibility: 'FOLLOWERS',
           bodyMetricsVisibility: 'FOLLOWERS',
           bodyProgressVisibility: 'PRIVATE',
+          rankVisibility: 'PUBLIC',
         }),
         count: async () => 0,
         findUnique: async (args: { select: Record<string, boolean> }) => {
@@ -451,6 +520,7 @@ describe('UsersService privacy boundary', () => {
       undefined,
       {
         forProfile: async () => publicAchievementLedger,
+        rankForProfile: async () => publicAchievementLedger.rank,
       } as unknown as AchievementsService,
     );
 
@@ -466,7 +536,9 @@ describe('UsersService privacy boundary', () => {
       achievements: true,
       bodyMetrics: true,
       bodyProgress: false,
+      rank: true,
     });
+    assert.deepEqual(result.rank, publicAchievementLedger.rank);
     assert.deepEqual(result.trainingSummary, {
       completedWorkouts: 12,
       totalVolumeKg: 1234,

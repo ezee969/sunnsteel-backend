@@ -224,6 +224,7 @@ describe('PROG-12 a weight saved in Settings', () => {
     achievementsVisibility: 'PRIVATE' as const,
     bodyMetricsVisibility: 'PRIVATE' as const,
     bodyProgressVisibility: 'PRIVATE' as const,
+    rankVisibility: 'PUBLIC' as const,
     discoverableByName: true,
     discoverableByUsername: true,
     discoverableByContacts: false,

@@ -52,6 +52,8 @@ model User {
   bodyMetricsVisibility      ProfileVisibility            @default(PRIVATE)
   // PROG-12: the dated weight and measurement history, separate from bodyMetrics.
   bodyProgressVisibility     ProfileVisibility            @default(PRIVATE)
+  /// ACH-10: the one privacy setting that starts at PUBLIC.
+  rankVisibility             ProfileVisibility            @default(PUBLIC)
   discoverableByName         Boolean                      @default(true)
   discoverableByUsername     Boolean                      @default(true)
   discoverableByContacts     Boolean                      @default(false)

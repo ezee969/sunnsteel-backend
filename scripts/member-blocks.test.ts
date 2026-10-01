@@ -167,6 +167,7 @@ describe('PROF-10 enforcement on the profile read', () => {
     achievementsVisibility: 'PUBLIC',
     bodyMetricsVisibility: 'PUBLIC',
     bodyProgressVisibility: 'PRIVATE',
+    rankVisibility: 'PUBLIC',
     moderationHiddenAt: null,
     _count: { followers: 0, following: 0 },
   };
