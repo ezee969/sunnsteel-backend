@@ -1,5 +1,7 @@
 import {
   NOTIFICATIONS_LOOKBACK_DAYS,
+  NOTIFICATIONS_PAGE_SIZE,
+  NOTIFICATIONS_PAGE_SIZE_MAX,
   NOTIFICATIONS_RETENTION_DAYS,
   type NotificationKind,
 } from "@sunsteel/contracts";
@@ -58,6 +60,40 @@ export interface NotificationDraft {
   sessionId: string | null;
   payload: Record<string, unknown>;
 }
+
+/**
+ * NOTIF-09: where the previous page stopped. The list is ordered by
+ * `createdAt` then `id`, both descending, so the pair names one position even
+ * when several notifications share an instant.
+ */
+export interface NotificationCursor {
+  at: Date;
+  id: string;
+}
+
+export const encodeNotificationCursor = (cursor: NotificationCursor) =>
+  Buffer.from(`${cursor.at.toISOString()}|${cursor.id}`, "utf8").toString(
+    "base64url",
+  );
+
+/** Null for a value this server never handed out. */
+export function decodeNotificationCursor(
+  value: string,
+): NotificationCursor | null {
+  const [at, id, ...rest] = Buffer.from(value, "base64url")
+    .toString("utf8")
+    .split("|");
+  if (!at || !id || rest.length) return null;
+  const parsed = new Date(at);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString() !== at)
+    return null;
+  return /^[0-9a-f-]{36}$/i.test(id) ? { at: parsed, id } : null;
+}
+
+export const notificationPageSize = (limit?: number) =>
+  limit && Number.isInteger(limit) && limit > 0
+    ? Math.min(limit, NOTIFICATIONS_PAGE_SIZE_MAX)
+    : NOTIFICATIONS_PAGE_SIZE;
 
 export const lookbackStart = (now: Date) =>
   new Date(now.getTime() - NOTIFICATIONS_LOOKBACK_DAYS * DAY_MS);

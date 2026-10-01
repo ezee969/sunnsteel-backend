@@ -1,10 +1,10 @@
-import { Injectable } from "@nestjs/common";
+import { BadRequestException, Injectable } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import {
-  NOTIFICATIONS_LIST_LIMIT,
   TRAINING_PARTNER_ENCOURAGEMENT_KINDS,
   type AppNotification,
   type MarkNotificationsReadResponse,
+  type NotificationsQuery,
   type NotificationsResponse,
 } from "@sunsteel/contracts";
 import { DatabaseService } from "../database/database.service";
@@ -12,8 +12,11 @@ import { readSnapshot } from "../workouts/analytics/session-snapshot";
 import { routineDayName } from "../workouts/workout-session.selects";
 import {
   NOTIFICATION_EVENT_TYPES,
+  decodeNotificationCursor,
+  encodeNotificationCursor,
   gatherNotifications,
   lookbackStart,
+  notificationPageSize,
   retentionStart,
 } from "./notification-sources";
 import { PartnerActivityAlertsService } from "./partner-activity-alerts.service";
@@ -177,18 +180,53 @@ export class NotificationsService {
     private readonly partnerAlerts: PartnerActivityAlertsService,
   ) {}
 
-  async list(userId: string, now = new Date()): Promise<NotificationsResponse> {
-    await this.partnerAlerts.syncUser(userId, now);
-    await this.gather(userId, now);
-    const [rows, unreadCount] = await Promise.all([
+  /**
+   * NOTIF-09: one page, newest first. Only the first page gathers: a member
+   * scrolling down is reading what was there when they opened the list, and
+   * gathering again per page would insert newer rows above a cursor that has
+   * already passed them. The unread count is the account's on every page.
+   */
+  async list(
+    userId: string,
+    query: NotificationsQuery = {},
+    now = new Date(),
+  ): Promise<NotificationsResponse> {
+    const cursor = query.cursor ? decodeNotificationCursor(query.cursor) : null;
+    if (query.cursor && !cursor) {
+      throw new BadRequestException("Invalid cursor");
+    }
+    if (!cursor) {
+      await this.partnerAlerts.syncUser(userId, now);
+      await this.gather(userId, now);
+    }
+    const take = notificationPageSize(query.limit);
+    const [page, unreadCount] = await Promise.all([
       this.db.notification.findMany({
-        where: { userId, revokedAt: null },
+        where: {
+          userId,
+          revokedAt: null,
+          ...(cursor
+            ? {
+                OR: [
+                  { createdAt: { lt: cursor.at } },
+                  { createdAt: cursor.at, id: { lt: cursor.id } },
+                ],
+              }
+            : {}),
+        },
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-        take: NOTIFICATIONS_LIST_LIMIT,
+        // One more than the page shows, to know whether anything older exists.
+        take: take + 1,
         select: NOTIFICATION_SELECT,
       }),
       this.unreadCount(userId),
     ]);
+    const rows = page.slice(0, take);
+    const last = rows.at(-1);
+    const nextCursor =
+      page.length > take && last
+        ? encodeNotificationCursor({ at: last.createdAt, id: last.id })
+        : null;
     const actorIds = rows.flatMap((row) => (row.actor ? [row.actor.id] : []));
     const followed = actorIds.length
       ? await this.db.userFollow.findMany({
@@ -203,6 +241,7 @@ export class NotificationsService {
         return notification ? [notification] : [];
       }),
       unreadCount,
+      nextCursor,
     };
   }
 

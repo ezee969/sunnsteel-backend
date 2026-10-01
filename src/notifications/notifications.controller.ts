@@ -4,11 +4,13 @@ import {
   Get,
   HttpCode,
   Post,
+  Query,
   Req,
   UseGuards,
 } from "@nestjs/common";
 import { SupabaseJwtGuard } from "../auth/guards/supabase-jwt.guard";
 import type { RequestWithUser } from "../common/types/request-with-user";
+import { ListNotificationsQueryDto } from "./dto/list-notifications-query.dto";
 import { MarkNotificationsReadDto } from "./dto/mark-notifications-read.dto";
 import { NotificationsService } from "./notifications.service";
 
@@ -19,8 +21,8 @@ export class NotificationsController {
   constructor(private readonly notifications: NotificationsService) {}
 
   @Get()
-  list(@Req() req: RequestWithUser) {
-    return this.notifications.list(req.user.id);
+  list(@Req() req: RequestWithUser, @Query() query: ListNotificationsQueryDto) {
+    return this.notifications.list(req.user.id, query);
   }
 
   @Post("read")
