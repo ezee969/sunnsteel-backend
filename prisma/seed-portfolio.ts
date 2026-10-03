@@ -655,8 +655,15 @@ async function verify(ownerId: string): Promise<void> {
 	const ownerRoutineIds = [ROUTINE_IDS.active, ROUTINE_IDS.legacy]
 	const expectedDays = ACTIVE_DAYS.length + LEGACY_DAYS.length
 
+	// Baseline days only: since ROUT-15 every training block keeps working
+	// copies of the routine's days (and a deload would too, ROUT-16), so the
+	// two blocks seeded below add a full set of days each.
 	const days = await prisma.routineDay.findMany({
-		where: { routineId: { in: ownerRoutineIds } },
+		where: {
+			routineId: { in: ownerRoutineIds },
+			trainingBlockId: null,
+			temporaryOverrideId: null,
+		},
 		select: { name: true, _count: { select: { exercises: true } } },
 	})
 	if (days.length !== expectedDays)
