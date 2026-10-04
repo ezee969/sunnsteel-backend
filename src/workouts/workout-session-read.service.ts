@@ -21,9 +21,42 @@ import {
   WORKOUT_SESSION_LIST_SELECT,
 } from "./workout-session.selects";
 
-type WorkoutSessionListRow = Prisma.WorkoutSessionGetPayload<{
+export type WorkoutSessionListRow = Prisma.WorkoutSessionGetPayload<{
   select: typeof WORKOUT_SESSION_LIST_SELECT;
 }>;
+
+/**
+ * One row of the history list as the `WorkoutSessionSummary` contract, named
+ * as it was trained: the snapshot's routine and day where one exists. NAV-01's
+ * workout search returns the same rows, so the two can never disagree.
+ */
+export function toWorkoutSessionSummary(
+  session: WorkoutSessionListRow,
+): WorkoutSessionSummary {
+  const snapshot = session.snapshot
+    ? readSnapshot(session.snapshot.payload)
+    : null;
+  return {
+    id: session.id,
+    status: session.status,
+    startedAt: session.startedAt.toISOString(),
+    endedAt: session.endedAt ? session.endedAt.toISOString() : null,
+    durationSec: session.durationSec ?? undefined,
+    notes: session.notes ?? undefined,
+    totalVolume: undefined,
+    totalSets: undefined,
+    totalExercises: undefined,
+    routine: {
+      id: snapshot?.sourceRoutineId ?? session.routine!.id,
+      name: snapshot?.routine.name ?? session.routine!.name,
+      dayName: routineDayName(snapshot?.routineDay ?? session.routineDay),
+      trainingBlockName:
+        snapshot?.trainingBlock?.name ?? session.trainingBlockName,
+      temporaryOverrideKind:
+        snapshot?.temporaryOverride?.kind ?? session.temporaryOverrideKind,
+    },
+  };
+}
 
 @Injectable()
 export class WorkoutSessionReadService {
@@ -156,31 +189,7 @@ export class WorkoutSessionReadService {
     const hasNext = list.length === take;
     const page = hasNext ? list.slice(0, -1) : list;
 
-    const items: WorkoutSessionSummary[] = page.map((session) => {
-      const snapshot = session.snapshot
-        ? readSnapshot(session.snapshot.payload)
-        : null;
-      return {
-        id: session.id,
-        status: session.status,
-        startedAt: session.startedAt.toISOString(),
-        endedAt: session.endedAt ? session.endedAt.toISOString() : null,
-        durationSec: session.durationSec ?? undefined,
-        notes: session.notes ?? undefined,
-        totalVolume: undefined,
-        totalSets: undefined,
-        totalExercises: undefined,
-        routine: {
-          id: snapshot?.sourceRoutineId ?? session.routine!.id,
-          name: snapshot?.routine.name ?? session.routine!.name,
-          dayName: routineDayName(snapshot?.routineDay ?? session.routineDay),
-          trainingBlockName:
-            snapshot?.trainingBlock?.name ?? session.trainingBlockName,
-          temporaryOverrideKind:
-            snapshot?.temporaryOverride?.kind ?? session.temporaryOverrideKind,
-        },
-      };
-    });
+    const items: WorkoutSessionSummary[] = page.map(toWorkoutSessionSummary);
 
     return {
       items,

@@ -8,6 +8,7 @@ import {
 // Services
 import { DatabaseService } from "../database/database.service";
 import { hiddenFromViewer, isHiddenFromViewer } from "./member-blocks";
+import { memberSearchBranches } from "./member-search";
 import { trainingPartnerPermissions } from "./training-partner-access";
 import {
   bodyMeasurementProblems,
@@ -409,38 +410,8 @@ export class UsersService {
     excludeUserId: string,
     limit: number = 10,
   ): Promise<UserSearchResponse[]> {
-    if (!query || query.trim() === "") return [];
-
-    const trimmedQuery = query.trim();
-    const usernameQuery = normalizeUsername(trimmedQuery);
-    if (trimmedQuery.startsWith("@") && !usernameQuery) return [];
-    const searches: Prisma.UserWhereInput[] = trimmedQuery.startsWith("@")
-      ? [
-          {
-            discoverableByUsername: true,
-            username: { contains: usernameQuery, mode: "insensitive" },
-          },
-        ]
-      : [
-          {
-            discoverableByName: true,
-            OR: [
-              { name: { contains: trimmedQuery, mode: "insensitive" } },
-              { lastName: { contains: trimmedQuery, mode: "insensitive" } },
-            ],
-          },
-          ...(usernameQuery
-            ? [
-                {
-                  discoverableByUsername: true,
-                  username: {
-                    contains: usernameQuery,
-                    mode: "insensitive" as const,
-                  },
-                },
-              ]
-            : []),
-        ];
+    const searches = memberSearchBranches(query ?? "");
+    if (!searches) return [];
 
     // PROF-10: neither party of a block appears in the other's search.
     const hidden = await this.hiddenMemberIds(excludeUserId);

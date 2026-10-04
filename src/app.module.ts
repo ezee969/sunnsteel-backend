@@ -20,6 +20,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { PushModule } from './notifications/push/push.module';
 import { ActivityModule } from './activity/activity.module';
 import { ModerationModule } from './moderation/moderation.module';
+import { SearchModule } from './search/search.module';
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ import { ModerationModule } from './moderation/moderation.module';
     PushModule,
     ActivityModule,
     ModerationModule,
+    SearchModule,
   ],
   providers: [
     {
