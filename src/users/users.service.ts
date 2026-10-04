@@ -15,6 +15,10 @@ import {
   isBodyMeasurementDate,
   type AppLocale,
   isAppLocale,
+  isWeekStartsOn,
+  DEFAULT_WEEK_STARTS_ON,
+  LENGTH_UNITS,
+  type WeekStartsOn,
   isDefaultDashboardLayout,
   normalizeDashboardLayout,
   type UpdateDashboardLayoutRequest,
@@ -87,6 +91,9 @@ const userProfileSelect = {
   isModerator: true,
   dashboardLayout: true,
   locale: true,
+  // PREF-04
+  weekStartsOn: true,
+  lengthUnit: true,
   createdAt: true,
   updatedAt: true,
   _count: {
@@ -155,6 +162,7 @@ export class UsersService {
       isModerator,
       dashboardLayout,
       locale,
+      weekStartsOn,
       ...profile
     } = user;
     return {
@@ -179,6 +187,9 @@ export class UsersService {
       isModerator,
       dashboardLayout: normalizeDashboardLayout(dashboardLayout),
       locale: isAppLocale(locale) ? locale : null,
+      weekStartsOn: isWeekStartsOn(weekStartsOn)
+        ? weekStartsOn
+        : DEFAULT_WEEK_STARTS_ON,
       trainingIdentity: {
         goals: trainingGoals,
         experienceLevel: trainingExperienceLevel,
@@ -220,6 +231,14 @@ export class UsersService {
       PROFILE_LOCATION_MAX_LENGTH,
       "Location",
     );
+    // PREF-04: the body is a contracts interface, so nothing upstream checks
+    // the enum; an unknown unit is refused here rather than by the database.
+    if (
+      data.lengthUnit !== undefined &&
+      !(LENGTH_UNITS as readonly string[]).includes(data.lengthUnit)
+    ) {
+      throw new BadRequestException("Unknown length unit");
+    }
     const trainingGoals = this.validateSelection(
       data.trainingGoals,
       TRAINING_GOAL_VALUES,
@@ -283,6 +302,7 @@ export class UsersService {
           weight: data.weight,
           height: data.height,
           weightUnit: data.weightUnit,
+          lengthUnit: data.lengthUnit,
         },
         select: userProfileSelect,
       });
@@ -356,6 +376,22 @@ export class UsersService {
     const user = await this.db.user.update({
       where: { email },
       data: { locale },
+      select: userProfileSelect,
+    });
+    return this.mapUserProfile(user);
+  }
+
+  /**
+   * PREF-04: the weekday the account's weeks start on. Every weekly view reads
+   * it; the rank does not, so changing it never moves a rank.
+   */
+  async updateWeekStart(
+    email: string,
+    weekStartsOn: WeekStartsOn,
+  ): Promise<UserProfile> {
+    const user = await this.db.user.update({
+      where: { email },
+      data: { weekStartsOn },
       select: userProfileSelect,
     });
     return this.mapUserProfile(user);

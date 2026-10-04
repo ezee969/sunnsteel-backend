@@ -1,7 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
 import {
+  apiError,
   SetAccountTimeZoneRequest,
   WorkoutAnalyticsStatus,
 } from '@sunsteel/contracts';
@@ -63,6 +64,18 @@ export class AnalyticsService {
         : timeZone;
       if (status.requestedTimeZone === desired && status.state !== 'FAILED')
         return status;
+      // PREF-04: a member's change, not the first registration. The plan a
+      // workout trains is resolved on the owner's local date, so the zone
+      // never changes under a workout in progress.
+      if (!request.onlyIfUnset) {
+        const live = await tx.workoutSession.findFirst({
+          where: { userId, status: 'IN_PROGRESS' },
+          select: { id: true },
+        });
+        if (live) {
+          throw new ConflictException(apiError('TIME_ZONE_LIVE_WORKOUT'));
+        }
+      }
       // Superseded jobs remain auditable but cannot activate later.
       await tx.analyticsBackfillJob.updateMany({
         where: { projection: { userId, state: 'BUILDING' } },

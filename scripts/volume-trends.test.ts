@@ -44,6 +44,7 @@ test("volume trends fill weeks and compare rollups, routines and exercises", asy
   const endedAt = new Date(`${previousWeek}T12:00:00.000Z`);
   const received: Record<string, any> = {};
   const tx = {
+    user: { findUnique: async () => ({ weekStartsOn: 1 }) },
     $queryRaw: async () => [{ id: "projection-1" }],
     workoutRollup: {
       findMany: async (query: any) => {
@@ -138,10 +139,13 @@ test("volume trends fill weeks and compare rollups, routines and exercises", asy
       ?.totalCompletedSets,
     1,
   );
+  // PREF-04: weeks are summed from the day rows, up to today.
+  assert.equal(received.overall.where.period, "DAY");
   assert.deepEqual(received.overall.where.date, {
     gte: weekStarts[0],
-    lte: currentWeek,
+    lte: localDate(new Date(), "Europe/Berlin"),
   });
+  assert.equal(received.muscles.where.period, "DAY");
   assert.equal(received.sessions.where.status, "COMPLETED");
   assert.equal(received.sessions.where.completedSets.gt, 0);
   assert.ok(received.sessions.where.endedAt.gte instanceof Date);
@@ -154,6 +158,7 @@ test("volume trends refuse a stale or missing analytics projection", async () =>
   const db = {
     $transaction: async (read: any) =>
       read({
+        user: { findUnique: async () => null },
         $queryRaw: async () => [],
         workoutRollup: {
           findMany: async () => assert.fail("rollups must not be queried"),

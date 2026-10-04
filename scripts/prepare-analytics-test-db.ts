@@ -372,6 +372,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20261004120000_stale_record_events/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// PREF-04: week start and length unit.
+				readFileSync(
+					'prisma/migrations/20261004140000_regional_preferences/migration.sql',
+					'utf8',
 				),
     );
     prisma(

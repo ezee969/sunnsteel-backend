@@ -35,6 +35,7 @@ import { ReplaceMeasurableGoalsDto } from './dto/replace-measurable-goals.dto';
 import { UpdatePlateauPreferencesDto } from './dto/update-plateau-preferences.dto';
 import { UpdateDashboardLayoutDto } from './dto/update-dashboard-layout.dto';
 import { UpdateLocaleDto } from './dto/update-locale.dto';
+import { UpdateWeekStartDto } from './dto/update-week-start.dto';
 import { PlateauPreferencesService } from './plateau-preferences.service';
 import { RoutineSharingService } from '../routines/routine-sharing.service';
 import { FeaturedProfileItemsService } from './featured-profile-items.service';
@@ -182,6 +183,15 @@ export class UsersController {
   @Put('preferences/locale')
   updateLocale(@Request() req: RequestWithUser, @Body() dto: UpdateLocaleDto) {
     return this.usersService.updateLocale(req.user.email, dto.locale);
+  }
+
+  /** PREF-04: the weekday the account's weeks start on. */
+  @Put('preferences/week-start')
+  updateWeekStart(
+    @Request() req: RequestWithUser,
+    @Body() dto: UpdateWeekStartDto,
+  ) {
+    return this.usersService.updateWeekStart(req.user.email, dto.weekStartsOn);
   }
 
   @Put('preferences/plateaus')

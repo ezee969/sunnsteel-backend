@@ -247,6 +247,9 @@ test(
       assert.equal(exported.account.username, 'export_owner');
       assert.equal(exported.account.email, 'exporting@isolated.test');
       assert.equal(exported.preferences.timeZone, 'Europe/Oslo');
+      // PREF-04: the regional preferences, at their defaults.
+      assert.equal(exported.preferences.weekStartsOn, 1);
+      assert.equal(exported.preferences.lengthUnit, 'CM');
       assert.deepEqual(exported.preferences.notifications.quietHours, {
         startMinute: 1320,
         endMinute: 420,

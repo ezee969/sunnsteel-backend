@@ -6,6 +6,7 @@ import {
   MeasurableGoalsService,
   normalizeMeasurableGoalInputs,
 } from "../src/goals/measurable-goals.service";
+import { weekStartOf } from "@sunsteel/contracts";
 import { localDate } from "../src/workouts/analytics/analytics-contribution";
 import {
   calculateGoalProgress,
@@ -123,6 +124,11 @@ test("replacing goals is owner-scoped and preserves supplied ids", async () => {
 
 test("personal goals compose weekly, streak, strength and body values", async () => {
   const localToday = localDate(new Date(), "UTC");
+  let weekStartsOn = 1;
+  const weekReads: Array<{
+    period: string;
+    date: { gte: string; lte: string };
+  }> = [];
   const makeGoal = (
     id: string,
     type:
@@ -163,9 +169,14 @@ test("personal goals compose weekly, streak, strength and body values", async ()
       },
     ],
     measurableGoal: { findMany: async () => goals },
-    user: { findUnique: async () => ({ weight: 82 }) },
+    user: { findUnique: async () => ({ weight: 82, weekStartsOn }) },
     workoutRollup: {
-      findUnique: async () => ({ sessions: 3, volumeKg: 4200 }),
+      aggregate: async (args: {
+        where: { period: string; date: { gte: string; lte: string } };
+      }) => {
+        weekReads.push(args.where);
+        return { _sum: { sessions: 3, volumeKg: 4200 } };
+      },
     },
     personalRecord: {
       findMany: async () => [{ exerciseId: "bench", estimated1rm: 140 }],
@@ -191,4 +202,15 @@ test("personal goals compose weekly, streak, strength and body values", async ()
   assert.equal(result.goals[0].periodStart?.length, 10);
   assert.equal(result.goals[3].exercise?.name, "Bench Press");
   assert.equal(result.goals[4].progressPercent, null);
+  // PREF-04: the week is the member's, summed from the day rows up to today.
+  assert.deepEqual(weekReads[0], {
+    projectionId: "projection",
+    period: "DAY",
+    date: { gte: weekStartOf(localToday, 1), lte: localToday },
+  });
+  weekStartsOn = 0;
+  await new WorkoutPersonalGoalsService(db).getPersonalGoals("user-1", {
+    timeZone: "UTC",
+  });
+  assert.equal(weekReads[1].date.gte, weekStartOf(localToday, 0));
 });

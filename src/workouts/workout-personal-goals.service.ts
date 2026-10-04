@@ -1,4 +1,9 @@
-import { apiError } from "@sunsteel/contracts";
+import {
+  apiError,
+  DEFAULT_WEEK_STARTS_ON,
+  isWeekStartsOn,
+  weekStartOf,
+} from "@sunsteel/contracts";
 import { Injectable, ServiceUnavailableException } from "@nestjs/common";
 import { Prisma, WorkoutAnalyticsProjection } from "@prisma/client";
 import type {
@@ -14,7 +19,6 @@ import {
 import {
   dayDifference,
   localDate,
-  weekDate,
 } from "./analytics/analytics-contribution";
 import { WorkoutProgressQueryDto } from "./dto/workout-progress.dto";
 
@@ -70,7 +74,6 @@ export class WorkoutPersonalGoalsService {
   ): Promise<PersonalGoalsResponse> {
     const now = new Date();
     const localToday = localDate(now, query.timeZone);
-    const currentWeek = weekDate(localToday);
 
     return this.db.$transaction(
       async (tx) => {
@@ -87,7 +90,7 @@ export class WorkoutPersonalGoalsService {
           }),
           tx.user.findUnique({
             where: { id: userId },
-            select: { weight: true },
+            select: { weight: true, weekStartsOn: true },
           }),
         ]);
         if (!projection) {
@@ -101,16 +104,22 @@ export class WorkoutPersonalGoalsService {
             ? [goal.exerciseId]
             : [],
         );
-        const [week, records] = await Promise.all([
-          tx.workoutRollup.findUnique({
+        // PREF-04: the member's own week, summed from the day rows, because
+        // the WEEK rows stay Monday weeks for the rank.
+        const currentWeek = weekStartOf(
+          localToday,
+          isWeekStartsOn(user?.weekStartsOn)
+            ? user.weekStartsOn
+            : DEFAULT_WEEK_STARTS_ON,
+        );
+        const [weekSum, records] = await Promise.all([
+          tx.workoutRollup.aggregate({
             where: {
-              projectionId_period_date: {
-                projectionId: projection.id,
-                period: "WEEK",
-                date: currentWeek,
-              },
+              projectionId: projection.id,
+              period: "DAY",
+              date: { gte: currentWeek, lte: localToday },
             },
-            select: { sessions: true, volumeKg: true },
+            _sum: { sessions: true, volumeKg: true },
           }),
           strengthExerciseIds.length
             ? tx.personalRecord.findMany({
@@ -140,9 +149,9 @@ export class WorkoutPersonalGoalsService {
             const stored = mapMeasurableGoal(goal);
             const currentValue =
               goal.type === "WEEKLY_SESSIONS"
-                ? (week?.sessions ?? 0)
+                ? (weekSum._sum.sessions ?? 0)
                 : goal.type === "WEEKLY_VOLUME"
-                  ? (week?.volumeKg ?? 0)
+                  ? (weekSum._sum.volumeKg ?? 0)
                   : goal.type === "STREAK_DAYS"
                     ? currentStreak
                     : goal.type === "EXERCISE_ESTIMATED_1RM"

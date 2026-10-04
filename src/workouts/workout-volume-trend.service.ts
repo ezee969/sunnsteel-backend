@@ -1,15 +1,19 @@
 import { Injectable, ServiceUnavailableException } from "@nestjs/common";
 import type { WorkoutAnalyticsProjection } from "@prisma/client";
 import {
+  DEFAULT_WEEK_STARTS_ON,
+  isWeekStartsOn,
   MUSCLE_GROUPS,
   type MuscleGroup,
   type VolumeTrendPoint,
   type VolumeTrendResponse,
   type VolumeTrendSeries,
   apiError,
+  weekStartOf,
+  type WeekStartsOn,
 } from "@sunsteel/contracts";
 import { DatabaseService } from "../database/database.service";
-import { localDate, weekDate } from "./analytics/analytics-contribution";
+import { localDate } from "./analytics/analytics-contribution";
 import { readSnapshot } from "./analytics/session-snapshot";
 import type { VolumeTrendQueryDto } from "./dto/volume-trend.dto";
 import { getHeatmapWeekStarts } from "./workout-muscle-heatmap.service";
@@ -96,13 +100,25 @@ export class WorkoutVolumeTrendService {
   ): Promise<VolumeTrendResponse> {
     const weeksCount = query.weeks ?? DEFAULT_VOLUME_TREND_WEEKS;
     const now = new Date();
-    const currentWeekStart = weekDate(localDate(now, query.timeZone));
-    const weekStarts = getHeatmapWeekStarts(currentWeekStart, weeksCount);
-    const weekSet = new Set(weekStarts);
-    const lowerBound = getVolumeTrendLowerBound(weekStarts[0]);
+    const localToday = localDate(now, query.timeZone);
 
     return this.db.$transaction(
       async (tx) => {
+        // PREF-04: weeks are the member's, built from the day rows, because
+        // the WEEK rows stay Monday weeks for the rank.
+        const user = await tx.user.findUnique({
+          where: { id: userId },
+          select: { weekStartsOn: true },
+        });
+        const weekStartsOn: WeekStartsOn = isWeekStartsOn(user?.weekStartsOn)
+          ? user.weekStartsOn
+          : DEFAULT_WEEK_STARTS_ON;
+        const weekOf = (date: string) => weekStartOf(date, weekStartsOn);
+        const currentWeekStart = weekOf(localToday);
+        const weekStarts = getHeatmapWeekStarts(currentWeekStart, weeksCount);
+        const weekSet = new Set(weekStarts);
+        const lowerBound = getVolumeTrendLowerBound(weekStarts[0]);
+
         const [projection] = await tx.$queryRaw<WorkoutAnalyticsProjection[]>`
           SELECT * FROM "WorkoutAnalyticsProjection"
           WHERE "userId" = ${userId} AND "active" AND "state" = 'READY' AND "timeZone" = ${query.timeZone} LIMIT 1`;
@@ -114,8 +130,8 @@ export class WorkoutVolumeTrendService {
         const overallRows = await tx.workoutRollup.findMany({
           where: {
             projectionId: projection.id,
-            period: "WEEK",
-            date: { gte: weekStarts[0], lte: currentWeekStart },
+            period: "DAY",
+            date: { gte: weekStarts[0], lte: localToday },
           },
           orderBy: { date: "asc" },
           select: { date: true, volumeKg: true, completedSets: true },
@@ -123,8 +139,8 @@ export class WorkoutVolumeTrendService {
         const muscleRows = await tx.workoutMuscleRollup.findMany({
           where: {
             projectionId: projection.id,
-            period: "WEEK",
-            date: { gte: weekStarts[0], lte: currentWeekStart },
+            period: "DAY",
+            date: { gte: weekStarts[0], lte: localToday },
           },
           orderBy: [{ date: "asc" }, { muscle: "asc" }],
           select: {
@@ -170,9 +186,17 @@ export class WorkoutVolumeTrendService {
           },
         });
 
-        const overallByWeek = new Map(
-          overallRows.map((row) => [row.date, row]),
-        );
+        const overallByWeek = new Map<
+          string,
+          { volumeKg: number; completedSets: number }
+        >();
+        for (const row of overallRows) {
+          const week = weekOf(row.date);
+          const sum = overallByWeek.get(week) ?? { volumeKg: 0, completedSets: 0 };
+          sum.volumeKg += row.volumeKg;
+          sum.completedSets += row.completedSets;
+          overallByWeek.set(week, sum);
+        }
         const overall: VolumeTrendPoint[] = weekStarts.map((weekStart) => {
           const row = overallByWeek.get(weekStart);
           return {
@@ -195,7 +219,7 @@ export class WorkoutVolumeTrendService {
             muscles,
             row.muscle,
             row.muscle,
-            row.date,
+            weekOf(row.date),
             row.volumeKg,
             row.completedSets,
           );
@@ -204,9 +228,7 @@ export class WorkoutVolumeTrendService {
         const routines = new Map<string, SeriesAccumulator>();
         for (const session of sessions) {
           if (!session.endedAt || !session.snapshot) continue;
-          const weekStart = weekDate(
-            localDate(session.endedAt, query.timeZone),
-          );
+          const weekStart = weekOf(localDate(session.endedAt, query.timeZone));
           if (!weekSet.has(weekStart)) continue;
           const snapshot = readSnapshot(session.snapshot.payload);
           addToSeries(
@@ -222,7 +244,7 @@ export class WorkoutVolumeTrendService {
         const exercises = new Map<string, SeriesAccumulator>();
         for (const log of logs) {
           if (!log.session.endedAt) continue;
-          const weekStart = weekDate(
+          const weekStart = weekOf(
             localDate(log.session.endedAt, query.timeZone),
           );
           if (!weekSet.has(weekStart)) continue;

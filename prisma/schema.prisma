@@ -67,6 +67,11 @@ model User {
   // I18N-02: the language the account chose, as contracts' AppLocale ('en' or
   // 'es'); null follows each device. Checked in the migration.
   locale                            String?
+  // PREF-04: the weekday weeks start on (1 Monday, 0 Sunday) for every weekly
+  // view but the rank, whose WEEK rollups stay Monday. Checked in the migration.
+  weekStartsOn                      Int                          @default(1)
+  // PREF-04: how lengths are shown; every length is stored in centimetres.
+  lengthUnit                        LengthUnit                   @default(CM)
   routines                          Routine[]
   workoutSessions                   WorkoutSession[]
   trainingLocations                 TrainingLocationPreference[]
@@ -321,6 +326,12 @@ enum ReportReason {
 enum WeightUnit {
   KG
   LB
+}
+
+/// PREF-04: the display and entry unit for lengths.
+enum LengthUnit {
+  CM
+  IN
 }
 
 // Biological sex of user
