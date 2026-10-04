@@ -360,6 +360,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20261001100000_rank_visibility/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// NAV-03: recent search results.
+				readFileSync(
+					'prisma/migrations/20261004100000_recent_searches/migration.sql',
+					'utf8',
 				),
     );
     prisma(

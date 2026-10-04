@@ -93,6 +93,7 @@ export class AccountExportService {
       sharingDefaults,
       entryOverrides,
       corrections,
+      recentSearches,
     ] = await Promise.all([
       this.db.routine.findMany({
         where: { userId },
@@ -246,7 +247,26 @@ export class AccountExportService {
         where: { userId },
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       }),
+      // NAV-03: the results the member last opened from search.
+      this.db.recentSearch.findMany({
+        where: { userId },
+        orderBy: { openedAt: "desc" },
+      }),
     ]);
+    // Another member is named by username, never by id, as everywhere in the
+    // file; one whose account is gone has nothing left to name.
+    const recentMemberIds = recentSearches
+      .filter((row) => row.kind === "MEMBER")
+      .map((row) => row.targetId);
+    const recentMembers = new Map(
+      (recentMemberIds.length
+        ? await this.db.user.findMany({
+            where: { id: { in: recentMemberIds } },
+            select: { id: true, username: true },
+          })
+        : []
+      ).map((row) => [row.id, row.username]),
+    );
 
     const member = (m: {
       username: string;
@@ -349,6 +369,13 @@ export class AccountExportService {
         kind: override.kind,
         toDate: override.toDate,
       })),
+      recentSearches: recentSearches.flatMap((row) => {
+        const target =
+          row.kind === "MEMBER" ? recentMembers.get(row.targetId) : row.targetId;
+        return target
+          ? [{ kind: row.kind, target, openedAt: iso(row.openedAt) }]
+          : [];
+      }),
       exercises: {
         starred: stars.map((star) => ({
           exerciseId: star.exercise.id,

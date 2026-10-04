@@ -3,12 +3,18 @@ import * as assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   normalizeSearchQuery,
+  RECENT_SEARCHES_MAX,
   SEARCH_PAGE_SIZE,
   SEARCH_PAGE_SIZE_MAX,
   SEARCH_QUERY_MAX_LENGTH,
 } from '@sunsteel/contracts';
 import type { Prisma } from '@prisma/client';
 import { canViewRoutine } from '../src/routines/routine-visibility';
+import {
+  recentSearchKey,
+  rowsToDrop,
+  splitResolved,
+} from '../src/search/recent-search-rules';
 import {
   afterUpdatedAt,
   containsPattern,
@@ -176,4 +182,47 @@ describe('NAV-01 shared routines are ROUT-07 discovery candidates', () => {
       }
     }
   }
+});
+
+describe('NAV-03 recent searches', () => {
+  const at = (minute: number) => new Date(Date.UTC(2026, 9, 4, 10, minute));
+  const row = (targetId: string, minute: number) => ({
+    kind: 'MEMBER' as const,
+    targetId,
+    openedAt: at(minute),
+  });
+
+  it('keeps the newest ten and drops the rest', () => {
+    const rows = Array.from({ length: 12 }, (_, index) => row(`m${index}`, index));
+    assert.deepEqual(
+      rowsToDrop(rows).map((r) => r.targetId),
+      ['m1', 'm0'],
+    );
+    assert.deepEqual(rowsToDrop(rows.slice(0, 10)), []);
+    assert.equal(RECENT_SEARCHES_MAX, 10);
+  });
+
+  it('lists what still resolves, newest first, and gives back the rest to delete', () => {
+    const rows = [row('old', 1), row('gone', 5), row('new', 9)];
+    const resolved = new Map([
+      [recentSearchKey(rows[0]), 'old'],
+      [recentSearchKey(rows[2]), 'new'],
+    ]);
+    const { kept, dropped } = splitResolved(rows, resolved);
+    assert.deepEqual(
+      kept.map((entry) => entry.item),
+      ['new', 'old'],
+    );
+    assert.deepEqual(
+      dropped.map((r) => r.targetId),
+      ['gone'],
+    );
+  });
+
+  it('keys a row by its kind as well as its target', () => {
+    assert.notEqual(
+      recentSearchKey({ kind: 'ROUTINE', targetId: 'x' }),
+      recentSearchKey({ kind: 'WORKOUT', targetId: 'x' }),
+    );
+  });
 });

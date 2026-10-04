@@ -1,5 +1,6 @@
 import { Type } from 'class-transformer';
 import {
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -8,6 +9,9 @@ import {
   Min,
 } from 'class-validator';
 import {
+  RECENT_SEARCH_KINDS,
+  type RecentSearchKind,
+  type RecordRecentSearchRequest,
   SEARCH_PAGE_SIZE_MAX,
   type SearchPageQuery,
   type SearchPreviewQuery,
@@ -39,4 +43,24 @@ export class SearchPageQueryDto implements SearchPageQuery {
   @Min(1)
   @Max(SEARCH_PAGE_SIZE_MAX)
   limit?: number;
+}
+
+/** NAV-03: a result the member opened from search. */
+export class RecordRecentSearchDto implements RecordRecentSearchRequest {
+  @IsIn(RECENT_SEARCH_KINDS)
+  kind: RecentSearchKind;
+
+  @IsString()
+  @MaxLength(64)
+  targetId: string;
+}
+
+/** NAV-03: the one recent result to forget. */
+export class RecentSearchParamsDto {
+  @IsIn(RECENT_SEARCH_KINDS)
+  kind: RecentSearchKind;
+
+  @IsString()
+  @MaxLength(64)
+  targetId: string;
 }
