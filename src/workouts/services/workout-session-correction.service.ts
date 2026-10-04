@@ -50,6 +50,7 @@ import {
 } from "../session-substitutions";
 import { COUNTED_SET_LOG } from "../counted-sets";
 import { syncFollowingWarmUps } from "../../routines/warm-up-follow";
+import { removeActivityEntries } from "../../activity/activity-entry-removal";
 
 type Tx = Prisma.TransactionClient;
 
@@ -297,7 +298,7 @@ export class WorkoutSessionCorrectionService {
               removedEntryKeys,
             );
         await this.refreshSessionNotification(tx, userId, sessionId);
-        await this.removeActivityEntries(tx, userId, removedEntryKeys);
+        await removeActivityEntries(tx, userId, removedEntryKeys);
 
         const row = await tx.sessionCorrection.create({
           data: {
@@ -707,40 +708,6 @@ export class WorkoutSessionCorrectionService {
           progressionCount: progressions,
         }),
       },
-    });
-  }
-
-  /**
-   * An activity entry is generated from its event, so an event that no
-   * longer holds takes its entry away. What hung from that entry -- its
-   * reactions, comments, their notifications and the owner's audience for it
-   * -- was about a fact that did not happen, and goes with it.
-   */
-  private async removeActivityEntries(
-    tx: Tx,
-    userId: string,
-    entryKeys: string[],
-  ) {
-    if (entryKeys.length === 0) return;
-    const comments = await tx.activityComment.findMany({
-      where: { entryKey: { in: entryKeys }, authorId: userId },
-      select: { id: true },
-    });
-    if (comments.length)
-      await tx.notification.deleteMany({
-        where: {
-          userId,
-          sourceKey: { in: comments.map((comment) => `comment:${comment.id}`) },
-        },
-      });
-    await tx.activityComment.deleteMany({
-      where: { entryKey: { in: entryKeys }, authorId: userId },
-    });
-    await tx.activityEntryReaction.deleteMany({
-      where: { entryKey: { in: entryKeys }, authorId: userId },
-    });
-    await tx.activityEntryOverride.deleteMany({
-      where: { userId, entryKey: { in: entryKeys } },
     });
   }
 }

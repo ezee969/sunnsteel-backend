@@ -1,6 +1,10 @@
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
-import type { WorkoutSessionSnapshotV1 } from "@sunsteel/contracts";
+import type {
+  ProgressTimelinePersonalRecordItem,
+  ProgressTimelineProgressionItem,
+  WorkoutSessionSnapshotV1,
+} from "@sunsteel/contracts";
 import { DatabaseService } from "../src/database/database.service";
 import {
   mapProgressTimelineItem,
@@ -44,36 +48,49 @@ const record = (
   previousPayload,
 });
 
+const recordItem = (row: ReturnType<typeof record>) => {
+  const item = mapProgressTimelineItem(row, snapshot);
+  assert.equal(item?.type, "PERSONAL_RECORD");
+  return item as ProgressTimelinePersonalRecordItem;
+};
+
 test("progress timeline explains record frontier changes", () => {
-  const first = mapProgressTimelineItem(
-    record("first", 100, 5, null),
-    snapshot,
-  );
-  assert.equal(first.type, "PERSONAL_RECORD");
+  const first = recordItem(record("first", 100, 5, null));
   assert.equal(first.reason, "FIRST_RECORDED_BEST");
   assert.equal(first.session.dayName, "Thursday");
 
-  const heavier = mapProgressTimelineItem(
+  const heavier = recordItem(
     record("heavier", 105, 3, {
       weight: 100,
       reps: 5,
       estimated1rm: 116.7,
     }),
-    snapshot,
   );
-  assert.equal(heavier.type, "PERSONAL_RECORD");
   assert.equal(heavier.reason, "HEAVIER_LOAD");
 
-  const moreReps = mapProgressTimelineItem(
+  const moreReps = recordItem(
     record("reps", 105, 6, {
       weight: 105,
       reps: 5,
       estimated1rm: 122.5,
     }),
+  );
+  assert.equal(moreReps.reason, "MORE_REPS_AT_SAME_LOAD");
+});
+
+test("progress timeline skips a record that does not beat the one before it", () => {
+  // TD-58: @eze-prof's 50 kg x 10 Bench Press record from a real workout,
+  // after the portfolio seed backdated 72.5 kg x 7 before it.
+  const stale = mapProgressTimelineItem(
+    record("stale", 50, 10, { weight: 72.5, reps: 7, estimated1rm: 89.4 }),
     snapshot,
   );
-  assert.equal(moreReps.type, "PERSONAL_RECORD");
-  assert.equal(moreReps.reason, "MORE_REPS_AT_SAME_LOAD");
+  assert.equal(stale, null);
+  const tie = mapProgressTimelineItem(
+    record("tie", 100, 5, { weight: 100, reps: 5, estimated1rm: 116.7 }),
+    snapshot,
+  );
+  assert.equal(tie, null);
 });
 
 test("progress timeline validates progression payloads", () => {
@@ -104,8 +121,11 @@ test("progress timeline validates progression payloads", () => {
     },
     snapshot,
   );
-  assert.equal(item.type, "PROGRESSION_CHANGED");
-  assert.equal(item.change.sets[0].newWeightKg, 102.5);
+  assert.equal(item?.type, "PROGRESSION_CHANGED");
+  assert.equal(
+    (item as ProgressTimelineProgressionItem).change.sets[0].newWeightKg,
+    102.5,
+  );
   assert.throws(
     () =>
       mapProgressTimelineItem(
@@ -177,6 +197,58 @@ test("progress timeline is owner-scoped, filtered and cursor-paginated", async (
   assert.deepEqual(received.snapshots.where.sessionId.in, ["session-1"]);
   assert.match(received.sql.strings.join(" "), /LEFT JOIN LATERAL/);
   assert.match(received.sql.strings.join(" "), /events\."userId"/);
+  // The cursor instant is the UTC wall clock cast to `timestamp`, never a
+  // Date the session's zone would shift.
+  assert.match(received.sql.strings.join(" "), /AS timestamp\(3\)/);
+  assert.ok(received.sql.values.includes("2026-09-13T00:00:00.000"));
+  assert.ok(!received.sql.values.some((value: unknown) => value instanceof Date));
+});
+
+test("progress timeline compares a record with the best before it and pages past a skipped row", async () => {
+  const received: Record<string, any> = {};
+  const rows = [
+    record("00000000-0000-4000-8000-000000000003", 75, 7, {
+      weight: 72.5,
+      reps: 7,
+      estimated1rm: 89.4,
+    }),
+    // Dropped by the query on real rows; a row that still reaches the mapper
+    // is skipped rather than failing the page.
+    record("00000000-0000-4000-8000-000000000002", 50, 10, {
+      weight: 72.5,
+      reps: 7,
+      estimated1rm: 89.4,
+    }),
+    record("00000000-0000-4000-8000-000000000001", 72.5, 7, null),
+  ];
+  const db = {
+    $transaction: async (read: any) =>
+      read({
+        $queryRaw: async (sql: any) => {
+          received.sql = sql;
+          return rows;
+        },
+        workoutSessionSnapshot: {
+          findMany: async () => [{ sessionId: "session-1", payload: snapshot }],
+        },
+      }),
+  } as unknown as DatabaseService;
+
+  const result = await new WorkoutProgressTimelineService(
+    db,
+  ).getProgressTimeline("user-1", { limit: 2 });
+
+  assert.deepEqual(
+    result.items.map((item) => item.eventId),
+    ["00000000-0000-4000-8000-000000000003"],
+  );
+  // The cursor is the last row read, so the next page starts after the
+  // skipped one instead of reading it again or ending the feed.
+  assert.equal(result.nextCursor, "00000000-0000-4000-8000-000000000002");
+  const sql = received.sql.strings.join(" ");
+  // `previous` is the best earlier record, not merely the latest one.
+  assert.match(sql, /ORDER BY \(CASE WHEN jsonb_typeof\(prior\."payload"->'weight'\)/);
+  assert.match(sql, /OR previous\."payload" IS NULL/);
 });
 
 test("progress timeline rejects a cursor outside the owner and filter", async () => {

@@ -42,6 +42,7 @@ import {
 	SESSION_NOTES,
 } from './portfolio-seed.program'
 import { resetPortfolioSeed } from './portfolio-seed.reset'
+import { staleRecordEvents } from '../src/workouts/analytics/stale-record-events'
 
 // DatabaseService is the app's PrismaClient, so the verification step can run
 // the real search, suggestion and profile services against the seeded rows.
@@ -712,6 +713,35 @@ async function verify(ownerId: string): Promise<void> {
 		}),
 	])
 	if (!records) problems.push('owner has no personal records')
+	// TD-58: every record event must beat the best before it, or the progress
+	// timeline cannot explain it. The rebuild removes the ones it no longer
+	// derives; this is the check that it did.
+	const staleRecords = staleRecordEvents(
+		(
+			await prisma.trainingEvent.findMany({
+				where: { userId: ownerId, type: 'PERSONAL_RECORD' },
+				select: { id: true, eventKey: true, occurredAt: true, payload: true },
+			})
+		).map((event) => {
+			const payload = event.payload as {
+				exerciseId: string
+				weight: number
+				reps: number
+			}
+			return {
+				id: event.id,
+				eventKey: event.eventKey,
+				occurredAt: event.occurredAt,
+				exerciseId: payload.exerciseId,
+				weight: payload.weight,
+				reps: payload.reps,
+			}
+		}),
+	)
+	if (staleRecords.length)
+		problems.push(
+			`${staleRecords.length} record events do not beat the record before them`,
+		)
 	if (!achievements) problems.push('owner has no achievements')
 
 	console.log('\nOwner analytics')
@@ -1124,7 +1154,7 @@ async function main() {
 	)
 	console.log(`  history window     ${HISTORY_DAYS} days`)
 	console.log(
-		`  analytics replay   ${analytics.sessions} sessions in ${timeZone} (${analytics.skipped} unrecoverable skipped)`,
+		`  analytics replay   ${analytics.sessions} sessions in ${timeZone} (${analytics.skipped} unrecoverable skipped, ${analytics.staleRecords} stale records removed)`,
 	)
 	console.log(
 		`  active routine     days ${activeDows.join(', ')} (today = ${todayDow})`,

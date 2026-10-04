@@ -76,7 +76,7 @@ async function main() {
 				randomUUID(),
 			)
 			console.log(
-				`\n  analytics rebuilt  ${rebuilt.sessions} sessions (${timeZone})`,
+				`\n  analytics rebuilt  ${rebuilt.sessions} sessions (${timeZone}), ${rebuilt.staleRecords} stale records removed`,
 			)
 		} else if (manifest?.ownerBefore) {
 			await prisma.user.update({

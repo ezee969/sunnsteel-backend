@@ -366,6 +366,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20261004100000_recent_searches/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// TD-58: stale record events left by a replay.
+				readFileSync(
+					'prisma/migrations/20261004120000_stale_record_events/migration.sql',
+					'utf8',
 				),
     );
     prisma(

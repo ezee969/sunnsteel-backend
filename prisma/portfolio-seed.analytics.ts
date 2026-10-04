@@ -7,6 +7,7 @@ import {
 } from '../src/workouts/analytics/analytics-writer'
 import { writeProgressionEvents } from '../src/workouts/analytics/progression-events'
 import { ensureSessionSnapshot } from '../src/workouts/analytics/session-snapshot'
+import { removeStaleRecordEvents } from '../src/workouts/analytics/stale-record-events'
 import { buildProgressionOutcome } from '../src/workouts/progression-changes'
 
 /**
@@ -155,7 +156,7 @@ export async function rebuildAnalytics(
 	userId: string,
 	timeZone: string,
 	projectionId: string,
-): Promise<{ sessions: number; skipped: number }> {
+): Promise<{ sessions: number; skipped: number; staleRecords: number }> {
 	await prisma.$transaction(async (tx) => {
 		await lockTrainingAccount(tx, userId)
 		await tx.analyticsBackfillJob.updateMany({
@@ -174,6 +175,7 @@ export async function rebuildAnalytics(
 	let cursor: { endedAt: Date; id: string } | null = null
 	let sessions = 0
 	let skipped = 0
+	let staleRecords = 0
 
 	for (;;) {
 		const done: boolean = await prisma.$transaction(async (tx) => {
@@ -228,6 +230,13 @@ export async function rebuildAnalytics(
 				return false
 			}
 
+			// The replay only adds events. The seed backdates history into the
+			// owner's real account, so a record one of the owner's own workouts
+			// set before that history existed no longer beats what now precedes
+			// it; left in place it read as a record that never happened and the
+			// progress timeline refused the whole exercise (TD-58).
+			staleRecords += (await removeStaleRecordEvents(tx, userId)).length
+
 			await tx.workoutAnalyticsProjection.updateMany({
 				where: { userId, active: true },
 				data: { active: false },
@@ -243,7 +252,7 @@ export async function rebuildAnalytics(
 			return true
 		}, TX_OPTIONS)
 
-		if (done) return { sessions, skipped }
+		if (done) return { sessions, skipped, staleRecords }
 	}
 }
 

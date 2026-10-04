@@ -87,6 +87,19 @@ function progressionChange(value: unknown, eventId: string): ProgressionChange {
   return payload as unknown as ProgressionChange;
 }
 
+/**
+ * A record payload's number, or null when it is missing or not a number, so
+ * one malformed row can be passed over instead of failing the cast.
+ */
+function recordValue(
+  alias: "events" | "prior" | "previous",
+  field: "weight" | "reps",
+) {
+  const value = Prisma.raw(`${alias}."payload"->'${field}'`);
+  const text = Prisma.raw(`${alias}."payload"->>'${field}'`);
+  return Prisma.sql`(CASE WHEN jsonb_typeof(${value}) = 'number' THEN (${text})::float8 END)`;
+}
+
 function sessionContext(snapshot: WorkoutSessionSnapshotV1) {
   return {
     sessionId: snapshot.sessionId,
@@ -95,10 +108,15 @@ function sessionContext(snapshot: WorkoutSessionSnapshotV1) {
   };
 }
 
+/**
+ * Maps one event row. A record that does not beat the one before it is
+ * answered as null and left out of the page: the query already drops such
+ * events, and one stale row (TD-58) must never fail the whole timeline.
+ */
 export function mapProgressTimelineItem(
   row: ProgressTimelineEventRow,
   snapshot: WorkoutSessionSnapshotV1,
-): ProgressTimelineItem {
+): ProgressTimelineItem | null {
   if (row.type === "PERSONAL_RECORD") {
     const payload = objectValue(row.payload);
     const current = recordPerformance(row.payload);
@@ -121,9 +139,7 @@ export function mapProgressTimelineItem(
         : current.weightKg === previous.weightKg && current.reps > previous.reps
           ? "MORE_REPS_AT_SAME_LOAD"
           : null;
-    if (!reason) {
-      throw new Error(`Non-improving PERSONAL_RECORD event: ${row.id}`);
-    }
+    if (!reason) return null;
     const item: ProgressTimelinePersonalRecordItem = {
       eventId: row.id,
       type: row.type,
@@ -190,11 +206,21 @@ export class WorkoutProgressTimelineService {
         const exerciseFilter = query.exerciseId
           ? Prisma.sql`AND events."payload"->>'exerciseId' = ${query.exerciseId}`
           : Prisma.empty;
+        // `occurredAt` is a `timestamp` holding UTC wall-clock time. A Date
+        // parameter would arrive as `timestamptz` and be shifted by the
+        // session's zone before comparing, repeating or skipping rows on any
+        // database not set to UTC; the UTC wall clock cast to `timestamp`
+        // does not move (the NAV-01 search cursor's rule).
+        const cursorAt = cursor
+          ? Prisma.sql`CAST(${cursor.occurredAt
+              .toISOString()
+              .replace("Z", "")} AS timestamp(3))`
+          : null;
         const cursorFilter = cursor
           ? Prisma.sql`AND (
-              events."occurredAt" < ${cursor.occurredAt}
+              events."occurredAt" < ${cursorAt}
               OR (
-                events."occurredAt" = ${cursor.occurredAt}
+                events."occurredAt" = ${cursorAt}
                 AND events."id" < ${cursor.id}
               )
             )`
@@ -222,13 +248,24 @@ export class WorkoutProgressTimelineService {
                   AND prior."id" < events."id"
                 )
               )
-            ORDER BY prior."occurredAt" DESC, prior."id" DESC
+            ORDER BY ${recordValue("prior", "weight")} DESC NULLS LAST,
+              ${recordValue("prior", "reps")} DESC NULLS LAST,
+              prior."occurredAt" DESC, prior."id" DESC
             LIMIT 1
           ) previous ON TRUE
           WHERE events."userId" = ${userId}
             ${typeFilter}
             ${exerciseFilter}
             ${cursorFilter}
+            AND (
+              events."type" <> 'PERSONAL_RECORD'
+              OR previous."payload" IS NULL
+              OR ${recordValue("events", "weight")} > ${recordValue("previous", "weight")}
+              OR (
+                ${recordValue("events", "weight")} = ${recordValue("previous", "weight")}
+                AND ${recordValue("events", "reps")} > ${recordValue("previous", "reps")}
+              )
+            )
           ORDER BY events."occurredAt" DESC, events."id" DESC
           LIMIT ${take}`);
 
@@ -247,19 +284,21 @@ export class WorkoutProgressTimelineService {
             readSnapshot(snapshot.payload),
           ]),
         );
-        const items = page.map((row) => {
+        const items = page.flatMap((row) => {
           const snapshot = snapshotsBySession.get(row.sessionId);
           if (!snapshot) {
             throw new Error(
               `Missing session snapshot for training event: ${row.id}`,
             );
           }
-          return mapProgressTimelineItem(row, snapshot);
+          return mapProgressTimelineItem(row, snapshot) ?? [];
         });
 
         return {
           items,
-          nextCursor: hasNext ? items.at(-1)?.eventId : undefined,
+          // The last row read, not the last item kept, so a skipped row can
+          // never end the feed early or be read twice.
+          nextCursor: hasNext ? page.at(-1)?.id : undefined,
         };
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
