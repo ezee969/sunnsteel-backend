@@ -33,7 +33,7 @@ interface NormalizedGoalInput {
   exerciseId: string | null;
 }
 
-const TARGET_LIMITS: Record<
+export const TARGET_LIMITS: Record<
   MeasurableGoalType,
   { minimum: number; maximum: number; integer?: boolean }
 > = {
@@ -43,6 +43,20 @@ const TARGET_LIMITS: Record<
   EXERCISE_ESTIMATED_1RM: { minimum: 0.1, maximum: 2000 },
   BODY_WEIGHT: { minimum: 20, maximum: 1000 },
 };
+
+/** Whether the goals write would accept this target for this type. */
+export function isAcceptableTarget(
+  type: MeasurableGoalType,
+  targetValue: number,
+): boolean {
+  const limits = TARGET_LIMITS[type];
+  return (
+    Number.isFinite(targetValue) &&
+    targetValue >= limits.minimum &&
+    targetValue <= limits.maximum &&
+    (!limits.integer || Number.isInteger(targetValue))
+  );
+}
 
 export function normalizeMeasurableGoalInputs(
   inputs: MeasurableGoalInput[],

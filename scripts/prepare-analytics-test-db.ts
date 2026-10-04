@@ -378,6 +378,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20261004140000_regional_preferences/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// ACH-06: goal suggestions set aside.
+				readFileSync(
+					'prisma/migrations/20261004160000_goal_suggestion_dismissals/migration.sql',
+					'utf8',
 				),
     );
     prisma(

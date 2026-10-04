@@ -96,6 +96,7 @@ export class AccountExportService {
       entryOverrides,
       corrections,
       recentSearches,
+      goalSuggestionDismissals,
     ] = await Promise.all([
       this.db.routine.findMany({
         where: { userId },
@@ -254,6 +255,11 @@ export class AccountExportService {
         where: { userId },
         orderBy: { openedAt: "desc" },
       }),
+      // ACH-06: goal suggestions set aside with "Not now".
+      this.db.goalSuggestionDismissal.findMany({
+        where: { userId },
+        orderBy: { dismissedAt: "desc" },
+      }),
     ]);
     // Another member is named by username, never by id, as everywhere in the
     // file; one whose account is gone has nothing left to name.
@@ -372,6 +378,11 @@ export class AccountExportService {
         date: override.date,
         kind: override.kind,
         toDate: override.toDate,
+      })),
+      goalSuggestionDismissals: goalSuggestionDismissals.map((row) => ({
+        key: row.key,
+        targetValue: row.targetValue,
+        dismissedAt: iso(row.dismissedAt),
       })),
       recentSearches: recentSearches.flatMap((row) => {
         const target =

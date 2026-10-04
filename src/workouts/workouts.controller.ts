@@ -38,6 +38,8 @@ import { ProgressTimelineQueryDto } from "./dto/progress-timeline.dto";
 import type { RequestWithUser } from "../common/types/request-with-user";
 import { RestAlertService } from "../notifications/push/rest-alert.service";
 import { ScheduleRestAlertDto } from "../notifications/push/dto/schedule-rest-alert.dto";
+import { DismissGoalSuggestionDto } from "./dto/dismiss-goal-suggestion.dto";
+import { WorkoutGoalSuggestionsService } from "./workout-goal-suggestions.service";
 
 @UseGuards(SupabaseJwtGuard)
 @Controller("workouts")
@@ -47,6 +49,7 @@ export class WorkoutsController {
     private readonly restAlerts: RestAlertService,
     private readonly corrections: WorkoutSessionCorrectionService,
     private readonly notes: WorkoutSessionNotesService,
+    private readonly goalSuggestions: WorkoutGoalSuggestionsService,
   ) {}
 
   @Post("sessions/start")
@@ -190,6 +193,23 @@ export class WorkoutsController {
     @Query() query: WorkoutProgressQueryDto,
   ) {
     return this.workoutsService.getPersonalGoals(req.user.id, query);
+  }
+
+  /** ACH-06: goals the member might add, from their own data. */
+  @Get("progress/goal-suggestions")
+  async goalSuggestionsRead(
+    @Req() req: RequestWithUser,
+    @Query() query: WorkoutProgressQueryDto,
+  ) {
+    return this.goalSuggestions.getGoalSuggestions(req.user.id, query);
+  }
+
+  @Post("progress/goal-suggestions/dismissals")
+  async dismissGoalSuggestion(
+    @Req() req: RequestWithUser,
+    @Body() dto: DismissGoalSuggestionDto,
+  ) {
+    return this.goalSuggestions.dismiss(req.user.id, dto);
   }
 
   @Get("progress/plateaus")

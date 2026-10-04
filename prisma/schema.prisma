@@ -85,6 +85,7 @@ model User {
   starredExercises                  StarredExercise[]
   // NAV-03: the results this member last opened from search.
   recentSearches                    RecentSearch[]
+  goalSuggestionDismissals          GoalSuggestionDismissal[]
   customExercises                   Exercise[]
   sessionShares                     SessionShare[]
   sessionCorrections                SessionCorrection[]
@@ -553,6 +554,19 @@ model RecentSearch {
 
   @@id([userId, kind, targetId])
   @@index([userId, openedAt])
+}
+
+// ACH-06: a goal suggestion set aside with "Not now", hidden while it would
+// suggest the same number for the same key.
+model GoalSuggestionDismissal {
+  userId      String
+  key         String   @db.VarChar(120)
+  targetValue Float
+  dismissedAt DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, key])
+  @@index([userId, dismissedAt])
 }
 
 model StarredExercise {

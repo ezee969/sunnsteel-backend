@@ -29,6 +29,7 @@ import { WorkoutPersonalGoalsService } from "./workout-personal-goals.service";
 import { WorkoutPlateausService } from "./workout-plateaus.service";
 import { WorkoutTrainingSignalsService } from "./workout-training-signals.service";
 import { WorkoutDeloadSuggestionService } from "./workout-deload-suggestion.service";
+import { WorkoutGoalSuggestionsService } from "./workout-goal-suggestions.service";
 import { WorkoutBlockComparisonService } from "./workout-block-comparison.service";
 import { TrainingBlockComparisonController } from "./training-block-comparison.controller";
 import { PushModule } from "../notifications/push/push.module";
@@ -64,6 +65,7 @@ import { PushModule } from "../notifications/push/push.module";
     WorkoutTrainingSignalsService,
     WorkoutDeloadSuggestionService,
     WorkoutBlockComparisonService,
+    WorkoutGoalSuggestionsService,
   ],
   exports: [WorkoutsService],
 })

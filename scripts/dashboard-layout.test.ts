@@ -3,7 +3,10 @@ import * as assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { Prisma } from '@prisma/client';
-import { DEFAULT_DASHBOARD_LAYOUT } from '@sunsteel/contracts';
+import {
+  DASHBOARD_SECTION_IDS,
+  DEFAULT_DASHBOARD_LAYOUT,
+} from '@sunsteel/contracts';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 
@@ -81,6 +84,8 @@ describe('DASH-05 / PREF-03 dashboard layout', () => {
       profile.dashboardLayout?.map((entry) => [entry.id, entry.hidden]),
       [
         ['this-week', false],
+        // DASH-04: a section the stored layout predates joins at its place.
+        ['goals', false],
         ['following', false],
         ['stats', true],
         ['recent-activity', false],
@@ -113,7 +118,7 @@ describe('DASH-05 / PREF-03 dashboard layout', () => {
     assert.ok(await problems({ sections: [{ id: 'stats' }] }));
     assert.ok(
       await problems({
-        sections: Array.from({ length: 8 }, () => ({
+        sections: Array.from({ length: DASHBOARD_SECTION_IDS.length + 1 }, () => ({
           id: 'stats',
           hidden: false,
         })),
