@@ -35,6 +35,7 @@ import { ReplaceMeasurableGoalsDto } from './dto/replace-measurable-goals.dto';
 import { UpdatePlateauPreferencesDto } from './dto/update-plateau-preferences.dto';
 import { UpdateDashboardLayoutDto } from './dto/update-dashboard-layout.dto';
 import { UpdateLocaleDto } from './dto/update-locale.dto';
+import { UpdateOnboardingDto } from './dto/update-onboarding.dto';
 import { UpdateWeekStartDto } from './dto/update-week-start.dto';
 import { PlateauPreferencesService } from './plateau-preferences.service';
 import { RoutineSharingService } from '../routines/routine-sharing.service';
@@ -192,6 +193,15 @@ export class UsersController {
     @Body() dto: UpdateWeekStartDto,
   ) {
     return this.usersService.updateWeekStart(req.user.email, dto.weekStartsOn);
+  }
+
+  /** ONBOARD-01: progress through onboarding. */
+  @Put('preferences/onboarding')
+  updateOnboarding(
+    @Request() req: RequestWithUser,
+    @Body() dto: UpdateOnboardingDto,
+  ) {
+    return this.usersService.updateOnboarding(req.user.email, dto);
   }
 
   @Put('preferences/plateaus')

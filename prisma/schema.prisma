@@ -72,6 +72,10 @@ model User {
   weekStartsOn                      Int                          @default(1)
   // PREF-04: how lengths are shown; every length is stored in centimetres.
   lengthUnit                        LengthUnit                   @default(CM)
+  // ONBOARD-01: accounts that existed when it shipped were set to 1.
+  onboardingCompletedVersion        Int                          @default(0)
+  onboardingStepsDone               String[]                     @default([])
+  onboardingOfferedAt               DateTime?
   routines                          Routine[]
   workoutSessions                   WorkoutSession[]
   trainingLocations                 TrainingLocationPreference[]

@@ -384,6 +384,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20261004160000_goal_suggestion_dismissals/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// ONBOARD-01: onboarding progress.
+				readFileSync(
+					'prisma/migrations/20261004180000_onboarding/migration.sql',
+					'utf8',
 				),
     );
     prisma(

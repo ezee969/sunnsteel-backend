@@ -18,6 +18,7 @@ import {
   isWeekStartsOn,
   DEFAULT_WEEK_STARTS_ON,
   LENGTH_UNITS,
+  type UpdateOnboardingRequest,
   type WeekStartsOn,
   isDefaultDashboardLayout,
   normalizeDashboardLayout,
@@ -27,6 +28,7 @@ import {
 import { localDate } from "../notifications/push/local-time";
 import { isAllowedEntryDate, isSameWeight } from "./body-measurement-rules";
 import { recordProfileWeight } from "./body-weight-sync";
+import { nextOnboarding } from "./onboarding";
 import {
   PREFERRED_TRAINING_STYLE_VALUES,
   ProfileDiscoverySettings,
@@ -94,6 +96,10 @@ const userProfileSelect = {
   // PREF-04
   weekStartsOn: true,
   lengthUnit: true,
+  // ONBOARD-01
+  onboardingCompletedVersion: true,
+  onboardingStepsDone: true,
+  onboardingOfferedAt: true,
   createdAt: true,
   updatedAt: true,
   _count: {
@@ -163,6 +169,9 @@ export class UsersService {
       dashboardLayout,
       locale,
       weekStartsOn,
+      onboardingCompletedVersion,
+      onboardingStepsDone,
+      onboardingOfferedAt,
       ...profile
     } = user;
     return {
@@ -190,6 +199,11 @@ export class UsersService {
       weekStartsOn: isWeekStartsOn(weekStartsOn)
         ? weekStartsOn
         : DEFAULT_WEEK_STARTS_ON,
+      onboarding: {
+        completedVersion: onboardingCompletedVersion,
+        stepsDone: onboardingStepsDone,
+        offeredAt: onboardingOfferedAt?.toISOString() ?? null,
+      },
       trainingIdentity: {
         goals: trainingGoals,
         experienceLevel: trainingExperienceLevel,
@@ -395,6 +409,34 @@ export class UsersService {
       select: userProfileSelect,
     });
     return this.mapUserProfile(user);
+  }
+
+  /**
+   * ONBOARD-01: progress through onboarding. Steps are added to what is
+   * stored, so two devices never undo each other; a completed version only
+   * rises and starts the next run empty; the first opening is kept.
+   */
+  async updateOnboarding(
+    email: string,
+    request: UpdateOnboardingRequest,
+  ): Promise<UserProfile> {
+    return this.db.$transaction(async (tx) => {
+      const current = await tx.user.findUniqueOrThrow({
+        where: { email },
+        select: {
+          onboardingCompletedVersion: true,
+          onboardingStepsDone: true,
+          onboardingOfferedAt: true,
+        },
+      });
+      const next = nextOnboarding(current, request, new Date());
+      const user = await tx.user.update({
+        where: { email },
+        data: next,
+        select: userProfileSelect,
+      });
+      return this.mapUserProfile(user);
+    });
   }
 
   async updateProfilePrivacy(
