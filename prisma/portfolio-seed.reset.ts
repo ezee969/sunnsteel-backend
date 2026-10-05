@@ -17,6 +17,7 @@ export interface ResetCounts {
 	projections: number
 	follows: number
 	reports: number
+	conversations: number
 	users: number
 }
 
@@ -129,6 +130,14 @@ export async function resetPortfolioSeed(
 			})
 		: { count: 0 }
 
+	// MSG-01: a conversation with a peer. Deleting the peer would leave the
+	// owner an emptied one with "Deleted member", so it goes first, whole.
+	const conversations = peerIds.length
+		? await prisma.conversation.deleteMany({
+				where: { participants: { some: { userId: { in: peerIds } } } },
+			})
+		: { count: 0 }
+
 	const users = peerIds.length
 		? await prisma.user.deleteMany({ where: { id: { in: peerIds } } })
 		: { count: 0 }
@@ -141,6 +150,7 @@ export async function resetPortfolioSeed(
 		notifications: analytics.notifications + peerNotifications.count,
 		follows: follows.count,
 		reports: reports.count,
+		conversations: conversations.count,
 		users: users.count,
 	}
 }

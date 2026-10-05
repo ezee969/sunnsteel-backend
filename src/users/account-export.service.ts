@@ -99,6 +99,7 @@ export class AccountExportService {
       corrections,
       recentSearches,
       goalSuggestionDismissals,
+      messagesSent,
     ] = await Promise.all([
       this.db.routine.findMany({
         where: { userId },
@@ -261,6 +262,25 @@ export class AccountExportService {
       this.db.goalSuggestionDismissal.findMany({
         where: { userId },
         orderBy: { dismissedAt: "desc" },
+      }),
+      // MSG-01: what the member wrote and has not deleted. Messages written
+      // to them belong to their authors.
+      this.db.message.findMany({
+        where: { senderId: userId, deletedAt: null },
+        select: {
+          conversationId: true,
+          body: true,
+          createdAt: true,
+          conversation: {
+            select: {
+              participants: {
+                where: { userId: { not: userId } },
+                select: { user: { select: MEMBER_SELECT } },
+              },
+            },
+          },
+        },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       }),
     ]);
     // Another member is named by username, never by id, as everywhere in the
@@ -443,6 +463,20 @@ export class AccountExportService {
           reaction: reaction.reaction,
           createdAt: iso(reaction.createdAt),
         })),
+        messagesSent: messagesSent.flatMap((message) =>
+          message.body === null
+            ? []
+            : [
+                {
+                  to: message.conversation.participants[0]
+                    ? member(message.conversation.participants[0].user)
+                    : null,
+                  conversationId: message.conversationId,
+                  body: message.body,
+                  createdAt: iso(message.createdAt),
+                },
+              ],
+        ),
         reportsFiled: reports.map((report) => ({
           subjectKind: report.subjectKind,
           reason: report.reason,

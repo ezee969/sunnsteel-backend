@@ -135,6 +135,69 @@ model User {
   moderationHiddenAt                DateTime?
   moderationActions                 ModerationAction[]           @relation("ModerationActor")
   reportsResolved                   MemberReport[]               @relation("ReportResolver")
+  /// MSG-01: who may start a conversation with this member.
+  messagePermission                 MessagePermission            @default(FOLLOWED)
+  conversationParticipants          ConversationParticipant[]
+  conversationsStarted              Conversation[]               @relation("ConversationStarter")
+  messagesSent                      Message[]
+}
+
+/// MSG-01: who may start a conversation with a member. MSG-02 adds EVERYONE.
+enum MessagePermission {
+  FOLLOWED
+  NOBODY
+}
+
+/// MSG-01: one conversation per pair of members. `pairKey` is the two sorted
+/// account ids joined by `:`, as SOC-08's partnership uses, so a pair can never
+/// hold two. Its participants are the two rows below; a deleted member's row
+/// goes with their account and the conversation stays for the other.
+model Conversation {
+  id            String                    @id @default(uuid())
+  pairKey       String                    @unique @db.VarChar(73)
+  /// Who wrote the first message: the daily start limit counts these.
+  startedById   String?
+  startedBy     User?                     @relation("ConversationStarter", fields: [startedById], references: [id], onDelete: SetNull)
+  createdAt     DateTime                  @default(now())
+  /// The newest message's time; the list orders by it, and a participant who
+  /// cleared the conversation sees it again once this passes their clearedAt.
+  lastMessageAt DateTime                  @default(now())
+  participants  ConversationParticipant[]
+  messages      Message[]
+
+  @@index([startedById, createdAt])
+}
+
+model ConversationParticipant {
+  conversationId String
+  userId         String
+  /// "Delete conversation": what was sent until then is hidden from this
+  /// participant only. Null when they never deleted it.
+  clearedAt      DateTime?
+  createdAt      DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([conversationId, userId])
+  @@index([userId])
+}
+
+/// MSG-01: text only, stored on the server and not end-to-end encrypted.
+/// Deleting one keeps its place ("Message deleted") with the text gone.
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  senderId       String
+  /// Null once its author deleted it. VarChar counts characters, as the
+  /// 2,000-character limit does.
+  body           String?      @db.VarChar(2000)
+  deletedAt      DateTime?
+  createdAt      DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt, id])
+  @@index([senderId, createdAt])
 }
 
 /// PROF-08 adds ROUTINE: a shared routine is a fourth kind of featured item,

@@ -402,6 +402,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20261005120000_linear_periodization/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// MSG-01: direct messages.
+				readFileSync(
+					'prisma/migrations/20261005140000_direct_messages/migration.sql',
+					'utf8',
 				),
     );
     prisma(

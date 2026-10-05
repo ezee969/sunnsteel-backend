@@ -263,6 +263,7 @@ describe('UsersService privacy boundary', () => {
           return storedProfile;
         },
       },
+      conversation: { findUnique: async () => null },
       userFollow: { findUnique: async () => null },
       workoutAnalyticsProjection: {
         findFirst: async () => {
@@ -345,6 +346,7 @@ describe('UsersService privacy boundary', () => {
           return null;
         },
       },
+      conversation: { findUnique: async () => null },
       userFollow: {
         findUnique: async () => {
           followReads += 1;
@@ -400,6 +402,7 @@ describe('UsersService privacy boundary', () => {
           count: async () => 0,
           findUnique: async () => null,
         },
+        conversation: { findUnique: async () => null },
         userFollow: { findUnique: async () => null },
         workoutAnalyticsProjection: { findFirst: async () => null },
         personalRecord: { findMany: async () => [] },
@@ -487,6 +490,7 @@ describe('UsersService privacy boundary', () => {
           };
         },
       },
+      conversation: { findUnique: async () => null },
       userFollow: {
         findUnique: async () => ({ followerId: 'viewer-1' }),
       },

@@ -140,6 +140,16 @@ function fakeDatabase(account: Account | null) {
       assert.ok(options?.timeout, 'the transaction must be bounded');
       const pending: string[] = [];
       await run({
+        message: {
+          async deleteMany() {
+            log.push('conversations emptied');
+          },
+        },
+        conversation: {
+          async deleteMany() {
+            return { count: 0 };
+          },
+        },
         user: {
           async delete({ where }: { where: { id: string } }) {
             log.push('local delete');
@@ -204,6 +214,7 @@ describe('TRUST-01 deleteAccount', () => {
     assert.deepEqual(log, [
       `list ${SUPABASE_ID}`,
       'remove 2',
+      'conversations emptied',
       'local delete',
       'admin delete',
     ]);

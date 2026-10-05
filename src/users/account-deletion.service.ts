@@ -12,6 +12,7 @@ import {
 } from "@sunsteel/contracts";
 import { SupabaseService } from "../auth/supabase.service";
 import { DatabaseService } from "../database/database.service";
+import { clearConversationsOf } from "../messages/messaging-access";
 
 /**
  * How long the deletion transaction may stay open. It holds the account's row
@@ -35,7 +36,8 @@ const DELETION_TRANSACTION_TIMEOUT_MS = 30_000;
  *
  * What stays is what was never the member's to take: a routine someone else
  * cloned is theirs, and keeps only "original unavailable" (`SET NULL`).
- * Reports the member filed go with the account, as their personal data; the
+ * A conversation keeps its place for the other member, emptied of both
+ * sides' messages (MSG-01). Reports the member filed go with the account, as their personal data; the
  * moderation record keeps its rows, which name subjects by id.
  */
 @Injectable()
@@ -76,6 +78,7 @@ export class AccountDeletionService {
 
     await this.db.$transaction(
       async (tx) => {
+        await clearConversationsOf(tx, account.id);
         await tx.user.delete({ where: { id: account.id } });
         if (account.supabaseUserId) {
           await this.supabase.deleteAuthUser(account.supabaseUserId);

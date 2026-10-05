@@ -22,6 +22,7 @@ import { ActivityModule } from './activity/activity.module';
 import { ModerationModule } from './moderation/moderation.module';
 import { SearchModule } from './search/search.module';
 import { RealtimeModule } from './realtime/realtime.module';
+import { MessagesModule } from './messages/messages.module';
 
 @Module({
   imports: [
@@ -63,6 +64,7 @@ import { RealtimeModule } from './realtime/realtime.module';
     ModerationModule,
     SearchModule,
     RealtimeModule,
+    MessagesModule,
   ],
   providers: [
     {

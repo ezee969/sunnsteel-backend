@@ -1069,6 +1069,37 @@ async function main() {
 		},
 	})
 
+	// --- direct messages (MSG-01) ----------------------------------------------
+	// One conversation with the training partner, so `/messages` and its thread
+	// photograph the feature rather than its empty state. Ken follows the
+	// owner (above), which is what lets either of them start it.
+	const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000)
+	const conversationLines: Array<[string, string, number]> = [
+		[owner.id, 'Leg day tomorrow? I can spot you on the squats.', 42],
+		[partnerId, 'Yes. 7:00 at the usual gym, I want to try 140 for a triple.', 38],
+		[owner.id, 'Bring chalk. I will run the warm-up ramp from 60.', 35],
+		[partnerId, 'Deal. Sharing my deload week after that, it worked well.', 6],
+	]
+	await prisma.conversation.create({
+		data: {
+			id: seedId('conversation', owner.id, partnerId),
+			pairKey: [owner.id, partnerId].sort().join(':'),
+			startedById: owner.id,
+			createdAt: minutesAgo(42),
+			lastMessageAt: minutesAgo(6),
+			participants: {
+				create: [{ userId: owner.id }, { userId: partnerId }],
+			},
+			messages: {
+				create: conversationLines.map(([senderId, body, ago]) => ({
+					senderId,
+					body,
+					createdAt: minutesAgo(ago),
+				})),
+			},
+		},
+	})
+
 	// --- moderation queue (TRUST-04) -------------------------------------------
 	// A few open reports so `/moderation` photographs the feature rather than
 	// its empty state. Every one is **peer about peer**: a portfolio frame must

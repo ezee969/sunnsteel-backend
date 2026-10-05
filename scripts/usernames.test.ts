@@ -416,9 +416,17 @@ describe('UsersService usernames', () => {
         count: async () => 0,
         findMany: async () => [],
       },
+      conversation: { findUnique: async () => null },
       userFollow: {
         findUnique: async (args: unknown) => {
-          followLookup = args;
+          // MSG-01 also asks whether the member follows the viewer; this
+          // test is about the viewer's own follow state.
+          const pair = (
+            args as {
+              where: { followerId_followingId: { followerId: string } };
+            }
+          ).where.followerId_followingId;
+          if (pair.followerId === 'viewer-1') followLookup = args;
           return { followerId: 'viewer-1' };
         },
       },

@@ -1,0 +1,51 @@
+import {
+  IsIn,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
+} from "class-validator";
+import {
+  MESSAGE_BODY_MAX,
+  MESSAGE_PERMISSIONS,
+  type MessagePermission,
+  type SendMessageRequest,
+  type StartConversationRequest,
+  type UpdateMessagePermissionRequest,
+} from "@sunsteel/contracts";
+
+/**
+ * A body may arrive longer than `MESSAGE_BODY_MAX` UTF-16 units and still be
+ * within the limit -- an emoji is two units and one character -- so the DTO
+ * only bounds the request, and `normalizeMessageBody` refuses with a code.
+ */
+const BODY_REQUEST_MAX = MESSAGE_BODY_MAX * 2 + 200;
+
+export class StartConversationDto implements StartConversationRequest {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(100)
+  recipient!: string;
+
+  @IsString()
+  @MaxLength(BODY_REQUEST_MAX)
+  body!: string;
+}
+
+export class SendMessageDto implements SendMessageRequest {
+  @IsString()
+  @MaxLength(BODY_REQUEST_MAX)
+  body!: string;
+}
+
+export class PageQueryDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  cursor?: string;
+}
+
+export class UpdateMessagePermissionDto implements UpdateMessagePermissionRequest {
+  @IsIn(MESSAGE_PERMISSIONS)
+  messagePermission!: MessagePermission;
+}

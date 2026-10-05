@@ -36,6 +36,7 @@ import { UpdatePlateauPreferencesDto } from './dto/update-plateau-preferences.dt
 import { UpdateDashboardLayoutDto } from './dto/update-dashboard-layout.dto';
 import { UpdateLocaleDto } from './dto/update-locale.dto';
 import { UpdateOnboardingDto } from './dto/update-onboarding.dto';
+import { UpdateMessagePermissionDto } from '../messages/dto/messages.dto';
 import { UpdateWeekStartDto } from './dto/update-week-start.dto';
 import { PlateauPreferencesService } from './plateau-preferences.service';
 import { RoutineSharingService } from '../routines/routine-sharing.service';
@@ -193,6 +194,18 @@ export class UsersController {
     @Body() dto: UpdateWeekStartDto,
   ) {
     return this.usersService.updateWeekStart(req.user.email, dto.weekStartsOn);
+  }
+
+  /** MSG-01: who may start a conversation with this member. */
+  @Put('preferences/messages')
+  updateMessagePermission(
+    @Request() req: RequestWithUser,
+    @Body() dto: UpdateMessagePermissionDto,
+  ) {
+    return this.usersService.updateMessagePermission(
+      req.user.email,
+      dto.messagePermission,
+    );
   }
 
   /** ONBOARD-01: progress through onboarding. */

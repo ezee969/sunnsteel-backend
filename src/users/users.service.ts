@@ -19,6 +19,7 @@ import {
   DEFAULT_WEEK_STARTS_ON,
   LENGTH_UNITS,
   type UpdateOnboardingRequest,
+  type MessagePermission,
   type WeekStartsOn,
   isDefaultDashboardLayout,
   normalizeDashboardLayout,
@@ -29,6 +30,7 @@ import { localDate } from "../notifications/push/local-time";
 import { isAllowedEntryDate, isSameWeight } from "./body-measurement-rules";
 import { recordProfileWeight } from "./body-weight-sync";
 import { nextOnboarding } from "./onboarding";
+import { messagingStateFor } from "../messages/messaging-access";
 import {
   PREFERRED_TRAINING_STYLE_VALUES,
   ProfileDiscoverySettings,
@@ -100,6 +102,8 @@ const userProfileSelect = {
   onboardingCompletedVersion: true,
   onboardingStepsDone: true,
   onboardingOfferedAt: true,
+  // MSG-01
+  messagePermission: true,
   createdAt: true,
   updatedAt: true,
   _count: {
@@ -399,6 +403,19 @@ export class UsersService {
    * PREF-04: the weekday the account's weeks start on. Every weekly view reads
    * it; the rank does not, so changing it never moves a rank.
    */
+  /** MSG-01: who may start a conversation with this member. */
+  async updateMessagePermission(
+    email: string,
+    messagePermission: MessagePermission,
+  ): Promise<UserProfile> {
+    const user = await this.db.user.update({
+      where: { email },
+      data: { messagePermission },
+      select: userProfileSelect,
+    });
+    return this.mapUserProfile(user);
+  }
+
   async updateWeekStart(
     email: string,
     weekStartsOn: WeekStartsOn,
@@ -540,6 +557,7 @@ export class UsersService {
         bodyProgressVisibility: true,
         rankVisibility: true,
         moderationHiddenAt: true,
+        messagePermission: true,
         _count: {
           select: {
             followers: true,
@@ -600,6 +618,12 @@ export class UsersService {
       partnerProgress: partnerPermissions.progress,
       partnerRoutines: partnerPermissions.routines,
     });
+
+    // MSG-01: only on the authenticated read, after the 404s above.
+    const messaging =
+      viewerUserId && !isOwner
+        ? await messagingStateFor(this.db, viewerUserId, user)
+        : null;
 
     const [
       projection,
@@ -704,6 +728,7 @@ export class UsersService {
       ...(viewerUserId && !isOwner
         ? { moderation: { isBlocked: viewerBlocksTarget } }
         : {}),
+      ...(messaging ? { messaging } : {}),
       viewerAccess,
       featuredItems,
       ...(viewerAccess.biography ? { bio: biography?.bio ?? null } : {}),

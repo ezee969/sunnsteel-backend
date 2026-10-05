@@ -185,6 +185,7 @@ describe('PROF-10 enforcement on the profile read', () => {
         },
       },
       userBlock: { count: async () => blockCount, findMany: async () => [] },
+      conversation: { findUnique: async () => null },
       userFollow: { findUnique: async () => null },
       workoutAnalyticsProjection: {
         findFirst: async () => {
