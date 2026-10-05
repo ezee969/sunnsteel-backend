@@ -172,6 +172,7 @@ function fakeDb(
     completed?: number;
     substitutions?: unknown;
     routineRows?: number;
+    linearSlot?: boolean;
   } = {},
 ) {
   let stored: unknown = options.substitutions ?? [];
@@ -232,6 +233,8 @@ function fakeDb(
         where.id === 'pushups' && where.OR ? pushupsRow : null,
     },
     routineExercise: {
+      // ROUT-17: whether the slot is on an 8-week block.
+      count: async () => (options.linearSlot ? 1 : 0),
       updateMany: async (args: unknown) => {
         calls.updateMany.push(args);
         return { count: options.routineRows ?? 1 };
@@ -305,6 +308,17 @@ describe('WorkoutSessionSubstitutionService', () => {
       applyToRoutine: true,
     });
     assert.equal(missing.routineUpdated, false);
+
+    // ROUT-17: an 8-week block stays with its exercise; the swap is today's.
+    const linear = fakeDb({ linearSlot: true });
+    await assert.rejects(
+      linear.service.substitute('user-1', 'session-1', 'slot-bench', {
+        ...swap,
+        applyToRoutine: true,
+      }),
+      BadRequestException,
+    );
+    assert.equal(linear.calls.updateMany.length, 0);
   });
 
   it('treats the prescribed exercise, or a revert, as clearing the swap', async () => {

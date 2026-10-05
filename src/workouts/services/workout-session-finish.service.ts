@@ -28,6 +28,15 @@ import {
 } from "../session-substitutions";
 import { buildWorkoutSessionSelect } from "../workout-session.selects";
 import { syncFollowingWarmUps } from "../../routines/warm-up-follow";
+import {
+  finishedBlock,
+  linearBlockChangesJson,
+  moveLinearSlot,
+  notifyFinishedBlock,
+  plannedLinearChanges,
+  readLinearBlockChanges,
+} from "../linear-block-advance";
+import type { LinearBlockChange } from "@sunsteel/contracts";
 
 @Injectable()
 export class WorkoutSessionFinishService {
@@ -64,6 +73,9 @@ export class WorkoutSessionFinishService {
               select: buildWorkoutSessionSelect(),
             }),
             progressionChanges,
+            linearBlockChanges: readLinearBlockChanges(
+              session.linearBlockChanges,
+            ),
           };
         }
 
@@ -85,6 +97,7 @@ export class WorkoutSessionFinishService {
 
         const snapshot = await ensureSessionSnapshot(tx, id);
         let progressionChanges: ProgressionChange[] = [];
+        const linearBlockChanges: LinearBlockChange[] = [];
         if (status === "COMPLETED") {
           const logs = await tx.setLog.findMany({ where: { sessionId: id } });
           const progressionLogs: ProgressionLog[] = logs.flatMap((log) => {
@@ -129,12 +142,60 @@ export class WorkoutSessionFinishService {
               }),
             ),
           );
-          // LIVE-20: warm-ups that follow the working load move with it.
-          await syncFollowingWarmUps(
-            tx,
-            userId,
-            outcome.updates.map((update) => update.routineExerciseId),
+          // ROUT-17/ROUT-18: each LP slot whose sets were all done moves one
+          // step, finishing its block after the eighth; a deload or a swap
+          // moves nothing, and a slot changed since the start is left alone.
+          const planned = plannedLinearChanges(
+            snapshot,
+            snapshot.routineDay.exercises ?? [],
+            progressionLogs,
+            {
+              sessionId: id,
+              finishedAt: now.toISOString(),
+              runs: progressionRuns(session),
+              substitutedIds: new Set(
+                readSubstitutions(session.exerciseSubstitutions).map(
+                  (substitution) => substitution.routineExerciseId,
+                ),
+              ),
+            },
           );
+          for (const change of planned) {
+            if (
+              await moveLinearSlot(
+                tx,
+                change.routineExerciseId,
+                change.before,
+                change.after,
+              )
+            ) {
+              linearBlockChanges.push(change);
+            }
+          }
+          if (linearBlockChanges.length) {
+            await tx.workoutSession.update({
+              where: { id },
+              data: {
+                linearBlockChanges: linearBlockChangesJson(linearBlockChanges),
+              },
+              select: { id: true },
+            });
+          }
+          for (const change of linearBlockChanges.filter(finishedBlock)) {
+            await notifyFinishedBlock(tx, {
+              userId,
+              sessionId: id,
+              routineId: session.routineId ?? snapshot.sourceRoutineId,
+              routineName: snapshot.routine?.name ?? "",
+              change,
+              at: now,
+            });
+          }
+          // LIVE-20: warm-ups that follow the working load move with it.
+          await syncFollowingWarmUps(tx, userId, [
+            ...outcome.updates.map((update) => update.routineExerciseId),
+            ...linearBlockChanges.map((change) => change.routineExerciseId),
+          ]);
           await writeProgressionEvents(tx, userId, id, now, progressionChanges);
 
           const summary = await summarizeSession(tx, id);
@@ -151,6 +212,7 @@ export class WorkoutSessionFinishService {
             select: buildWorkoutSessionSelect(),
           }),
           progressionChanges,
+          linearBlockChanges,
         };
       },
       { timeout: 15000 },

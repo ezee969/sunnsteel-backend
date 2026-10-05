@@ -31,6 +31,7 @@ import {
 } from "./routine-schedule";
 import { assertUsableExercises } from "../exercises/exercise-access";
 import { assertExerciseLinks, dayExerciseLinks } from "./exercise-links";
+import { linearStateJson, normalizeLinearExercise } from "./linear-periodization";
 
 const dayExerciseIds = (
   days: ReadonlyArray<{ exercises: ReadonlyArray<{ exerciseId: string }> }>,
@@ -57,6 +58,7 @@ type RoutineExerciseInput = {
   minWeightIncrement?: number;
   warmUpsFollowLoad?: boolean;
   linkedToNext?: boolean;
+  linearPeriodization?: unknown;
   sets: RoutineSetInput[];
 };
 
@@ -78,7 +80,7 @@ function snapshotDayOrder(payload: unknown): number | null {
 export class RoutinesService {
   constructor(private readonly db: DatabaseService) {}
 
-  private mapRoutineSetForCreate(set: RoutineSetInput) {
+  private mapRoutineSetForCreate(set: RoutineSetInput, openReps = false) {
     if (set.repType === "RANGE") {
       if (typeof set.minReps !== "number" || typeof set.maxReps !== "number") {
         throw new BadRequestException(
@@ -91,7 +93,9 @@ export class RoutinesService {
         );
       }
     } else if (set.repType === "FIXED") {
-      if (typeof set.reps !== "number") {
+      // ROUT-17: an 8-week block's working sets have no rep target.
+      const open = openReps && (set.kind ?? "WORKING") !== "WARMUP";
+      if (typeof set.reps !== "number" && !open) {
         throw new BadRequestException("For FIXED repType, reps is required");
       }
     }
@@ -126,6 +130,7 @@ export class RoutinesService {
     exercise: RoutineExerciseInput,
     linkedToNext: boolean,
   ) {
+    const lp = normalizeLinearExercise(exercise);
     return {
       exercise: { connect: { id: exercise.exerciseId } },
       order: exercise.order ?? 0,
@@ -135,8 +140,11 @@ export class RoutinesService {
       minWeightIncrement: exercise.minWeightIncrement ?? 2.5,
       warmUpsFollowLoad: exercise.warmUpsFollowLoad ?? false,
       linkedToNext,
+      linearPeriodization: linearStateJson(lp.linearPeriodization),
       sets: {
-        create: exercise.sets.map((set) => this.mapRoutineSetForCreate(set)),
+        create: lp.sets.map((set) =>
+          this.mapRoutineSetForCreate(set as RoutineSetInput, lp.linear),
+        ),
       },
     };
   }

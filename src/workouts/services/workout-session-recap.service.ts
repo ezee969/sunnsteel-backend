@@ -1,3 +1,4 @@
+import { readLinearBlockChanges } from "../linear-block-advance";
 import { apiError } from "@sunsteel/contracts";
 import {
   BadRequestException,
@@ -39,6 +40,8 @@ export class WorkoutSessionRecapService {
         notes: true,
         exerciseNotes: true,
         exerciseSubstitutions: true,
+        linearBlockChanges: true,
+        routineId: true,
         sourceRoutineDayId: true,
         routineDayId: true,
         snapshot: { select: { payload: true } },
@@ -194,6 +197,9 @@ export class WorkoutSessionRecapService {
         : [],
       records,
       progressionChanges,
+      // ROUT-17/ROUT-18: owner-only, never part of a shared recap.
+      linearBlockChanges: readLinearBlockChanges(session.linearBlockChanges),
+      routineId: session.routineId,
       previousSession: previous,
     };
   }

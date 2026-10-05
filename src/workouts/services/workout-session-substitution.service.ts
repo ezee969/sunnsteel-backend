@@ -58,6 +58,21 @@ export class WorkoutSessionSubstitutionService {
         routineExerciseId,
       );
 
+      // ROUT-17: an 8-week block belongs to its exercise -- its reference max
+      // means nothing for another one -- so the swap is for today only. A
+      // slot with no reference yet (a clone) has no block to lose.
+      if (dto.applyToRoutine) {
+        const linear = await tx.routineExercise.count({
+          where: {
+            id: routineExerciseId,
+            progressionScheme: "LINEAR_PERIODIZATION",
+            NOT: { linearPeriodization: { equals: Prisma.DbNull } },
+          },
+        });
+        if (linear)
+          throw new BadRequestException(apiError("LINEAR_BLOCK_SWAP_ROUTINE"));
+      }
+
       let next = withoutSubstitution(substitutions, routineExerciseId);
       if (dto.exerciseId !== slot.exercise.id) {
         const exercise = await tx.exercise.findFirst({

@@ -10,6 +10,7 @@ import {
   apiError,
 } from "@sunsteel/contracts";
 import type { RoutineWithDaysEntity } from "./routine.mapper";
+import { readLinearState } from "./linear-periodization";
 
 /**
  * ROUT-08: what a version preserves — everything a routine edit can change —
@@ -43,6 +44,14 @@ export function captureRoutineSetup(
             minWeightIncrement: exercise.minWeightIncrement,
             ...(exercise.warmUpsFollowLoad ? { warmUpsFollowLoad: true } : {}),
             ...(exercise.linkedToNext ? { linkedToNext: true } : {}),
+            // ROUT-17: the block travels with the setup, like the loads.
+            ...(readLinearState(exercise.linearPeriodization)
+              ? {
+                  linearPeriodization: readLinearState(
+                    exercise.linearPeriodization,
+                  ),
+                }
+              : {}),
             sets: exercise.sets.map(
               (set): RoutineSet => ({
                 setNumber: set.setNumber,
@@ -131,6 +140,9 @@ export function setupToRoutineUpdate(setup: RoutineVersionSetup) {
         minWeightIncrement: exercise.minWeightIncrement,
         ...(exercise.warmUpsFollowLoad ? { warmUpsFollowLoad: true } : {}),
         ...(exercise.linkedToNext ? { linkedToNext: true } : {}),
+        ...(exercise.linearPeriodization
+          ? { linearPeriodization: exercise.linearPeriodization }
+          : {}),
         sets: exercise.sets.map((set) => ({ ...set })),
       })),
     })),

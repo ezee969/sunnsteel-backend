@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { LinearBlocksService } from './linear-blocks.service';
 import { RoutinesService } from './routines.service';
 import { RoutinesController } from './routines.controller';
 import { DatabaseModule } from '../database/database.module';
@@ -28,6 +29,7 @@ import { ExercisesModule } from '../exercises/exercises.module';
   ],
   providers: [
     RoutinesService,
+    LinearBlocksService,
     RoutineVersionsService,
     RoutineTrainingBlocksService,
     RoutineDeloadsService,

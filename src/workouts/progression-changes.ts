@@ -94,6 +94,8 @@ export function buildProgressionOutcome(
   const changes: ProgressionChange[] = [];
 
   for (const prescribed of exercises) {
+    // ROUT-17: an 8-week block moves by its step, never by the logged sets.
+    if (prescribed.progressionScheme === 'LINEAR_PERIODIZATION') continue;
     const increment = prescribed.minWeightIncrement ?? 2.5;
     const logFor = (set: PrescriptionSet) =>
       logMap.get(logKey(prescribed.id, set.setNumber));

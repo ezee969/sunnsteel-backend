@@ -1,4 +1,5 @@
 import type { RoutineVersionSetup } from "@sunsteel/contracts";
+import { linearStateJson, readLinearState } from "./linear-periodization";
 
 /**
  * ROUT-15/ROUT-16: a plan's working copy (a training-block revision's or a
@@ -25,6 +26,12 @@ export function workingCopyDays(routineId: string, setup: RoutineVersionSetup) {
           minWeightIncrement: exercise.minWeightIncrement,
           ...(exercise.warmUpsFollowLoad ? { warmUpsFollowLoad: true } : {}),
           ...(exercise.linkedToNext ? { linkedToNext: true } : {}),
+          // ROUT-17: a new revision restarts from its setup's block state.
+          linearPeriodization: linearStateJson(
+            exercise.progressionScheme === "LINEAR_PERIODIZATION"
+              ? readLinearState(exercise.linearPeriodization)
+              : null,
+          ),
           sets: {
             create: exercise.sets.map((set) => ({
               setNumber: set.setNumber,

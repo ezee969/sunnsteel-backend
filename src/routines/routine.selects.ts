@@ -19,6 +19,7 @@ const ROUTINE_EXERCISE_SELECT = {
   minWeightIncrement: true,
   warmUpsFollowLoad: true,
   linkedToNext: true,
+  linearPeriodization: true,
   exercise: { select: { id: true, name: true } },
   sets: {
     select: ROUTINE_SET_SELECT,

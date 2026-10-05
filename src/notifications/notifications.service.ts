@@ -161,6 +161,27 @@ export function toAppNotification(
         },
       };
     }
+    case "LINEAR_BLOCK_FINISHED": {
+      // ROUT-18: written at finish, named as the workout named them.
+      const routineId =
+        typeof payload.routineId === "string" ? payload.routineId : "";
+      const exerciseId =
+        typeof payload.exerciseId === "string" ? payload.exerciseId : "";
+      const referenceMaxKg = Number(payload.referenceMaxKg);
+      if (!row.sessionId || !routineId || !exerciseId || !(referenceMaxKg > 0))
+        return null;
+      const estimate = Number(payload.estimatedMaxKg);
+      return {
+        ...base,
+        kind: "LINEAR_BLOCK_FINISHED",
+        routine: { id: routineId, name: String(payload.routineName ?? "") },
+        exercise: { id: exerciseId, name: String(payload.exerciseName ?? "") },
+        sessionId: row.sessionId,
+        referenceMaxKg,
+        estimatedMaxKg:
+          payload.estimatedMaxKg != null && estimate > 0 ? estimate : null,
+      };
+    }
     default:
       return null;
   }

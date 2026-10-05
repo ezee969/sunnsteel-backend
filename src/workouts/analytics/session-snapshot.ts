@@ -1,3 +1,4 @@
+import { readLinearState } from '../../routines/linear-periodization';
 import { Prisma } from '@prisma/client';
 import { WorkoutSessionSnapshotV1 } from '@sunsteel/contracts';
 import {
@@ -45,7 +46,14 @@ export async function ensureSessionSnapshot(
     provenance,
     notes: session.notes,
     routine: session.routine,
-    routineDay: session.routineDay,
+    // ROUT-17: the LP block read as contracts' state, never raw JSON.
+    routineDay: {
+      ...session.routineDay,
+      exercises: session.routineDay.exercises.map((exercise) => ({
+        ...exercise,
+        linearPeriodization: readLinearState(exercise.linearPeriodization),
+      })),
+    },
     trainingBlock: sessionTrainingBlock(session),
     temporaryOverride: sessionTemporaryOverride(session),
   };

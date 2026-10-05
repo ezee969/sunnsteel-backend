@@ -396,6 +396,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20261005100000_realtime_signals/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// ROUT-17: the 8-week linear periodization block.
+				readFileSync(
+					'prisma/migrations/20261005120000_linear_periodization/migration.sql',
+					'utf8',
 				),
     );
     prisma(

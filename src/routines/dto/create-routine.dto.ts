@@ -7,6 +7,7 @@ import {
   IsInt,
   IsNotEmpty,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
   Max,
@@ -19,6 +20,7 @@ import {
   CreateRoutineRequest,
   CreateRoutineDayInput,
   CreateRoutineExerciseInput,
+  type LinearPeriodizationState,
   ProgressionScheme,
   RepType,
   REP_TYPES,
@@ -40,6 +42,8 @@ const LIVE_PROGRESSION_SCHEMES = [
   'NONE',
   'DOUBLE_PROGRESSION',
   'DYNAMIC_DOUBLE_PROGRESSION',
+  // ROUT-17: an 8-step block by % of a reference max and target RIR.
+  'LINEAR_PERIODIZATION',
 ] as const satisfies readonly ProgressionScheme[];
 
 type LiveProgressionScheme = (typeof LIVE_PROGRESSION_SCHEMES)[number];
@@ -60,8 +64,11 @@ export class CreateRoutineExerciseSetDto implements RoutineSet {
   @IsIn(REP_TYPE_VALUES)
   repType: RepType;
 
-  // When repType is FIXED, reps must be provided
-  @ValidateIf((o: CreateRoutineExerciseSetDto) => o.repType === 'FIXED')
+  // When repType is FIXED, reps must be provided -- except on an 8-week
+  // block's working sets, which have no rep target (the service checks).
+  @ValidateIf(
+    (o: CreateRoutineExerciseSetDto) => o.repType === 'FIXED' && o.reps != null,
+  )
   @IsInt()
   @Min(1)
   @Max(50)
@@ -140,6 +147,12 @@ export class CreateRoutineExerciseDto implements CreateRoutineExerciseInput {
   @IsOptional()
   @IsBoolean()
   linkedToNext?: boolean;
+
+  // ROUT-17: the block's state on a LINEAR_PERIODIZATION exercise; checked in
+  // full by the service (`assertLinearState`).
+  @IsOptional()
+  @IsObject()
+  linearPeriodization?: LinearPeriodizationState | null;
 
   @IsArray()
   @ValidateNested({ each: true })

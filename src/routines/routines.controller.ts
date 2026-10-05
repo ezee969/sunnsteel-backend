@@ -8,9 +8,12 @@ import {
   Delete,
   UseGuards,
   Patch,
+  Put,
   Query,
 } from '@nestjs/common';
 import { RoutinesService } from './routines.service';
+import { LinearBlocksService } from './linear-blocks.service';
+import { ContinueLinearBlockDto } from './dto/continue-linear-block.dto';
 import { RoutineSharingService } from './routine-sharing.service';
 import { RoutineDiscoveryService } from './routine-discovery.service';
 import { SupabaseJwtGuard } from '../auth/guards/supabase-jwt.guard';
@@ -30,6 +33,7 @@ export class RoutinesController {
     private readonly routinesService: RoutinesService,
     private readonly routineSharing: RoutineSharingService,
     private readonly discovery: RoutineDiscoveryService,
+    private readonly linearBlocks: LinearBlocksService,
   ) {}
 
   @Post()
@@ -85,6 +89,22 @@ export class RoutinesController {
     @Body() dto: UpdateRoutineDto,
   ) {
     return await this.routinesService.update(req.user.id, id, dto);
+  }
+
+  /** ROUT-19: what a finished 8-week block does next. */
+  @Put(':id/exercises/:routineExerciseId/linear-block')
+  continueLinearBlock(
+    @Req() req: RequestWithUser,
+    @Param('id') routineId: string,
+    @Param('routineExerciseId') routineExerciseId: string,
+    @Body() dto: ContinueLinearBlockDto,
+  ) {
+    return this.linearBlocks.continueBlock(
+      req.user.id,
+      routineId,
+      routineExerciseId,
+      dto,
+    );
   }
 
   @Patch(':id/exercises/:exerciseId/note')

@@ -25,6 +25,7 @@ import {
   prescribedSetKind,
   removeSetRefusal,
 } from "../session-extra-sets";
+import { linearSetWrite, linearSlotOf } from "../session-linear-block";
 import { toSetLogResponse } from "../workout-session.mapper";
 
 // Narrow unknown error objects that include a Prisma error code
@@ -139,6 +140,22 @@ export class WorkoutSessionLogService {
             dto.setNumber,
             routineExercise.sets,
           ));
+      // ROUT-17: an LP slot stores its prescribed load, takes no extra set and
+      // keeps its working sets' kind -- unless it was swapped for today.
+      const linearSlot = substitution
+        ? null
+        : linearSlotOf(session.snapshot?.payload, routineExercise.id);
+      let weight = dto.weight;
+      if (linearSlot) {
+        const write = linearSetWrite(linearSlot, {
+          setNumber: dto.setNumber,
+          weight: dto.weight,
+          kind: dto.kind,
+          isNew: !existing,
+        });
+        if ("refusal" in write) throw new BadRequestException(write.refusal);
+        weight = write.weight;
+      }
       // LIVE-15: a new set above the prescription is an extra set.
       if (!existing) {
         const prescribed = prescribedSetCount(
@@ -172,7 +189,7 @@ export class WorkoutSessionLogService {
         where,
         update: {
           reps: dto.reps,
-          weight: dto.weight,
+          weight,
           rpe: dto.rpe,
           isCompleted: dto.isCompleted ?? undefined,
           completedAt: dto.isCompleted === undefined ? undefined : completedAt,
@@ -186,7 +203,7 @@ export class WorkoutSessionLogService {
           exerciseId: dto.exerciseId,
           setNumber: dto.setNumber,
           reps: dto.reps,
-          weight: dto.weight,
+          weight,
           rpe: dto.rpe,
           isCompleted: dto.isCompleted ?? false,
           completedAt: dto.isCompleted ? new Date() : undefined,

@@ -1,5 +1,6 @@
 import { progressionRuns } from "../session-training-block";
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -51,6 +52,20 @@ import {
 import { COUNTED_SET_LOG } from "../counted-sets";
 import { syncFollowingWarmUps } from "../../routines/warm-up-follow";
 import { removeActivityEntries } from "../../activity/activity-entry-removal";
+import {
+  finishedBlock,
+  linearBlockChangesJson,
+  linearBlockSourceKey,
+  moveLinearSlot,
+  notifyFinishedBlock,
+  plannedLinearChanges,
+  readLinearBlockChanges,
+} from "../linear-block-advance";
+import { linearSlotOf } from "../session-linear-block";
+import {
+  type LinearBlockChange,
+  setKindOf,
+} from "@sunsteel/contracts";
 
 type Tx = Prisma.TransactionClient;
 
@@ -208,6 +223,26 @@ export class WorkoutSessionCorrectionService {
 
         const snapshot = await ensureSessionSnapshot(tx, sessionId);
         const substitutions = readSubstitutions(session.exerciseSubstitutions);
+        // ROUT-17: an 8-week block's load was prescribed, so a correction
+        // changes its reps and ticks only.
+        const swapped = new Set(
+          substitutions.map((substitution) => substitution.routineExerciseId),
+        );
+        for (const log of corrected) {
+          const original = logs.find((entry) => entry.id === log.id);
+          const slotId = log.sourceRoutineExerciseId ?? log.routineExerciseId;
+          if (
+            !original ||
+            !slotId ||
+            swapped.has(slotId) ||
+            original.weight === log.weight ||
+            setKindOf({ kind: log.kind }) === "WARMUP" ||
+            !linearSlotOf(snapshot, slotId)
+          ) {
+            continue;
+          }
+          throw new BadRequestException(apiError("LINEAR_BLOCK_LOAD_FIXED"));
+        }
         const before = sessionContribution(
           logs,
           snapshot,
@@ -297,6 +332,16 @@ export class WorkoutSessionCorrectionService {
               substitutions,
               removedEntryKeys,
             );
+        const linearBlockKept = !progressionRuns(session)
+          ? []
+          : await this.rederiveLinearBlocks(
+              tx,
+              userId,
+              session,
+              snapshot,
+              corrected,
+              swapped,
+            );
         await this.refreshSessionNotification(tx, userId, sessionId);
         await removeActivityEntries(tx, userId, removedEntryKeys);
 
@@ -312,6 +357,7 @@ export class WorkoutSessionCorrectionService {
           correction: mapCorrection(row),
           window: await readWindow(tx, userId, session, correctionCount + 1),
           progressionKept,
+          linearBlockKept,
         };
       },
       { timeout: 20000 },
@@ -668,6 +714,100 @@ export class WorkoutSessionCorrectionService {
         if (removed.count) removedEntryKeys.push(eventKey);
       }
     }
+    return kept;
+  }
+
+  /**
+   * ROUT-17/ROUT-18: each LP slot is moved from where this workout left it
+   * to where the corrected sets leave it -- a step undone or done, a block's
+   * estimate recomputed -- but only while the routine still stands where the
+   * workout left it; otherwise it is reported kept, as a load change is.
+   */
+  private async rederiveLinearBlocks(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    session: {
+      id: string;
+      routineId: string | null;
+      endedAt: Date | null;
+      linearBlockChanges: Prisma.JsonValue;
+    },
+    snapshot: Awaited<ReturnType<typeof ensureSessionSnapshot>>,
+    corrected: CorrectableLog[],
+    swapped: ReadonlySet<string>,
+  ): Promise<Array<{ exerciseId: string; exerciseName: string }>> {
+    const exercises = snapshot.routineDay.exercises ?? [];
+    const stored = readLinearBlockChanges(session.linearBlockChanges);
+    const planned = plannedLinearChanges(
+      snapshot,
+      exercises,
+      corrected.flatMap((log) => {
+        const routineExerciseId =
+          log.sourceRoutineExerciseId ?? log.routineExerciseId;
+        return routineExerciseId
+          ? [
+              {
+                routineExerciseId,
+                setNumber: log.setNumber,
+                reps: log.reps,
+                isCompleted: log.isCompleted,
+              },
+            ]
+          : [];
+      }),
+      {
+        sessionId: session.id,
+        finishedAt: (session.endedAt ?? new Date()).toISOString(),
+        runs: true,
+        substitutedIds: swapped,
+      },
+    );
+    const kept: Array<{ exerciseId: string; exerciseName: string }> = [];
+    const applied: LinearBlockChange[] = [];
+    for (const exercise of exercises) {
+      const slot = linearSlotOf(snapshot, exercise.id);
+      if (!slot || swapped.has(exercise.id)) continue;
+      const was = stored.find((c) => c.routineExerciseId === exercise.id);
+      const now = planned.find((c) => c.routineExerciseId === exercise.id);
+      const from = was?.after ?? slot.state;
+      const to = now?.after ?? slot.state;
+      if (JSON.stringify(from) === JSON.stringify(to)) {
+        if (was) applied.push(was);
+        continue;
+      }
+      if (!(await moveLinearSlot(tx, exercise.id, from, to))) {
+        kept.push({
+          exerciseId: exercise.exercise.id,
+          exerciseName: exercise.exercise.name,
+        });
+        if (was) applied.push(was);
+        continue;
+      }
+      if (now) applied.push(now);
+      const sourceKey = linearBlockSourceKey(session.id, exercise.id);
+      if (now && finishedBlock(now)) {
+        await notifyFinishedBlock(tx, {
+          userId,
+          sessionId: session.id,
+          routineId: session.routineId ?? snapshot.sourceRoutineId,
+          routineName: snapshot.routine?.name ?? "",
+          change: now,
+          at: session.endedAt ?? new Date(),
+        });
+      } else if (was && finishedBlock(was)) {
+        await tx.notification.deleteMany({ where: { userId, sourceKey } });
+      }
+    }
+    await tx.workoutSession.update({
+      where: { id: session.id },
+      data: { linearBlockChanges: linearBlockChangesJson(applied) },
+      select: { id: true },
+    });
+    await syncFollowingWarmUps(
+      tx,
+      userId,
+      applied.map((change) => change.routineExerciseId),
+    );
     return kept;
   }
 

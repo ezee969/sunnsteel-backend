@@ -191,6 +191,37 @@ test('selected partner activity maps without exposing unrelated training data', 
   assert.equal(achievement.achievement.id, 'sessions-10');
 });
 
+test('ROUT-18: a finished block names its routine, exercise and estimate', () => {
+  const row = (estimatedMaxKg: number | null) =>
+    toAppNotification(
+      {
+        id: 'block',
+        kind: 'LINEAR_BLOCK_FINISHED',
+        payload: {
+          routineId: 'routine-1',
+          routineName: 'Strength',
+          exerciseId: 'squat',
+          exerciseName: 'Squat',
+          referenceMaxKg: 100,
+          estimatedMaxKg,
+        },
+        createdAt: NOW,
+        readAt: null,
+        sessionId: 'session-1',
+        actor: null,
+      } as never,
+      new Set(),
+    );
+  const finished = row(102.5);
+  assert.ok(finished?.kind === 'LINEAR_BLOCK_FINISHED');
+  assert.deepEqual(finished.routine, { id: 'routine-1', name: 'Strength' });
+  assert.equal(finished.referenceMaxKg, 100);
+  assert.equal(finished.estimatedMaxKg, 102.5);
+  const none = row(null);
+  assert.ok(none?.kind === 'LINEAR_BLOCK_FINISHED');
+  assert.equal(none.estimatedMaxKg, null);
+});
+
 type Row = {
   id: string;
   userId: string;

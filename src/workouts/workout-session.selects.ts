@@ -51,6 +51,8 @@ export function buildWorkoutSessionSelect(includeLogs = false) {
             minWeightIncrement: true,
             // ROUT-12: the grouping a session trains in rounds (LIVE-14).
             linkedToNext: true,
+            // ROUT-17: the slot's 8-week block, frozen in the snapshot.
+            linearPeriodization: true,
             exercise: {
               select: {
                 id: true,

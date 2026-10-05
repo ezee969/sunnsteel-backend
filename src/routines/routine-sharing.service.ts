@@ -26,6 +26,7 @@ import {
   toSharedRoutineSummary,
 } from "./routine-summary";
 import { captureRoutineSetup } from "./routine-versions";
+import { withoutOwnersBlocks } from "./linear-periodization";
 import { canViewRoutine } from "./routine-visibility";
 import { RoutinesService } from "./routines.service";
 import { CustomExercisesService } from "../exercises/custom-exercises.service";
@@ -171,7 +172,7 @@ export class RoutineSharingService {
 
     return {
       routineId: share.routine.id,
-      setup: captureRoutineSetup(share.routine),
+      setup: withoutOwnersBlocks(captureRoutineSetup(share.routine)),
       owner: {
         username: share.user.username ?? "",
         name: share.user.name,
@@ -317,7 +318,7 @@ export class RoutineSharingService {
 
     return {
       routineId: routine.id,
-      setup: captureRoutineSetup(routine),
+      setup: withoutOwnersBlocks(captureRoutineSetup(routine)),
       owner: {
         username: routine.user.username ?? "",
         name: routine.user.name,

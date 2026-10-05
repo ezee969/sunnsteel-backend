@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { readLinearState } from './linear-periodization';
 import {
   Routine,
   RoutineDay,
@@ -59,6 +60,7 @@ function toRoutineExercise(e: RoutineExerciseEntity): RoutineExercise {
     minWeightIncrement: e.minWeightIncrement,
     warmUpsFollowLoad: e.warmUpsFollowLoad,
     linkedToNext: e.linkedToNext,
+    linearPeriodization: readLinearState(e.linearPeriodization),
     exercise: { id: e.exercise.id, name: e.exercise.name },
     sets: e.sets.map(toRoutineSet),
   };

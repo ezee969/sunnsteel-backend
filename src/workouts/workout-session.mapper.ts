@@ -1,3 +1,4 @@
+import { readLinearState } from '../routines/linear-periodization';
 import { readSnapshot } from './analytics/session-snapshot';
 import { Prisma } from '@prisma/client';
 import { SetLog, WorkoutSession } from '@sunsteel/contracts';
@@ -57,6 +58,7 @@ function toRoutineDay(day: RoutineDayEntity): WorkoutSession['routineDay'] {
       progressionScheme: e.progressionScheme,
       minWeightIncrement: e.minWeightIncrement,
       linkedToNext: e.linkedToNext,
+      linearPeriodization: readLinearState(e.linearPeriodization),
       exercise: {
         id: e.exercise.id,
         name: e.exercise.name,

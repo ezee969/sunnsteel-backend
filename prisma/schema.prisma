@@ -813,23 +813,27 @@ model RoutineDay {
 
 // One exercise entry in a routine day
 model RoutineExercise {
-  id                 String               @id @default(uuid())
-  routineDayId       String
-  routineDay         RoutineDay           @relation(fields: [routineDayId], references: [id], onDelete: Cascade)
-  exerciseId         String
-  exercise           Exercise             @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
-  order              Int                  @default(0)
-  restSeconds        Int                  @default(60)
-  note               String? // User note for the exercise in this routine
+  id                  String               @id @default(uuid())
+  routineDayId        String
+  routineDay          RoutineDay           @relation(fields: [routineDayId], references: [id], onDelete: Cascade)
+  exerciseId          String
+  exercise            Exercise             @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  order               Int                  @default(0)
+  restSeconds         Int                  @default(60)
+  note                String? // User note for the exercise in this routine
   // Progression configuration per exercise
-  progressionScheme  ProgressionScheme    @default(NONE)
-  minWeightIncrement Float                @default(2.5)
+  progressionScheme   ProgressionScheme    @default(NONE)
+  minWeightIncrement  Float                @default(2.5)
   // LIVE-20: warm-ups with a share are recalculated from the first working set
-  warmUpsFollowLoad  Boolean              @default(false)
+  warmUpsFollowLoad   Boolean              @default(false)
   // ROUT-12: done in rounds with the next exercise of the day
-  linkedToNext       Boolean              @default(false)
-  sets               RoutineExerciseSet[]
-  setLogs            SetLog[]
+  linkedToNext        Boolean              @default(false)
+  // ROUT-17: contracts' LinearPeriodizationState on a LINEAR_PERIODIZATION
+  // exercise -- where the slot is in its 8-step block. Travels with the setup
+  // like the set loads, since an edit recreates every exercise row.
+  linearPeriodization Json?
+  sets                RoutineExerciseSet[]
+  setLogs             SetLog[]
 }
 
 // Set configuration for a routine exercise
@@ -873,6 +877,7 @@ enum ProgressionScheme {
   NONE // no progression applied
   DOUBLE_PROGRESSION // progress when all sets hit target (formerly DYNAMIC)
   DYNAMIC_DOUBLE_PROGRESSION // progress per set when that set hits target (formerly DYNAMIC_DOUBLE)
+  LINEAR_PERIODIZATION // ROUT-17: an 8-step block by % of a reference max and target RIR
 }
 
 // Tracking a user's execution of a specific RoutineDay
@@ -919,6 +924,10 @@ model WorkoutSession {
   // ROUT-16: the deload this session trained; no progression ran for it.
   temporaryOverrideId   String?
   temporaryOverrideKind TemporaryOverrideKind?
+  // ROUT-17/ROUT-18: contracts' LinearBlockChange[] -- the LP blocks this
+  // workout moved at finish, each with its state before and after, so the
+  // recap shows them and a LIVE-17 correction can re-derive them.
+  linearBlockChanges    Json                    @default("[]")
 
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
@@ -1162,6 +1171,8 @@ enum NotificationKind {
   /// NOTIF-07: selected activity from a partner who currently shares it.
   TRAINING_PARTNER_SESSION
   TRAINING_PARTNER_ACHIEVEMENT
+  /// ROUT-18: an LP exercise finished its 8-step block.
+  LINEAR_BLOCK_FINISHED
 }
 
 /// NOTIF-08: one subscribed browser on one device. The endpoint is the

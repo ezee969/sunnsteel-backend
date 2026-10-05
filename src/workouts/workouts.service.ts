@@ -155,6 +155,7 @@ export class WorkoutsService {
     return {
       session: toWorkoutSessionResponse(result.session),
       progressionChanges: result.progressionChanges,
+      linearBlockChanges: result.linearBlockChanges,
       recap:
         dto.status === "COMPLETED"
           ? await this.workoutSessionRecap.getSessionRecap(userId, id)
