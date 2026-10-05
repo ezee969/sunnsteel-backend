@@ -20,6 +20,8 @@ export interface StartFacts {
   hasConversation: boolean;
   /** TRUST-04: the sender is hidden by moderation and messages no one. */
   senderHidden: boolean;
+  /** MSG-09: moderation restricted the sender's messaging until lifted. */
+  senderRestricted: boolean;
 }
 
 /**
@@ -30,7 +32,7 @@ export interface StartFacts {
  * this is asked, with a 404.
  */
 export function maySendTo(facts: StartFacts): boolean {
-  if (facts.senderHidden) return false;
+  if (facts.senderHidden || facts.senderRestricted) return false;
   if (facts.hasConversation) return true;
   if (facts.permission === "NOBODY") return false;
   return facts.recipientFollowsSender;

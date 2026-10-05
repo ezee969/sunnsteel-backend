@@ -29,6 +29,13 @@ export function statusAfter(
       return 'OPEN';
     case 'VIEW_SUBJECT':
       return current;
+    // MSG-09. A restriction taken on an open report is that report's
+    // handling; on one already reviewed it changes nothing about the report,
+    // and lifting one never reopens it.
+    case 'RESTRICT_MESSAGING':
+      return current === 'OPEN' ? 'ACTIONED' : current;
+    case 'LIFT_MESSAGING_RESTRICTION':
+      return current;
   }
 }
 

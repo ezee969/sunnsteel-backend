@@ -81,4 +81,27 @@ export class ModerationController {
   ) {
     return this.moderation.restore(req.user.id, id, dto.note ?? null);
   }
+
+  /** MSG-09: on a member or a message report, about that account. */
+  @Post('reports/:id/restrict-messaging')
+  restrictMessaging(
+    @Request() req: RequestWithUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ReviewReportDto,
+  ) {
+    return this.moderation.restrictMessaging(req.user.id, id, dto.note ?? null);
+  }
+
+  @Post('reports/:id/lift-messaging-restriction')
+  liftMessagingRestriction(
+    @Request() req: RequestWithUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ReviewReportDto,
+  ) {
+    return this.moderation.liftMessagingRestriction(
+      req.user.id,
+      id,
+      dto.note ?? null,
+    );
+  }
 }

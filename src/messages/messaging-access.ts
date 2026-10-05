@@ -22,7 +22,7 @@ export async function messagingStateFor(
   viewerId: string,
   target: { id: string; messagePermission: MessagePermission },
 ): Promise<MemberMessagingState> {
-  const [conversation, follow, viewerHidden] = await Promise.all([
+  const [conversation, follow, hidden, restricted] = await Promise.all([
     db.conversation.findUnique({
       where: { pairKey: conversationPairKey(viewerId, target.id) },
       select: { id: true, _count: { select: { participants: true } } },
@@ -36,10 +36,13 @@ export async function messagingStateFor(
       },
       select: { followerId: true },
     }),
-    // A count, like TRUST-04's hide check: it reads nothing about the account
-    // but whether a hide stands.
+    // Counts, like TRUST-04's hide check: they read nothing about the account
+    // but whether a hide (TRUST-04) or a restriction (MSG-09) stands.
     db.user.count({
       where: { id: viewerId, moderationHiddenAt: { not: null } },
+    }),
+    db.user.count({
+      where: { id: viewerId, messagingRestrictedAt: { not: null } },
     }),
   ]);
   const shared =
@@ -51,7 +54,8 @@ export async function messagingStateFor(
       permission: target.messagePermission,
       recipientFollowsSender: follow !== null,
       hasConversation: shared !== null,
-      senderHidden: viewerHidden > 0,
+      senderHidden: hidden > 0,
+      senderRestricted: restricted > 0,
     }),
     conversationId: shared,
   };

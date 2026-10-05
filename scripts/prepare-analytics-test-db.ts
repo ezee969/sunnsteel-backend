@@ -408,6 +408,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20261005140000_direct_messages/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// MSG-09: reporting and moderation of messages.
+				readFileSync(
+					'prisma/migrations/20261006100000_message_moderation/migration.sql',
+					'utf8',
 				),
     );
     prisma(

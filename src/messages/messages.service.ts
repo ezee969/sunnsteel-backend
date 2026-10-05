@@ -27,6 +27,7 @@ import {
 import { DatabaseService } from "../database/database.service";
 import { hiddenFromViewer, isHiddenFromViewer } from "../users/member-blocks";
 import { normalizeUsername } from "../users/username";
+import { messageFor } from "./message-moderation";
 import {
   conversationPairKey,
   decodeKeysetCursor,
@@ -48,6 +49,7 @@ const MESSAGE_SELECT = {
   senderId: true,
   body: true,
   deletedAt: true,
+  moderationHiddenAt: true,
   createdAt: true,
 } as const satisfies Prisma.MessageSelect;
 
@@ -63,18 +65,19 @@ interface OpenConversation {
   clearedAt: Date | null;
   /** Null once the other member deleted their account. */
   other: MemberRow | null;
-  viewerHidden: boolean;
+  viewer: ViewerMessaging;
+}
+
+/** TRUST-04's hide and MSG-09's restriction, as they stand for the viewer. */
+interface ViewerMessaging {
+  /** Hidden by moderation: messages no one and is reached by no one. */
+  hidden: boolean;
+  /** Restricted by moderation: still reads, deletes and receives. */
+  restricted: boolean;
 }
 
 function toMessage(row: MessageRow, viewerId: string): ConversationMessage {
-  const deleted = row.deletedAt !== null;
-  return {
-    id: row.id,
-    sentByMe: row.senderId === viewerId,
-    body: deleted ? null : row.body,
-    deleted,
-    createdAt: row.createdAt.toISOString(),
-  };
+  return messageFor(row, viewerId);
 }
 
 function isUniqueViolation(error: unknown): boolean {
@@ -102,6 +105,11 @@ function isMissingRecord(error: unknown): boolean {
  * conversation exists it keeps working. A participant who deletes it hides
  * what was sent until then from themselves only, and once every participant
  * has, the conversation is removed.
+ *
+ * MSG-09: a message moderation hid reads "Removed by moderation" for the
+ * other participant and keeps its text for its author (`messageFor`), and a
+ * member whose messaging moderation restricted can no longer send or start a
+ * conversation (403 `MESSAGING_RESTRICTED`) while everything else stays.
  */
 @Injectable()
 export class MessagesService {
@@ -113,9 +121,9 @@ export class MessagesService {
   ): Promise<ConversationsResponse> {
     const cursor = cursorText ? decodeKeysetCursor(cursorText) : null;
     if (cursorText && !cursor) throw new BadRequestException("Invalid cursor");
-    const [hidden, viewerHidden] = await Promise.all([
+    const [hidden, viewer] = await Promise.all([
       hiddenFromViewer(this.db, viewerId),
-      this.isViewerHidden(viewerId),
+      this.viewerMessaging(viewerId),
     ]);
     const take = CONVERSATIONS_PAGE_SIZE;
     const rows = await this.db.$queryRaw<
@@ -151,7 +159,7 @@ export class MessagesService {
             lastMessageAt: row.lastMessageAt,
             clearedAt: row.clearedAt,
             other: others.get(row.id) ?? null,
-            viewerHidden,
+            viewer,
           },
           viewerId,
         ),
@@ -164,6 +172,7 @@ export class MessagesService {
         rows.length > take && last
           ? encodeKeysetCursor({ at: last.lastMessageAt, id: last.id })
           : null,
+      messagingRestricted: viewer.restricted,
     };
   }
 
@@ -242,8 +251,8 @@ export class MessagesService {
       return this.send(viewerId, existing.id, request);
     }
 
-    const [viewerHidden, follow] = await Promise.all([
-      this.isViewerHidden(viewerId),
+    const [viewer, follow] = await Promise.all([
+      this.viewerMessaging(viewerId),
       this.db.userFollow.findUnique({
         where: {
           followerId_followingId: {
@@ -254,8 +263,11 @@ export class MessagesService {
         select: { followerId: true },
       }),
     ]);
-    if (viewerHidden) {
+    if (viewer.hidden) {
       throw new ForbiddenException(apiError("MESSAGING_UNAVAILABLE"));
+    }
+    if (viewer.restricted) {
+      throw new ForbiddenException(apiError("MESSAGING_RESTRICTED"));
     }
     if (
       !maySendTo({
@@ -263,6 +275,7 @@ export class MessagesService {
         recipientFollowsSender: follow !== null,
         hasConversation: false,
         senderHidden: false,
+        senderRestricted: false,
       })
     ) {
       throw new ForbiddenException(apiError("MESSAGE_NOT_ADMITTED"));
@@ -332,8 +345,11 @@ export class MessagesService {
   ): Promise<SendMessageResponse> {
     const body = this.body(request.body);
     const open = await this.open(viewerId, conversationId);
-    if (open.viewerHidden) {
+    if (open.viewer.hidden) {
       throw new ForbiddenException(apiError("MESSAGING_UNAVAILABLE"));
+    }
+    if (open.viewer.restricted) {
+      throw new ForbiddenException(apiError("MESSAGING_RESTRICTED"));
     }
     if (!open.other)
       throw new ConflictException(apiError("CONVERSATION_CLOSED"));
@@ -469,7 +485,7 @@ export class MessagesService {
       lastMessageAt: conversation.lastMessageAt,
       clearedAt: mine?.clearedAt ?? null,
       other: other?.user ?? null,
-      viewerHidden: await this.isViewerHidden(viewerId),
+      viewer: await this.viewerMessaging(viewerId),
     };
   }
 
@@ -502,7 +518,9 @@ export class MessagesService {
         : null,
       lastMessage: newest,
       lastMessageAt: newest ? open.lastMessageAt.toISOString() : null,
-      canSend: open.other !== null && !open.viewerHidden,
+      canSend:
+        open.other !== null && !open.viewer.hidden && !open.viewer.restricted,
+      messagingRestricted: open.viewer.restricted,
     };
   }
 
@@ -521,12 +539,15 @@ export class MessagesService {
     return new Map(rows.map((row) => [row.conversationId, row.user]));
   }
 
-  private async isViewerHidden(viewerId: string): Promise<boolean> {
+  private async viewerMessaging(viewerId: string): Promise<ViewerMessaging> {
     const viewer = await this.db.user.findUnique({
       where: { id: viewerId },
-      select: { moderationHiddenAt: true },
+      select: { moderationHiddenAt: true, messagingRestrictedAt: true },
     });
-    return viewer?.moderationHiddenAt != null;
+    return {
+      hidden: viewer?.moderationHiddenAt != null,
+      restricted: viewer?.messagingRestrictedAt != null,
+    };
   }
 
   private body(text: string): string {

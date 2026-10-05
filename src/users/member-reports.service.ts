@@ -4,6 +4,7 @@ import {
   HttpException,
   HttpStatus,
 } from "@nestjs/common";
+import type { Prisma } from "@prisma/client";
 import {
   REPORTS_PER_DAY_MAX,
   type CreateReportRequest,
@@ -11,6 +12,10 @@ import {
   apiError,
 } from "@sunsteel/contracts";
 import { DatabaseService } from "../database/database.service";
+import {
+  captureReportedMessage,
+  type MessageCaptureData,
+} from "../messages/message-moderation";
 
 /**
  * PROF-10's report path. A report is **recorded and acknowledged, not acted
@@ -32,8 +37,15 @@ export class MemberReportsService {
 
     // The subject must exist, so the queue TRUST-04 builds is not seeded with
     // reports about nothing. A session share is checked by its token, because
-    // that is the only identity a reader of one ever has.
-    await this.assertSubjectExists(request.subjectKind, subjectId);
+    // that is the only identity a reader of one ever has. A message (MSG-09)
+    // must be one the reporter can read in their own conversation, and its
+    // report captures it with the few before it, as they read them now.
+    let capture: MessageCaptureData | null = null;
+    if (request.subjectKind === "MESSAGE") {
+      capture = await captureReportedMessage(this.db, reporterId, subjectId);
+    } else {
+      await this.assertSubjectExists(request.subjectKind, subjectId);
+    }
 
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const recent = await this.db.memberReport.count({
@@ -53,6 +65,20 @@ export class MemberReportsService {
         subjectId,
         reason: request.reason,
         details: request.details?.trim() || null,
+        // One write, so a report of a message never exists without the
+        // evidence it was filed with.
+        ...(capture
+          ? {
+              messageCapture: {
+                create: {
+                  messageId: capture.messageId,
+                  conversationId: capture.conversationId,
+                  authorId: capture.authorId,
+                  messages: capture.messages as unknown as Prisma.InputJsonValue,
+                },
+              },
+            }
+          : {}),
       },
       select: { id: true, createdAt: true },
     });
@@ -89,6 +115,9 @@ export class MemberReportsService {
         return this.db.sessionShare.count({ where: { token: subjectId } });
       case "COMMENT":
         return this.db.activityComment.count({ where: { id: subjectId } });
+      // Asked by `captureReportedMessage` instead, with the reporter's view.
+      case "MESSAGE":
+        return this.db.message.count({ where: { id: subjectId } });
     }
   }
 }

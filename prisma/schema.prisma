@@ -140,6 +140,13 @@ model User {
   conversationParticipants          ConversationParticipant[]
   conversationsStarted              Conversation[]               @relation("ConversationStarter")
   messagesSent                      Message[]
+  /// MSG-09: set by RESTRICT_MESSAGING, cleared by LIFT_MESSAGING_RESTRICTION.
+  /// The member can no longer send or start conversations; they still read,
+  /// delete and receive.
+  messagingRestrictedAt             DateTime?
+  /// MSG-09: captures of this member's reported messages, which go with the
+  /// account.
+  reportedMessageCaptures           ReportedMessageCapture[]
 }
 
 /// MSG-01: who may start a conversation with a member. MSG-02 adds EVERYONE.
@@ -185,16 +192,19 @@ model ConversationParticipant {
 /// MSG-01: text only, stored on the server and not end-to-end encrypted.
 /// Deleting one keeps its place ("Message deleted") with the text gone.
 model Message {
-  id             String       @id @default(uuid())
-  conversationId String
-  senderId       String
+  id                 String       @id @default(uuid())
+  conversationId     String
+  senderId           String
   /// Null once its author deleted it. VarChar counts characters, as the
   /// 2,000-character limit does.
-  body           String?      @db.VarChar(2000)
-  deletedAt      DateTime?
-  createdAt      DateTime     @default(now())
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  body               String?      @db.VarChar(2000)
+  deletedAt          DateTime?
+  /// MSG-09: hidden from the other participant by a moderator; its author
+  /// still reads it. A restore writes it back to null.
+  moderationHiddenAt DateTime?
+  createdAt          DateTime     @default(now())
+  conversation       Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender             User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
 
   @@index([conversationId, createdAt, id])
   @@index([senderId, createdAt])
@@ -312,28 +322,51 @@ model TrainingPartnerGrant {
 /// the enforcement record; nothing here reads these rows yet, which is why the
 /// response never implies that anything does.
 model MemberReport {
-  id           String            @id @default(uuid())
-  reporterId   String
-  reporter     User              @relation(fields: [reporterId], references: [id], onDelete: Cascade)
-  subjectKind  ReportSubjectKind
+  id             String                  @id @default(uuid())
+  reporterId     String
+  reporter       User                    @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  subjectKind    ReportSubjectKind
   /// A member id, a routine id, or a session share token.
-  subjectId    String
-  reason       ReportReason
-  details      String?           @db.VarChar(500)
-  createdAt    DateTime          @default(now())
+  subjectId      String
+  reason         ReportReason
+  details        String?                 @db.VarChar(500)
+  createdAt      DateTime                @default(now())
   /// TRUST-04. OPEN until a moderator dismisses it or acts on the subject.
   /// It is denormalised from the enforcement records on purpose -- the queue
   /// pages on it -- and only ever written in the same transaction as the
   /// ModerationAction row that explains it.
-  status       ReportStatus      @default(OPEN)
-  resolvedAt   DateTime?
-  resolvedById String?
-  resolvedBy   User?             @relation("ReportResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  status         ReportStatus            @default(OPEN)
+  resolvedAt     DateTime?
+  resolvedById   String?
+  resolvedBy     User?                   @relation("ReportResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  /// MSG-09: what a MESSAGE report captured.
+  messageCapture ReportedMessageCapture?
 
   @@index([reporterId, createdAt])
   @@index([subjectKind, subjectId])
   @@index([status, createdAt, id])
   @@index([subjectKind, subjectId, status])
+}
+
+/// MSG-09: the reported message and up to five before it, as the reporter
+/// could see them when they reported it. It outlives the author deleting the
+/// message, so deleting cannot erase the evidence, and it goes with the
+/// author's account (and with the report, which goes with the reporter's).
+/// `messageId` and `conversationId` are deliberately not foreign keys: the
+/// message and the conversation may be removed while the capture stays.
+model ReportedMessageCapture {
+  reportId       String       @id
+  report         MemberReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  messageId      String
+  conversationId String
+  authorId       String
+  author         User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  /// Oldest first, the reported message last: `CapturedMessage[]` as stored.
+  messages       Json
+  capturedAt     DateTime     @default(now())
+
+  @@index([authorId])
+  @@index([messageId])
 }
 
 /// TRUST-04: one moderator power, used once. Rows are appended and never
@@ -372,6 +405,8 @@ enum ModerationActionKind {
   DISMISS_REPORT
   HIDE_SUBJECT
   RESTORE_SUBJECT
+  RESTRICT_MESSAGING
+  LIFT_MESSAGING_RESTRICTION
 }
 
 enum ReportSubjectKind {
@@ -379,6 +414,7 @@ enum ReportSubjectKind {
   ROUTINE
   SESSION
   COMMENT
+  MESSAGE
 }
 
 enum ReportReason {

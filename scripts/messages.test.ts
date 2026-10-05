@@ -39,6 +39,7 @@ describe('MSG-01 who may message whom', () => {
     recipientFollowsSender: false,
     hasConversation: false,
     senderHidden: false,
+    senderRestricted: false,
   };
 
   it('a member the recipient follows may start; anyone else may not', () => {

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -16,11 +17,13 @@ import {
   type ReportStatus,
   type ReportSubjectKind,
   type ReportSubjectPreview,
+  type ReportedMessageContext,
   type ReviewReportResponse,
   type UserSearchResponse,
   apiError,
 } from "@sunsteel/contracts";
 import { DatabaseService } from "../database/database.service";
+import { readCapturedMessages } from "../messages/message-moderation";
 import { canViewRoutine } from "../routines/routine-visibility";
 import { isHiddenFromViewer } from "../users/member-blocks";
 import {
@@ -62,7 +65,18 @@ function toMember(row: MemberRow): UserSearchResponse {
 type ResolvedSubjectDetail = ResolvedSubject & {
   owner: MemberRow | null;
   readable: boolean;
+  /** MSG-09: the member's (or message author's) restriction; null otherwise. */
+  messagingRestricted: boolean | null;
+  /** MSG-09: a reported message deleted or removed since its capture. */
+  messageGone: boolean;
 };
+
+/** MSG-09: the powers over an account's messaging, rather than one subject. */
+function isMessagingAction(kind: ModerationActionKind): boolean {
+  return (
+    kind === "RESTRICT_MESSAGING" || kind === "LIFT_MESSAGING_RESTRICTION"
+  );
+}
 
 /**
  * TRUST-04. The review side of `PROF-10`: a queue over the reports that were
@@ -85,6 +99,16 @@ type ResolvedSubjectDetail = ResolvedSubject & {
  * `RESTORE_SUBJECT` row; the `HIDE_SUBJECT` row it supersedes stays exactly
  * as it was written, which is what makes the log evidence rather than a
  * cache of the current state.
+ *
+ * MSG-09 adds messages, which have no page of their own and are shared with
+ * nobody but the other participant. A message report therefore carries the
+ * reporter's own view -- the message and up to five before it, captured when
+ * it was filed -- and that capture is the one thing a moderator reads, only
+ * through the logged view, whatever blocks stand (the owner's decision at
+ * claim: it is the reporter's evidence, handed over, and withholding it under
+ * a block would let anyone evade review by blocking the moderator). Nothing
+ * else of a conversation is readable. A message can be hidden from the other
+ * participant, and an account's messaging restricted and lifted.
  */
 @Injectable()
 export class ModerationService {
@@ -181,7 +205,12 @@ export class ModerationService {
     moderatorId: string,
     reportId: string,
   ): Promise<ReviewReportResponse> {
-    return this.act(moderatorId, reportId, "VIEW_SUBJECT", null);
+    const response = await this.act(moderatorId, reportId, "VIEW_SUBJECT", null);
+    // MSG-09: the capture is answered only here, after its record is written,
+    // so the read and the record are one request.
+    if (response.report.subject.kind !== "MESSAGE") return response;
+    const messageContext = await this.messageContext(reportId);
+    return messageContext ? { ...response, messageContext } : response;
   }
 
   async dismiss(
@@ -208,6 +237,23 @@ export class ModerationService {
     return this.act(moderatorId, reportId, "RESTORE_SUBJECT", note);
   }
 
+  /** MSG-09: the account stops sending and starting conversations. */
+  async restrictMessaging(
+    moderatorId: string,
+    reportId: string,
+    note: string | null,
+  ): Promise<ReviewReportResponse> {
+    return this.act(moderatorId, reportId, "RESTRICT_MESSAGING", note);
+  }
+
+  async liftMessagingRestriction(
+    moderatorId: string,
+    reportId: string,
+    note: string | null,
+  ): Promise<ReviewReportResponse> {
+    return this.act(moderatorId, reportId, "LIFT_MESSAGING_RESTRICTION", note);
+  }
+
   /**
    * One transaction per action: the record, the report's status and -- for a
    * hide or a restore -- the subject's own column, so the log can never say
@@ -229,11 +275,12 @@ export class ModerationService {
       moderatorId,
       report.subjectKind,
       report.subjectId,
+      report.id,
     );
     const isMissing = subject.resolvedId === null;
 
     if (kind === "HIDE_SUBJECT" || kind === "RESTORE_SUBJECT") {
-      if (isMissing) {
+      if (isMissing || subject.messageGone) {
         throw new ConflictException(apiError("REPORTED_CONTENT_GONE"));
       }
       if (kind === "HIDE_SUBJECT" && subject.isHidden) {
@@ -245,6 +292,25 @@ export class ModerationService {
         throw new ConflictException(apiError("REPORTED_CONTENT_NOT_HIDDEN"));
       }
     }
+    if (isMessagingAction(kind)) {
+      if (report.subjectKind !== "MEMBER" && report.subjectKind !== "MESSAGE") {
+        throw new BadRequestException(
+          "Messaging is restricted only from a member or a message report",
+        );
+      }
+      if (subject.ownerId === null || subject.messagingRestricted === null) {
+        throw new ConflictException(apiError("REPORTED_CONTENT_GONE"));
+      }
+      if (kind === "RESTRICT_MESSAGING" && subject.messagingRestricted) {
+        throw new ConflictException(apiError("MESSAGING_ALREADY_RESTRICTED"));
+      }
+      if (
+        kind === "LIFT_MESSAGING_RESTRICTION" &&
+        !subject.messagingRestricted
+      ) {
+        throw new ConflictException(apiError("MESSAGING_NOT_RESTRICTED"));
+      }
+    }
     if (kind === "VIEW_SUBJECT" && isMissing) {
       throw new NotFoundException(apiError("REPORTED_CONTENT_GONE"));
     }
@@ -254,8 +320,15 @@ export class ModerationService {
 
     // Whatever the reporter typed, the record stores what it resolved to: a
     // username is not a stable identity, and an enforcement record has to
-    // name the thing it was about years later.
-    const subjectId = subject.resolvedId ?? report.subjectId;
+    // name the thing it was about years later. A restriction is about the
+    // account, so it is recorded against the member, from this report.
+    const messaging = isMessagingAction(kind);
+    const subjectKind: ReportSubjectKind = messaging
+      ? "MEMBER"
+      : report.subjectKind;
+    const subjectId = messaging
+      ? (subject.ownerId as string)
+      : (subject.resolvedId ?? report.subjectId);
     const nextStatus = statusAfter(kind, report.status);
 
     const action = await this.db.$transaction(async (tx) => {
@@ -264,7 +337,7 @@ export class ModerationService {
           moderatorId,
           kind,
           reportId: report.id,
-          subjectKind: report.subjectKind,
+          subjectKind,
           subjectId,
           note: note?.trim() || null,
         },
@@ -275,14 +348,24 @@ export class ModerationService {
         const hiddenAt = kind === "HIDE_SUBJECT" ? created.createdAt : null;
         await this.applyHide(tx, report.subjectKind, subjectId, hiddenAt);
       }
+      if (messaging) {
+        await tx.user.update({
+          where: { id: subjectId },
+          data: {
+            messagingRestrictedAt:
+              kind === "RESTRICT_MESSAGING" ? created.createdAt : null,
+          },
+        });
+      }
 
       if (nextStatus !== report.status) {
+        const resolved = nextStatus !== "OPEN";
         await tx.memberReport.update({
           where: { id: report.id },
           data: {
             status: nextStatus,
-            resolvedAt: resolvesReport(kind) ? created.createdAt : null,
-            resolvedById: resolvesReport(kind) ? moderatorId : null,
+            resolvedAt: resolved ? created.createdAt : null,
+            resolvedById: resolved ? moderatorId : null,
           },
         });
       }
@@ -332,6 +415,14 @@ export class ModerationService {
       });
       return;
     }
+    if (kind === "MESSAGE") {
+      // From the other participant only: its author keeps reading it.
+      await tx.message.update({
+        where: { id: subjectId },
+        data: { moderationHiddenAt: hiddenAt },
+      });
+      return;
+    }
     const { count } = await tx.sessionShare.updateMany({
       where: { token: subjectId },
       data: { moderationHiddenAt: hiddenAt },
@@ -348,6 +439,7 @@ export class ModerationService {
       moderatorId,
       row.subjectKind,
       row.subjectId,
+      row.id,
     );
     const otherOpenReports = await this.db.memberReport.count({
       where: {
@@ -382,6 +474,7 @@ export class ModerationService {
     moderatorId: string,
     kind: ReportSubjectKind,
     reportedId: string,
+    reportId: string,
   ): Promise<ResolvedSubjectDetail> {
     const missing: ResolvedSubjectDetail = {
       kind,
@@ -391,14 +484,52 @@ export class ModerationService {
       isHidden: false,
       owner: null,
       readable: false,
+      messagingRestricted: null,
+      messageGone: false,
     };
+    const unrelated = { messagingRestricted: null, messageGone: false };
+
+    if (kind === "MESSAGE") {
+      // The report's own capture, not the live message: it outlives the
+      // author deleting it and goes with the author's account.
+      const capture = await this.db.reportedMessageCapture.findUnique({
+        where: { reportId },
+        select: {
+          messageId: true,
+          author: {
+            select: { ...MEMBER_SELECT, messagingRestrictedAt: true },
+          },
+        },
+      });
+      if (!capture) return missing;
+      const message = await this.db.message.findUnique({
+        where: { id: capture.messageId },
+        select: { deletedAt: true, moderationHiddenAt: true },
+      });
+      return {
+        kind,
+        resolvedId: capture.messageId,
+        ownerId: capture.author.id,
+        // The words are read only through the logged view.
+        title: null,
+        isHidden: message?.moderationHiddenAt != null,
+        owner: capture.author,
+        readable: true,
+        messagingRestricted: capture.author.messagingRestrictedAt !== null,
+        messageGone: message === null || message.deletedAt !== null,
+      };
+    }
 
     if (kind === "MEMBER") {
       const user = await this.db.user.findFirst({
         where: {
           OR: [{ id: reportedId }, { username: reportedId.toLowerCase() }],
         },
-        select: { ...MEMBER_SELECT, moderationHiddenAt: true },
+        select: {
+          ...MEMBER_SELECT,
+          moderationHiddenAt: true,
+          messagingRestrictedAt: true,
+        },
       });
       if (!user) return missing;
       const isOwner = user.id === moderatorId;
@@ -425,6 +556,8 @@ export class ModerationService {
         isHidden: user.moderationHiddenAt !== null,
         owner: user,
         readable: isOwner || (!user.moderationHiddenAt && blocked === 0),
+        messagingRestricted: user.messagingRestrictedAt !== null,
+        messageGone: false,
       };
     }
 
@@ -460,6 +593,7 @@ export class ModerationService {
           { isOwner, isFollower },
           routine,
         ),
+        ...unrelated,
       };
     }
 
@@ -496,6 +630,7 @@ export class ModerationService {
         isHidden: comment.moderationHiddenAt !== null,
         owner: comment.user,
         readable,
+        ...unrelated,
       };
     }
 
@@ -520,6 +655,27 @@ export class ModerationService {
       // because the reporter sent it. A revoked or hidden link resolves for
       // nobody, and that includes them.
       readable: share.revokedAt === null && share.moderationHiddenAt === null,
+      ...unrelated,
+    };
+  }
+
+  /** MSG-09: a message report's capture, for the logged view only. */
+  private async messageContext(
+    reportId: string,
+  ): Promise<ReportedMessageContext | null> {
+    const capture = await this.db.reportedMessageCapture.findUnique({
+      where: { reportId },
+      select: {
+        messages: true,
+        capturedAt: true,
+        author: { select: MEMBER_SELECT },
+      },
+    });
+    if (!capture) return null;
+    return {
+      author: toMember(capture.author),
+      messages: readCapturedMessages(capture.messages),
+      capturedAt: capture.capturedAt.toISOString(),
     };
   }
 
@@ -554,6 +710,8 @@ function toPreview(
     isMissing: subject.resolvedId === null,
     isWithheld: subject.resolvedId !== null && !subject.readable,
     isHidden: subject.isHidden,
+    messagingRestricted: subject.messagingRestricted,
+    messageGone: subject.messageGone,
   };
 }
 
