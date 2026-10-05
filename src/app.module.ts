@@ -21,6 +21,7 @@ import { PushModule } from './notifications/push/push.module';
 import { ActivityModule } from './activity/activity.module';
 import { ModerationModule } from './moderation/moderation.module';
 import { SearchModule } from './search/search.module';
+import { RealtimeModule } from './realtime/realtime.module';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { SearchModule } from './search/search.module';
     ActivityModule,
     ModerationModule,
     SearchModule,
+    RealtimeModule,
   ],
   providers: [
     {

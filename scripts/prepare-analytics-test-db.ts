@@ -390,6 +390,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20261004180000_onboarding/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// MSG-06: realtime change signals.
+				readFileSync(
+					'prisma/migrations/20261005100000_realtime_signals/migration.sql',
+					'utf8',
 				),
     );
     prisma(
