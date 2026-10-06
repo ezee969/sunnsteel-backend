@@ -14,6 +14,7 @@ import {
 import { SupabaseJwtGuard } from "../auth/guards/supabase-jwt.guard";
 import type { RequestWithUser } from "../common/types/request-with-user";
 import {
+  ListConversationsQueryDto,
   MarkConversationReadDto,
   PageQueryDto,
   SendMessageDto,
@@ -28,8 +29,11 @@ export class MessagesController {
   constructor(private readonly messages: MessagesService) {}
 
   @Get()
-  list(@Req() req: RequestWithUser, @Query() query: PageQueryDto) {
-    return this.messages.list(req.user.id, query.cursor);
+  list(
+    @Req() req: RequestWithUser,
+    @Query() query: ListConversationsQueryDto,
+  ) {
+    return this.messages.list(req.user.id, query.cursor, query.box);
   }
 
   @Post()
@@ -41,6 +45,20 @@ export class MessagesController {
   @Get("unread")
   unread(@Req() req: RequestWithUser) {
     return this.messages.unreadCount(req.user.id);
+  }
+
+  /** MSG-02: the recipient takes a request into their inbox. */
+  @Post(":id/accept")
+  @HttpCode(204)
+  accept(@Req() req: RequestWithUser, @Param("id", ParseUUIDPipe) id: string) {
+    return this.messages.acceptRequest(req.user.id, id);
+  }
+
+  /** MSG-02: the recipient declines a request; its sender is not told. */
+  @Post(":id/decline")
+  @HttpCode(204)
+  decline(@Req() req: RequestWithUser, @Param("id", ParseUUIDPipe) id: string) {
+    return this.messages.declineRequest(req.user.id, id);
   }
 
   /** MSG-03: the reader has seen up to this message. */

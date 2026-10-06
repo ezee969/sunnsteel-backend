@@ -7,6 +7,8 @@ import {
   MinLength,
 } from "class-validator";
 import {
+  CONVERSATION_BOXES,
+  type ConversationBox,
   MESSAGE_BODY_MAX,
   MESSAGE_PERMISSIONS,
   type MarkConversationReadRequest,
@@ -56,4 +58,11 @@ export class UpdateMessagePermissionDto implements UpdateMessagePermissionReques
 export class MarkConversationReadDto implements MarkConversationReadRequest {
   @IsUUID()
   through!: string;
+}
+
+/** MSG-02: the inbox, or the requests waiting for the viewer. */
+export class ListConversationsQueryDto extends PageQueryDto {
+  @IsOptional()
+  @IsIn(CONVERSATION_BOXES as unknown as string[])
+  box?: ConversationBox;
 }

@@ -130,15 +130,11 @@ describe('MSG-01 message bodies', () => {
     assert.deepEqual(await validate(dto), []);
   });
 
-  it('takes only the settings MSG-01 offers', async () => {
+  it('takes the settings MSG-01 offers (MSG-02 adds Everyone)', async () => {
     for (const messagePermission of ['FOLLOWED', 'NOBODY']) {
       const dto = plainToInstance(UpdateMessagePermissionDto, { messagePermission });
       assert.deepEqual(await validate(dto), [], messagePermission);
     }
-    const everyone = plainToInstance(UpdateMessagePermissionDto, {
-      messagePermission: 'EVERYONE',
-    });
-    assert.equal((await validate(everyone)).length, 1);
   });
 });
 

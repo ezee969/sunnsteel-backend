@@ -149,10 +149,21 @@ model User {
   reportedMessageCaptures           ReportedMessageCapture[]
 }
 
-/// MSG-01: who may start a conversation with a member. MSG-02 adds EVERYONE.
+/// MSG-01: who may start a conversation with a member. MSG-02 adds EVERYONE:
+/// members they follow reach the inbox, anyone else lands in Requests.
 enum MessagePermission {
   FOLLOWED
   NOBODY
+  EVERYONE
+}
+
+/// MSG-02: a conversation's request state. A request is PENDING until its
+/// recipient accepts it (or writes in it); DECLINED hides it from them and is
+/// never told to its sender.
+enum ConversationStatus {
+  ACCEPTED
+  PENDING
+  DECLINED
 }
 
 /// MSG-01: one conversation per pair of members. `pairKey` is the two sorted
@@ -169,6 +180,12 @@ model Conversation {
   /// The newest message's time; the list orders by it, and a participant who
   /// cleared the conversation sees it again once this passes their clearedAt.
   lastMessageAt DateTime                  @default(now())
+  /// MSG-02: ACCEPTED for every conversation that is not a request. The
+  /// requester is `startedById`.
+  status        ConversationStatus        @default(ACCEPTED)
+  /// MSG-02: when the request was declined, for the 30-day wait before the
+  /// same member may ask again.
+  declinedAt    DateTime?
   participants  ConversationParticipant[]
   messages      Message[]
 

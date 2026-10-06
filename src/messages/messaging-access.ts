@@ -3,7 +3,7 @@ import type {
   MessagePermission,
 } from "@sunsteel/contracts";
 import type { DatabaseService } from "../database/database.service";
-import { conversationPairKey, maySendTo } from "./message-rules";
+import { admissionFor, conversationPairKey } from "./message-rules";
 
 type MessagingDb = Pick<
   DatabaseService,
@@ -49,15 +49,18 @@ export async function messagingStateFor(
     conversation && conversation._count.participants === 2
       ? conversation.id
       : null;
+  const admission = admissionFor({
+    permission: target.messagePermission,
+    recipientFollowsSender: follow !== null,
+    hasConversation: shared !== null,
+    senderHidden: hidden > 0,
+    senderRestricted: restricted > 0,
+  });
   return {
-    canStart: maySendTo({
-      permission: target.messagePermission,
-      recipientFollowsSender: follow !== null,
-      hasConversation: shared !== null,
-      senderHidden: hidden > 0,
-      senderRestricted: restricted > 0,
-    }),
+    canStart: admission !== "REFUSED",
     conversationId: shared,
+    // MSG-02: the first message would land in their Requests.
+    asRequest: admission === "REQUEST",
   };
 }
 

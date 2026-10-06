@@ -1,4 +1,8 @@
-import type { MessagePermission } from "@sunsteel/contracts";
+import {
+  type ConversationRequest,
+  MESSAGE_REQUEST_DECLINE_COOLDOWN_DAYS,
+  type MessagePermission,
+} from "@sunsteel/contracts";
 
 /**
  * MSG-01: the pure rules of direct messages. Who may start a conversation,
@@ -32,10 +36,76 @@ export interface StartFacts {
  * this is asked, with a 404.
  */
 export function maySendTo(facts: StartFacts): boolean {
-  if (facts.senderHidden || facts.senderRestricted) return false;
-  if (facts.hasConversation) return true;
-  if (facts.permission === "NOBODY") return false;
-  return facts.recipientFollowsSender;
+  return admissionFor(facts) !== "REFUSED";
+}
+
+/**
+ * MSG-02: where a would-be sender's first message goes. A member the
+ * recipient follows reaches the inbox under either setting that admits them;
+ * under Everyone anyone else's lands in Requests; Nobody refuses both.
+ */
+export function admissionFor(
+  facts: StartFacts,
+): "INBOX" | "REQUEST" | "REFUSED" {
+  if (facts.senderHidden || facts.senderRestricted) return "REFUSED";
+  if (facts.hasConversation) return "INBOX";
+  if (facts.permission === "NOBODY") return "REFUSED";
+  if (facts.recipientFollowsSender) return "INBOX";
+  return facts.permission === "EVERYONE" ? "REQUEST" : "REFUSED";
+}
+
+export type ConversationStatus = "ACCEPTED" | "PENDING" | "DECLINED";
+
+export interface RequestSendFacts {
+  status: ConversationStatus;
+  /** The viewer sent the request (`startedById`). */
+  viewerIsRequester: boolean;
+  /** The other member follows the viewer. */
+  otherFollowsViewer: boolean;
+  /** The other member's own setting. */
+  otherPermission: MessagePermission;
+  declinedAt: Date | null;
+  now: Date;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * MSG-02: what a message into a conversation does while it is a request (the
+ * owner's decisions at claim). Its recipient writing accepts it. Its sender
+ * waits after the first message, unless the recipient follows them now; after
+ * a decline they may ask again only after 30 days and only while the
+ * recipient still lets everyone in -- and are refused with the ordinary "not
+ * taking messages" answer, so a decline is never told.
+ */
+export function requestSendOutcome(
+  facts: RequestSendFacts,
+): "SEND" | "ACCEPT_AND_SEND" | "PENDING" | "REFUSED" | "REREQUEST" {
+  if (facts.status === "ACCEPTED") return "SEND";
+  if (!facts.viewerIsRequester) return "ACCEPT_AND_SEND";
+  if (facts.otherFollowsViewer && facts.otherPermission !== "NOBODY") {
+    return "ACCEPT_AND_SEND";
+  }
+  if (facts.status === "PENDING") return "PENDING";
+  if (facts.otherPermission !== "EVERYONE") return "REFUSED";
+  const waited =
+    facts.declinedAt === null ||
+    facts.now.getTime() - facts.declinedAt.getTime() >=
+      MESSAGE_REQUEST_DECLINE_COOLDOWN_DAYS * DAY_MS;
+  return waited ? "REREQUEST" : "REFUSED";
+}
+
+/**
+ * MSG-02: how a request reads for one participant. Its sender sees it waiting
+ * whether it is pending or declined; its recipient sees it until it is
+ * accepted.
+ */
+export function requestFor(
+  status: ConversationStatus,
+  viewerIsRequester: boolean,
+): ConversationRequest | null {
+  if (status === "ACCEPTED") return null;
+  return { direction: viewerIsRequester ? "OUTGOING" : "INCOMING" };
 }
 
 /**

@@ -10,6 +10,7 @@ import {
 import { Prisma } from "@prisma/client";
 import {
   apiError,
+  type ConversationBox,
   CONVERSATIONS_PAGE_SIZE,
   type ConversationMessage,
   type ConversationMessagesResponse,
@@ -33,9 +34,12 @@ import {
   conversationPairKey,
   decodeKeysetCursor,
   encodeKeysetCursor,
+  admissionFor,
+  type ConversationStatus,
   isAbandoned,
-  maySendTo,
   nextReadPosition,
+  requestFor,
+  requestSendOutcome,
   unreadCutoff,
   utcWallClock,
 } from "./message-rules";
@@ -68,6 +72,10 @@ interface OpenConversation {
   clearedAt: Date | null;
   /** MSG-03: the viewer's read position. */
   lastReadAt: Date | null;
+  /** MSG-02: a request's state, its sender, and when it was declined. */
+  status: ConversationStatus;
+  startedById: string | null;
+  declinedAt: Date | null;
   /** Null once the other member deleted their account. */
   other: MemberRow | null;
   viewer: ViewerMessaging;
@@ -83,6 +91,17 @@ interface ViewerMessaging {
 
 function toMessage(row: MessageRow, viewerId: string): ConversationMessage {
   return messageFor(row, viewerId);
+}
+
+/**
+ * MSG-02: which conversations a box holds, as raw SQL over `c`. The inbox has
+ * accepted conversations and the viewer's own requests, waiting or declined
+ * alike (a sender is never told); Requests has the ones waiting for them.
+ */
+function boxFilter(box: ConversationBox, viewerId: string): Prisma.Sql {
+  return box === "REQUESTS"
+    ? Prisma.sql`(c."status" = 'PENDING' AND c."startedById" IS DISTINCT FROM ${viewerId})`
+    : Prisma.sql`(c."status" = 'ACCEPTED' OR c."startedById" = ${viewerId})`;
 }
 
 function isUniqueViolation(error: unknown): boolean {
@@ -121,6 +140,12 @@ function isMissingRecord(error: unknown): boolean {
  * (or after the reader's "delete conversation") that is neither deleted nor
  * removed for them; sending moves the sender's position, and the count the
  * navigation shows is of conversations, never of messages.
+ *
+ * MSG-02: under Everyone, a stranger's first message opens a PENDING
+ * conversation in the recipient's Requests (`admissionFor`). Its sender waits
+ * until it is accepted, and a decline is never told; what a message does to
+ * a request is `requestSendOutcome`. Requests are listed apart and never
+ * counted in the navigation.
  */
 @Injectable()
 export class MessagesService {
@@ -129,6 +154,7 @@ export class MessagesService {
   async list(
     viewerId: string,
     cursorText?: string,
+    box: ConversationBox = "INBOX",
   ): Promise<ConversationsResponse> {
     const cursor = cursorText ? decodeKeysetCursor(cursorText) : null;
     if (cursorText && !cursor) throw new BadRequestException("Invalid cursor");
@@ -143,13 +169,18 @@ export class MessagesService {
         lastMessageAt: Date;
         clearedAt: Date | null;
         lastReadAt: Date | null;
+        status: ConversationStatus;
+        startedById: string | null;
+        declinedAt: Date | null;
       }>
     >`
-      SELECT c."id", c."lastMessageAt", p."clearedAt", p."lastReadAt"
+      SELECT c."id", c."lastMessageAt", p."clearedAt", p."lastReadAt",
+        c."status", c."startedById", c."declinedAt"
       FROM "ConversationParticipant" p
       JOIN "Conversation" c ON c."id" = p."conversationId"
       WHERE p."userId" = ${viewerId}
         AND (p."clearedAt" IS NULL OR c."lastMessageAt" > p."clearedAt")
+        AND ${boxFilter(box, viewerId)}
         AND NOT EXISTS (
           SELECT 1 FROM "ConversationParticipant" o
           WHERE o."conversationId" = c."id" AND o."userId" = ANY(${hidden}::text[])
@@ -175,6 +206,9 @@ export class MessagesService {
             lastMessageAt: row.lastMessageAt,
             clearedAt: row.clearedAt,
             lastReadAt: row.lastReadAt,
+            status: row.status,
+            startedById: row.startedById,
+            declinedAt: row.declinedAt,
             other: others.get(row.id) ?? null,
             viewer,
           },
@@ -286,15 +320,14 @@ export class MessagesService {
     if (viewer.restricted) {
       throw new ForbiddenException(apiError("MESSAGING_RESTRICTED"));
     }
-    if (
-      !maySendTo({
-        permission: recipient.messagePermission,
-        recipientFollowsSender: follow !== null,
-        hasConversation: false,
-        senderHidden: false,
-        senderRestricted: false,
-      })
-    ) {
+    const admission = admissionFor({
+      permission: recipient.messagePermission,
+      recipientFollowsSender: follow !== null,
+      hasConversation: false,
+      senderHidden: false,
+      senderRestricted: false,
+    });
+    if (admission === "REFUSED") {
       throw new ForbiddenException(apiError("MESSAGE_NOT_ADMITTED"));
     }
     const now = new Date();
@@ -327,6 +360,8 @@ export class MessagesService {
             startedById: viewerId,
             createdAt: now,
             lastMessageAt: now,
+            // MSG-02: a stranger's first message is a request.
+            status: admission === "REQUEST" ? "PENDING" : "ACCEPTED",
             participants: {
               // The starter has read their own first message.
               create: [
@@ -375,6 +410,13 @@ export class MessagesService {
     if (!open.other)
       throw new ConflictException(apiError("CONVERSATION_CLOSED"));
     const now = new Date();
+    const outcome = await this.requestOutcome(open, viewerId, now);
+    if (outcome === "PENDING") {
+      throw new ForbiddenException(apiError("REQUEST_PENDING"));
+    }
+    if (outcome === "REFUSED") {
+      throw new ForbiddenException(apiError("MESSAGE_NOT_ADMITTED"));
+    }
     await this.assertSendRate(viewerId, now);
     let row: MessageRow;
     try {
@@ -384,7 +426,16 @@ export class MessagesService {
         // removal that read the old `lastMessageAt`.
         await tx.conversation.update({
           where: { id: conversationId },
-          data: { lastMessageAt: now },
+          data: {
+            lastMessageAt: now,
+            // MSG-02: the recipient writing accepts a request; a sender
+            // asking again after the wait reopens it.
+            ...(outcome === "ACCEPT_AND_SEND"
+              ? { status: "ACCEPTED", declinedAt: null }
+              : outcome === "REREQUEST"
+                ? { status: "PENDING", declinedAt: null }
+                : {}),
+          },
         });
         // MSG-03: a sender has read what they answered.
         await tx.conversationParticipant.update({
@@ -405,7 +456,21 @@ export class MessagesService {
     const message = toMessage(row, viewerId);
     return {
       conversation: await this.summary(
-        { ...open, lastMessageAt: now, lastReadAt: now },
+        {
+          ...open,
+          lastMessageAt: now,
+          lastReadAt: now,
+          status:
+            outcome === "ACCEPT_AND_SEND"
+              ? "ACCEPTED"
+              : outcome === "REREQUEST"
+                ? "PENDING"
+                : open.status,
+          declinedAt:
+            outcome === "ACCEPT_AND_SEND" || outcome === "REREQUEST"
+              ? null
+              : open.declinedAt,
+        },
         viewerId,
         message,
       ),
@@ -485,6 +550,9 @@ export class MessagesService {
       select: {
         id: true,
         lastMessageAt: true,
+        status: true,
+        startedById: true,
+        declinedAt: true,
         participants: {
           select: {
             userId: true,
@@ -512,6 +580,9 @@ export class MessagesService {
       lastMessageAt: conversation.lastMessageAt,
       clearedAt: mine?.clearedAt ?? null,
       lastReadAt: mine?.lastReadAt ?? null,
+      status: conversation.status,
+      startedById: conversation.startedById,
+      declinedAt: conversation.declinedAt,
       other: other?.user ?? null,
       viewer: await this.viewerMessaging(viewerId),
     };
@@ -547,10 +618,16 @@ export class MessagesService {
       lastMessage: newest,
       lastMessageAt: newest ? open.lastMessageAt.toISOString() : null,
       canSend:
-        open.other !== null && !open.viewer.hidden && !open.viewer.restricted,
+        open.other !== null &&
+        !open.viewer.hidden &&
+        !open.viewer.restricted &&
+        ["SEND", "ACCEPT_AND_SEND", "REREQUEST"].includes(
+          await this.requestOutcome(open, viewerId, new Date()),
+        ),
       messagingRestricted: open.viewer.restricted,
       unread: await this.hasUnread(open, viewerId),
       lastReadAt: open.lastReadAt?.toISOString() ?? null,
+      request: requestFor(open.status, open.startedById === viewerId),
     };
   }
 
@@ -590,8 +667,7 @@ export class MessagesService {
    */
   async unreadCount(viewerId: string): Promise<UnreadConversationsResponse> {
     const hidden = await hiddenFromViewer(this.db, viewerId);
-    const rows = await this.db.$queryRaw<Array<{ count: bigint }>>`
-      SELECT count(*) AS "count"
+    const listed = Prisma.sql`
       FROM "ConversationParticipant" p
       JOIN "Conversation" c ON c."id" = p."conversationId"
       WHERE p."userId" = ${viewerId}
@@ -599,7 +675,14 @@ export class MessagesService {
         AND NOT EXISTS (
           SELECT 1 FROM "ConversationParticipant" o
           WHERE o."conversationId" = c."id" AND o."userId" = ANY(${hidden}::text[])
-        )
+        )`;
+    // MSG-02: requests are counted for their own tab and never here.
+    const requests = await this.db.$queryRaw<Array<{ count: bigint }>>`
+      SELECT count(*) AS "count" ${listed} AND ${boxFilter("REQUESTS", viewerId)}
+    `;
+    const rows = await this.db.$queryRaw<Array<{ count: bigint }>>`
+      SELECT count(*) AS "count" ${listed}
+        AND ${boxFilter("INBOX", viewerId)}
         AND EXISTS (
           SELECT 1 FROM "Message" m
           WHERE m."conversationId" = c."id"
@@ -612,7 +695,88 @@ export class MessagesService {
             )
         )
     `;
-    return { unreadConversations: Number(rows[0]?.count ?? 0) };
+    return {
+      unreadConversations: Number(rows[0]?.count ?? 0),
+      requests: Number(requests[0]?.count ?? 0),
+    };
+  }
+
+  /**
+   * MSG-02: the recipient accepts a request into their inbox; its sender may
+   * write again. Only a request waiting for this viewer can be accepted.
+   */
+  async acceptRequest(viewerId: string, conversationId: string): Promise<void> {
+    const open = await this.open(viewerId, conversationId);
+    if (open.status === "ACCEPTED" || open.startedById === viewerId) {
+      throw new ConflictException("This conversation is not a request to you");
+    }
+    await this.db.conversation.update({
+      where: { id: conversationId },
+      data: { status: "ACCEPTED", declinedAt: null },
+    });
+  }
+
+  /**
+   * MSG-02: the recipient declines a request. It leaves their Requests and
+   * what was sent is hidden from them (their delete-for-me), its sender is
+   * not told, and the same member may ask again only after 30 days.
+   */
+  async declineRequest(
+    viewerId: string,
+    conversationId: string,
+  ): Promise<void> {
+    const open = await this.open(viewerId, conversationId);
+    if (open.status !== "PENDING" || open.startedById === viewerId) {
+      throw new ConflictException("This conversation is not a request to you");
+    }
+    const now = new Date();
+    await this.db.$transaction([
+      this.db.conversation.update({
+        where: { id: conversationId },
+        data: { status: "DECLINED", declinedAt: now },
+      }),
+      this.db.conversationParticipant.update({
+        where: { conversationId_userId: { conversationId, userId: viewerId } },
+        data: {
+          clearedAt: open.lastMessageAt > now ? open.lastMessageAt : now,
+        },
+      }),
+    ]);
+  }
+
+  /** MSG-02: what a message from the viewer would do in this conversation. */
+  private async requestOutcome(
+    open: OpenConversation,
+    viewerId: string,
+    now: Date,
+  ) {
+    if (open.status === "ACCEPTED" || !open.other) return "SEND" as const;
+    const viewerIsRequester = open.startedById === viewerId;
+    const [follow, other] = viewerIsRequester
+      ? await Promise.all([
+          this.db.userFollow.findUnique({
+            where: {
+              followerId_followingId: {
+                followerId: open.other.id,
+                followingId: viewerId,
+              },
+            },
+            select: { followerId: true },
+          }),
+          this.db.user.findUnique({
+            where: { id: open.other.id },
+            select: { messagePermission: true },
+          }),
+        ])
+      : [null, null];
+    return requestSendOutcome({
+      status: open.status,
+      viewerIsRequester,
+      otherFollowsViewer: follow !== null,
+      otherPermission: other?.messagePermission ?? "FOLLOWED",
+      declinedAt: open.declinedAt,
+      now,
+    });
   }
 
   /** MSG-03: the other member wrote something after the viewer's position. */
