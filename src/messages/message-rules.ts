@@ -60,6 +60,32 @@ export function isAbandoned(
   );
 }
 
+/**
+ * MSG-03: where a reader's unread starts -- their read position or their
+ * "delete conversation", whichever is later -- or null when neither was ever
+ * set, so everything the other member wrote is new.
+ */
+export function unreadCutoff(
+  lastReadAt: Date | null,
+  clearedAt: Date | null,
+): Date | null {
+  if (!lastReadAt) return clearedAt;
+  if (!clearedAt) return lastReadAt;
+  return lastReadAt > clearedAt ? lastReadAt : clearedAt;
+}
+
+/**
+ * MSG-03: a read position only moves forward. The new position, or null when
+ * the message seen is not after the one already read up to -- a tab showing
+ * an older page must never make a newer message unread again.
+ */
+export function nextReadPosition(
+  current: Date | null,
+  seen: Date,
+): Date | null {
+  return current && current.getTime() >= seen.getTime() ? null : seen;
+}
+
 export interface KeysetCursor {
   at: Date;
   id: string;

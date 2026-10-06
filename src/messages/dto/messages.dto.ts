@@ -1,5 +1,6 @@
 import {
   IsIn,
+  IsUUID,
   IsOptional,
   IsString,
   MaxLength,
@@ -8,6 +9,7 @@ import {
 import {
   MESSAGE_BODY_MAX,
   MESSAGE_PERMISSIONS,
+  type MarkConversationReadRequest,
   type MessagePermission,
   type SendMessageRequest,
   type StartConversationRequest,
@@ -48,4 +50,10 @@ export class PageQueryDto {
 export class UpdateMessagePermissionDto implements UpdateMessagePermissionRequest {
   @IsIn(MESSAGE_PERMISSIONS)
   messagePermission!: MessagePermission;
+}
+
+/** MSG-03: the newest message the reader has on screen. */
+export class MarkConversationReadDto implements MarkConversationReadRequest {
+  @IsUUID()
+  through!: string;
 }

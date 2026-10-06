@@ -23,6 +23,7 @@ import {
   type SendMessageRequest,
   type SendMessageResponse,
   type StartConversationRequest,
+  type UnreadConversationsResponse,
 } from "@sunsteel/contracts";
 import { DatabaseService } from "../database/database.service";
 import { hiddenFromViewer, isHiddenFromViewer } from "../users/member-blocks";
@@ -34,6 +35,8 @@ import {
   encodeKeysetCursor,
   isAbandoned,
   maySendTo,
+  nextReadPosition,
+  unreadCutoff,
   utcWallClock,
 } from "./message-rules";
 
@@ -63,6 +66,8 @@ interface OpenConversation {
   id: string;
   lastMessageAt: Date;
   clearedAt: Date | null;
+  /** MSG-03: the viewer's read position. */
+  lastReadAt: Date | null;
   /** Null once the other member deleted their account. */
   other: MemberRow | null;
   viewer: ViewerMessaging;
@@ -110,6 +115,12 @@ function isMissingRecord(error: unknown): boolean {
  * other participant and keeps its text for its author (`messageFor`), and a
  * member whose messaging moderation restricted can no longer send or start a
  * conversation (403 `MESSAGING_RESTRICTED`) while everything else stays.
+ *
+ * MSG-03: each participant has a read position, for that reader only. A
+ * conversation is unread while the other member wrote something after it
+ * (or after the reader's "delete conversation") that is neither deleted nor
+ * removed for them; sending moves the sender's position, and the count the
+ * navigation shows is of conversations, never of messages.
  */
 @Injectable()
 export class MessagesService {
@@ -127,9 +138,14 @@ export class MessagesService {
     ]);
     const take = CONVERSATIONS_PAGE_SIZE;
     const rows = await this.db.$queryRaw<
-      Array<{ id: string; lastMessageAt: Date; clearedAt: Date | null }>
+      Array<{
+        id: string;
+        lastMessageAt: Date;
+        clearedAt: Date | null;
+        lastReadAt: Date | null;
+      }>
     >`
-      SELECT c."id", c."lastMessageAt", p."clearedAt"
+      SELECT c."id", c."lastMessageAt", p."clearedAt", p."lastReadAt"
       FROM "ConversationParticipant" p
       JOIN "Conversation" c ON c."id" = p."conversationId"
       WHERE p."userId" = ${viewerId}
@@ -158,6 +174,7 @@ export class MessagesService {
             id: row.id,
             lastMessageAt: row.lastMessageAt,
             clearedAt: row.clearedAt,
+            lastReadAt: row.lastReadAt,
             other: others.get(row.id) ?? null,
             viewer,
           },
@@ -311,7 +328,11 @@ export class MessagesService {
             createdAt: now,
             lastMessageAt: now,
             participants: {
-              create: [{ userId: viewerId }, { userId: recipient.id }],
+              // The starter has read their own first message.
+              create: [
+                { userId: viewerId, lastReadAt: now },
+                { userId: recipient.id },
+              ],
             },
             messages: {
               create: { senderId: viewerId, body, createdAt: now },
@@ -365,6 +386,11 @@ export class MessagesService {
           where: { id: conversationId },
           data: { lastMessageAt: now },
         });
+        // MSG-03: a sender has read what they answered.
+        await tx.conversationParticipant.update({
+          where: { conversationId_userId: { conversationId, userId: viewerId } },
+          data: { lastReadAt: now },
+        });
         return tx.message.create({
           data: { conversationId, senderId: viewerId, body, createdAt: now },
           select: MESSAGE_SELECT,
@@ -379,7 +405,7 @@ export class MessagesService {
     const message = toMessage(row, viewerId);
     return {
       conversation: await this.summary(
-        { ...open, lastMessageAt: now },
+        { ...open, lastMessageAt: now, lastReadAt: now },
         viewerId,
         message,
       ),
@@ -463,6 +489,7 @@ export class MessagesService {
           select: {
             userId: true,
             clearedAt: true,
+            lastReadAt: true,
             user: { select: MEMBER_SELECT },
           },
         },
@@ -484,6 +511,7 @@ export class MessagesService {
       id: conversation.id,
       lastMessageAt: conversation.lastMessageAt,
       clearedAt: mine?.clearedAt ?? null,
+      lastReadAt: mine?.lastReadAt ?? null,
       other: other?.user ?? null,
       viewer: await this.viewerMessaging(viewerId),
     };
@@ -521,7 +549,89 @@ export class MessagesService {
       canSend:
         open.other !== null && !open.viewer.hidden && !open.viewer.restricted,
       messagingRestricted: open.viewer.restricted,
+      unread: await this.hasUnread(open, viewerId),
+      lastReadAt: open.lastReadAt?.toISOString() ?? null,
     };
+  }
+
+  /**
+   * MSG-03: moves the viewer's read position to a message they have on
+   * screen, forward only. The message must be in the conversation; the gate
+   * is `open`, as for every other read.
+   */
+  async markRead(
+    viewerId: string,
+    conversationId: string,
+    through: string,
+  ): Promise<void> {
+    const open = await this.open(viewerId, conversationId);
+    const message = await this.db.message.findFirst({
+      where: { id: through, conversationId },
+      select: { createdAt: true },
+    });
+    if (!message) throw new NotFoundException(apiError("MESSAGE_NOT_FOUND"));
+    if (nextReadPosition(open.lastReadAt, message.createdAt) === null) return;
+    // The condition repeats the rule in the write, so two tabs marking at once
+    // can never move the position back.
+    await this.db.conversationParticipant.updateMany({
+      where: {
+        conversationId,
+        userId: viewerId,
+        OR: [{ lastReadAt: null }, { lastReadAt: { lt: message.createdAt } }],
+      },
+      data: { lastReadAt: message.createdAt },
+    });
+  }
+
+  /**
+   * MSG-03: how many of the viewer's conversations have something new -- the
+   * list's own filter (listed, nobody hidden from the viewer in it) and the
+   * unread rule of `hasUnread`, in one query for the navigation.
+   */
+  async unreadCount(viewerId: string): Promise<UnreadConversationsResponse> {
+    const hidden = await hiddenFromViewer(this.db, viewerId);
+    const rows = await this.db.$queryRaw<Array<{ count: bigint }>>`
+      SELECT count(*) AS "count"
+      FROM "ConversationParticipant" p
+      JOIN "Conversation" c ON c."id" = p."conversationId"
+      WHERE p."userId" = ${viewerId}
+        AND (p."clearedAt" IS NULL OR c."lastMessageAt" > p."clearedAt")
+        AND NOT EXISTS (
+          SELECT 1 FROM "ConversationParticipant" o
+          WHERE o."conversationId" = c."id" AND o."userId" = ANY(${hidden}::text[])
+        )
+        AND EXISTS (
+          SELECT 1 FROM "Message" m
+          WHERE m."conversationId" = c."id"
+            AND m."senderId" <> ${viewerId}
+            AND m."deletedAt" IS NULL
+            AND m."moderationHiddenAt" IS NULL
+            AND m."createdAt" > COALESCE(
+              GREATEST(p."lastReadAt", p."clearedAt"),
+              '-infinity'::timestamp
+            )
+        )
+    `;
+    return { unreadConversations: Number(rows[0]?.count ?? 0) };
+  }
+
+  /** MSG-03: the other member wrote something after the viewer's position. */
+  private async hasUnread(
+    open: OpenConversation,
+    viewerId: string,
+  ): Promise<boolean> {
+    if (!open.other) return false;
+    const cutoff = unreadCutoff(open.lastReadAt, open.clearedAt);
+    const count = await this.db.message.count({
+      where: {
+        conversationId: open.id,
+        senderId: { not: viewerId },
+        deletedAt: null,
+        moderationHiddenAt: null,
+        ...(cutoff ? { createdAt: { gt: cutoff } } : {}),
+      },
+    });
+    return count > 0;
   }
 
   private async otherMembers(

@@ -14,6 +14,7 @@ import {
 import { SupabaseJwtGuard } from "../auth/guards/supabase-jwt.guard";
 import type { RequestWithUser } from "../common/types/request-with-user";
 import {
+  MarkConversationReadDto,
   PageQueryDto,
   SendMessageDto,
   StartConversationDto,
@@ -34,6 +35,23 @@ export class MessagesController {
   @Post()
   start(@Req() req: RequestWithUser, @Body() dto: StartConversationDto) {
     return this.messages.start(req.user.id, dto);
+  }
+
+  /** MSG-03: the navigation's count of conversations with something new. */
+  @Get("unread")
+  unread(@Req() req: RequestWithUser) {
+    return this.messages.unreadCount(req.user.id);
+  }
+
+  /** MSG-03: the reader has seen up to this message. */
+  @Post(":id/read")
+  @HttpCode(204)
+  markRead(
+    @Req() req: RequestWithUser,
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body() dto: MarkConversationReadDto,
+  ) {
+    return this.messages.markRead(req.user.id, id, dto.through);
   }
 
   @Get(":id/messages")

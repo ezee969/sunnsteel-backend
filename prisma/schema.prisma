@@ -181,6 +181,9 @@ model ConversationParticipant {
   /// "Delete conversation": what was sent until then is hidden from this
   /// participant only. Null when they never deleted it.
   clearedAt      DateTime?
+  /// MSG-03: this reader's read position, never shown to anyone else. Null
+  /// when they have never read the conversation.
+  lastReadAt     DateTime?
   createdAt      DateTime     @default(now())
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)

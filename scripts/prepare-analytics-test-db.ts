@@ -414,6 +414,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20261006100000_message_moderation/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// MSG-03: unread state.
+				readFileSync(
+					'prisma/migrations/20261006140000_unread_state/migration.sql',
+					'utf8',
 				),
     );
     prisma(
