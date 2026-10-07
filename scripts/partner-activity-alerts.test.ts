@@ -158,6 +158,7 @@ test('notification preferences expose both partner categories as opt-ins', () =>
     notifyStreakAtRisk: true,
     notifyPartnerSession: false,
     notifyPartnerAchievement: true,
+    notifyMessages: true,
     quietHoursStartMinute: null,
     quietHoursEndMinute: null,
     reminderMinuteOfDay: null,

@@ -18,6 +18,7 @@ const PREFERENCE_SELECT = {
   notifyStreakAtRisk: true,
   notifyPartnerSession: true,
   notifyPartnerAchievement: true,
+  notifyMessages: true,
   quietHoursStartMinute: true,
   quietHoursEndMinute: true,
   reminderMinuteOfDay: true,
@@ -30,6 +31,7 @@ type PreferenceRow = {
   notifyStreakAtRisk: boolean;
   notifyPartnerSession: boolean;
   notifyPartnerAchievement: boolean;
+  notifyMessages: boolean;
   quietHoursStartMinute: number | null;
   quietHoursEndMinute: number | null;
   reminderMinuteOfDay: number | null;
@@ -52,6 +54,7 @@ export function mapPreferences(row: PreferenceRow): NotificationPreferences {
       STREAK_AT_RISK: row.notifyStreakAtRisk,
       TRAINING_PARTNER_SESSION: row.notifyPartnerSession,
       TRAINING_PARTNER_ACHIEVEMENT: row.notifyPartnerAchievement,
+      MESSAGE: row.notifyMessages,
     },
     quietHours,
     reminder: { minuteOfDay: row.reminderMinuteOfDay },
@@ -121,6 +124,9 @@ export class NotificationPreferencesService {
     if (input.categories?.STREAK_AT_RISK !== undefined) {
       data.notifyStreakAtRisk = input.categories.STREAK_AT_RISK;
     }
+    if (input.categories?.MESSAGE !== undefined) {
+      data.notifyMessages = input.categories.MESSAGE;
+    }
     if (changesPartnerSession && current) {
       const enabled = input.categories!.TRAINING_PARTNER_SESSION!;
       data.notifyPartnerSession = enabled;
@@ -188,6 +194,7 @@ export class NotificationPreferencesService {
   ): Promise<void> {
     const prefixes: string[] = [];
     if (input.categories?.REST_ALERT === false) prefixes.push("rest:");
+    if (input.categories?.MESSAGE === false) prefixes.push("message:");
     if (
       input.categories?.TRAINING_REMINDER === false ||
       input.categories?.STREAK_AT_RISK === false ||

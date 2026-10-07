@@ -23,6 +23,9 @@ interface ServerCopy {
   trainingDayBody: (routines: string[]) => string;
   partnerSessionTitle: (name: string) => string;
   partnerAchievementTitle: (name: string) => string;
+  /** MSG-08: names the sender, never the text. */
+  messageTitle: (name: string) => string;
+  messageBody: string;
   workoutFallback: string;
   achievementFallback: string;
   /** EXPORT-01: what the export leaves out on purpose, and why. */
@@ -55,6 +58,8 @@ export const SERVER_COPY: Record<AppLocale, ServerCopy> = {
       `${englishList(routines)} is planned for today.`,
     partnerSessionTitle: (name) => `${name} completed a workout`,
     partnerAchievementTitle: (name) => `${name} earned an achievement`,
+    messageTitle: (name) => `${name} sent you a message`,
+    messageBody: "Open Sunnsteel to read it.",
     workoutFallback: "Workout",
     achievementFallback: "Achievement",
     exportOmitted: [
@@ -76,6 +81,8 @@ export const SERVER_COPY: Record<AppLocale, ServerCopy> = {
       `Planificado para hoy: ${spanishList(routines)}.`,
     partnerSessionTitle: (name) => `${name} completó un entrenamiento`,
     partnerAchievementTitle: (name) => `${name} obtuvo un logro`,
+    messageTitle: (name) => `${name} te envió un mensaje`,
+    messageBody: "Abre Sunnsteel para leerlo.",
     workoutFallback: "Entrenamiento",
     achievementFallback: "Logro",
     exportOmitted: [

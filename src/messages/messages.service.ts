@@ -11,6 +11,7 @@ import { Prisma } from "@prisma/client";
 import {
   apiError,
   type ConversationBox,
+  MESSAGE_PUSH_DELAY_SECONDS,
   CONVERSATIONS_PAGE_SIZE,
   type ConversationMessage,
   type ConversationMessagesResponse,
@@ -29,6 +30,7 @@ import {
 import { DatabaseService } from "../database/database.service";
 import { hiddenFromViewer, isHiddenFromViewer } from "../users/member-blocks";
 import { normalizeUsername } from "../users/username";
+import { recipientLocale, serverCopy } from "../i18n/server-copy";
 import { messageFor } from "./message-moderation";
 import {
   conversationPairKey,
@@ -37,6 +39,7 @@ import {
   admissionFor,
   type ConversationStatus,
   isAbandoned,
+  maySchedulePush,
   nextReadPosition,
   requestFor,
   requestSendOutcome,
@@ -146,6 +149,12 @@ function isMissingRecord(error: unknown): boolean {
  * until it is accepted, and a decline is never told; what a message does to
  * a request is `requestSendOutcome`. Requests are listed apart and never
  * counted in the navigation.
+ *
+ * MSG-08: a message into an accepted conversation schedules one push to the
+ * other member (`schedulePush`), naming the sender and never the text; it
+ * waits `MESSAGE_PUSH_DELAY_SECONDS`, the sweep drops it if they read the
+ * conversation meanwhile, and nothing more pushes until they have read it.
+ * A request never pushes.
  */
 @Injectable()
 export class MessagesService {
@@ -387,6 +396,9 @@ export class MessagesService {
       return this.send(viewerId, raced.id, request);
     }
     const open = await this.open(viewerId, created.id);
+    if (admission === "INBOX") {
+      await this.schedulePush(created.id, viewerId, recipient.id, now);
+    }
     const message = toMessage(created.messages[0], viewerId);
     return {
       conversation: await this.summary(open, viewerId, message),
@@ -439,7 +451,9 @@ export class MessagesService {
         });
         // MSG-03: a sender has read what they answered.
         await tx.conversationParticipant.update({
-          where: { conversationId_userId: { conversationId, userId: viewerId } },
+          where: {
+            conversationId_userId: { conversationId, userId: viewerId },
+          },
           data: { lastReadAt: now },
         });
         return tx.message.create({
@@ -452,6 +466,9 @@ export class MessagesService {
         throw new NotFoundException(apiError("CONVERSATION_NOT_FOUND"));
       }
       throw error;
+    }
+    if ((outcome === "SEND" || outcome === "ACCEPT_AND_SEND") && open.other) {
+      await this.schedulePush(conversationId, viewerId, open.other.id, now);
     }
     const message = toMessage(row, viewerId);
     return {
@@ -742,6 +759,71 @@ export class MessagesService {
         },
       }),
     ]);
+  }
+
+  /**
+   * MSG-08: one push to the other member, waiting a moment, only to a device
+   * that can receive it and only when the conversation has not pushed since
+   * they last read it. A failure here never fails the send.
+   */
+  private async schedulePush(
+    conversationId: string,
+    senderId: string,
+    recipientId: string,
+    now: Date,
+  ): Promise<void> {
+    try {
+      const [participant, devices, sender] = await Promise.all([
+        this.db.conversationParticipant.findUnique({
+          where: {
+            conversationId_userId: { conversationId, userId: recipientId },
+          },
+          select: { lastPushedAt: true, lastReadAt: true, clearedAt: true },
+        }),
+        this.db.pushSubscription.count({ where: { userId: recipientId } }),
+        this.db.user.findUnique({
+          where: { id: senderId },
+          select: { name: true, username: true },
+        }),
+      ]);
+      if (!participant || devices === 0 || !sender) return;
+      if (
+        !maySchedulePush(
+          participant.lastPushedAt,
+          unreadCutoff(participant.lastReadAt, participant.clearedAt),
+        )
+      ) {
+        return;
+      }
+      const copy = serverCopy(await recipientLocale(this.db, recipientId));
+      const name = sender.name.trim() || `@${sender.username ?? ""}`;
+      const payload = {
+        kind: "MESSAGE",
+        title: copy.messageTitle(name),
+        body: copy.messageBody,
+        url: `/messages/${conversationId}`,
+        tag: `message:${conversationId}`,
+        conversationId,
+      };
+      // The first unread message decides when it goes; later ones find the
+      // row already waiting and leave it.
+      await this.db.scheduledPush.createMany({
+        data: [
+          {
+            userId: recipientId,
+            dedupeKey: `message:${conversationId}:${recipientId}`,
+            sendAt: new Date(now.getTime() + MESSAGE_PUSH_DELAY_SECONDS * 1000),
+            // Written here rather than by the database's clock, which reads
+            // the session's zone into a UTC column.
+            createdAt: now,
+            payload,
+          },
+        ],
+        skipDuplicates: true,
+      });
+    } catch {
+      // A push is a courtesy; the message is already sent.
+    }
   }
 
   /** MSG-02: what a message from the viewer would do in this conversation. */

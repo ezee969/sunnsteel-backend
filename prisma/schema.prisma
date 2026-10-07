@@ -110,6 +110,8 @@ model User {
   // from before that choice is never replayed as a new alert.
   notifyPartnerSession              Boolean                      @default(false)
   notifyPartnerAchievement          Boolean                      @default(false)
+  /// MSG-08: message pushes, on by default like the training categories.
+  notifyMessages                    Boolean                      @default(true)
   partnerSessionAlertsEnabledAt     DateTime?
   partnerAchievementAlertsEnabledAt DateTime?
   quietHoursStartMinute             Int?
@@ -201,6 +203,9 @@ model ConversationParticipant {
   /// MSG-03: this reader's read position, never shown to anyone else. Null
   /// when they have never read the conversation.
   lastReadAt     DateTime?
+  /// MSG-08: when this reader was last sent a push for it. Nothing more is
+  /// pushed until they have read past it.
+  lastPushedAt   DateTime?
   createdAt      DateTime     @default(now())
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)

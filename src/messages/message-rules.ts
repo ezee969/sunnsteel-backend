@@ -156,6 +156,43 @@ export function nextReadPosition(
   return current && current.getTime() >= seen.getTime() ? null : seen;
 }
 
+/**
+ * MSG-08: whether a new message may schedule a push to its recipient. A
+ * conversation pushes once until it is read (the owner's decision): never
+ * pushed, or read since the last push.
+ */
+export function maySchedulePush(
+  lastPushedAt: Date | null,
+  cutoff: Date | null,
+): boolean {
+  if (lastPushedAt === null) return true;
+  return cutoff !== null && cutoff.getTime() >= lastPushedAt.getTime();
+}
+
+/**
+ * MSG-08: whether a waiting push still goes out when it falls due. It goes
+ * while the newest message from the other member is unread, so one written
+ * after the recipient read the earlier ones still reaches them; it is
+ * dropped once they have read it (the owner's decision: a live conversation
+ * does not buzz), and when the conversation is no longer theirs to read --
+ * gone, a request again, or a block or a hide between the two.
+ */
+export function messagePushStillDue(facts: {
+  /** Null when the recipient is no longer in the conversation. */
+  cutoff: Date | null | undefined;
+  /** The other member's newest message they can still read, if any. */
+  newestFromThem: Date | null;
+  status: ConversationStatus | null;
+  hidden: boolean;
+}): boolean {
+  if (facts.cutoff === undefined || facts.status !== "ACCEPTED") return false;
+  if (facts.hidden || facts.newestFromThem === null) return false;
+  return (
+    facts.cutoff === null ||
+    facts.cutoff.getTime() < facts.newestFromThem.getTime()
+  );
+}
+
 export interface KeysetCursor {
   at: Date;
   id: string;

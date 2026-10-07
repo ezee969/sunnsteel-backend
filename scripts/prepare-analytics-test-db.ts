@@ -426,6 +426,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20261006180000_message_requests/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// MSG-08: message notifications.
+				readFileSync(
+					'prisma/migrations/20261006200000_message_notifications/migration.sql',
+					'utf8',
 				),
     );
     prisma(

@@ -36,6 +36,10 @@ class NotificationCategoriesDto implements Partial<
   @IsOptional()
   @IsBoolean()
   TRAINING_PARTNER_ACHIEVEMENT?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  MESSAGE?: boolean;
 }
 
 class QuietHoursDto implements QuietHours {

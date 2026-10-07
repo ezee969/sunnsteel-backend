@@ -3,6 +3,11 @@ import { Interval } from "@nestjs/schedule";
 import { Prisma } from "@prisma/client";
 import type { PushPayload } from "@sunsteel/contracts";
 import { DatabaseService } from "../../database/database.service";
+import {
+  messagePushStillDue,
+  unreadCutoff,
+} from "../../messages/message-rules";
+import { isHiddenFromViewer } from "../../users/member-blocks";
 import { PushConfigService } from "./push-config.service";
 import { PushSenderService } from "./push-sender.service";
 
@@ -67,6 +72,60 @@ export class ScheduledPushService {
     await this.db.scheduledPush.deleteMany({ where: { userId, dedupeKey } });
   }
 
+  /**
+   * MSG-08: a message push is asked again when it falls due -- dropped once
+   * the recipient has read the other member's newest message or can no
+   * longer read the conversation. The sweep then records when it went, so
+   * the conversation pushes once until read.
+   */
+  private async messagePushStillDue(
+    userId: string,
+    payload: Extract<PushPayload, { kind: "MESSAGE" }>,
+  ): Promise<boolean> {
+    const participant = await this.db.conversationParticipant.findUnique({
+      where: {
+        conversationId_userId: {
+          conversationId: payload.conversationId,
+          userId,
+        },
+      },
+      select: {
+        lastReadAt: true,
+        clearedAt: true,
+        conversation: {
+          select: {
+            status: true,
+            participants: {
+              where: { userId: { not: userId } },
+              select: { userId: true },
+            },
+          },
+        },
+      },
+    });
+    const other = participant?.conversation.participants[0]?.userId;
+    const newest = other
+      ? await this.db.message.findFirst({
+          where: {
+            conversationId: payload.conversationId,
+            senderId: other,
+            deletedAt: null,
+            moderationHiddenAt: null,
+          },
+          orderBy: { createdAt: "desc" },
+          select: { createdAt: true },
+        })
+      : null;
+    return messagePushStillDue({
+      cutoff: participant
+        ? unreadCutoff(participant.lastReadAt, participant.clearedAt)
+        : undefined,
+      newestFromThem: newest?.createdAt ?? null,
+      status: participant?.conversation.status ?? null,
+      hidden: other ? await isHiddenFromViewer(this.db, userId, other) : true,
+    });
+  }
+
   @Interval(PUSH_SWEEP_INTERVAL_MS)
   async sweep(): Promise<void> {
     if (this.sweeping || !this.config.isConfigured) return;
@@ -76,23 +135,48 @@ export class ScheduledPushService {
       // instances sweeping at once cannot both take the same row and send the
       // alert twice. A crash after claiming loses one alert; sending twice
       // would wake the athlete mid-set, which is the worse failure.
+      // `sendAt` is a timestamp written as UTC, so it is compared with UTC:
+      // a bare NOW() is read in the session's zone, which on a server set to
+      // anything else made every push due hours early.
       const claimed = await this.db.$queryRaw<ClaimedPush[]>`
         DELETE FROM "ScheduledPush"
-        WHERE "sendAt" <= NOW()
+        WHERE "sendAt" <= (NOW() AT TIME ZONE 'UTC')
         RETURNING "id", "userId", "payload"
       `;
       if (claimed.length === 0) return;
 
       await Promise.all(
-        claimed.map((row) =>
-          this.sender
-            .sendToUser(row.userId, row.payload as unknown as PushPayload)
-            .catch((error: unknown) => {
-              this.logger.warn(
-                `Scheduled push ${row.id} could not be delivered: ${String(error)}`,
-              );
-            }),
-        ),
+        claimed.map(async (row) => {
+          const payload = row.payload as unknown as PushPayload;
+          try {
+            if (payload.kind !== "MESSAGE") {
+              await this.sender.sendToUser(row.userId, payload);
+              return;
+            }
+            if (!(await this.messagePushStillDue(row.userId, payload))) {
+              return;
+            }
+            const result = await this.sender.sendToUser(row.userId, payload);
+            // Only a push a device took counts: one the switch or the quiet
+            // window held back, or none that arrived, leaves the next message
+            // free to be the one that reaches them.
+            if (result.sent > 0) {
+              await this.db.conversationParticipant.update({
+                where: {
+                  conversationId_userId: {
+                    conversationId: payload.conversationId,
+                    userId: row.userId,
+                  },
+                },
+                data: { lastPushedAt: new Date() },
+              });
+            }
+          } catch (error: unknown) {
+            this.logger.warn(
+              `Scheduled push ${row.id} could not be delivered: ${String(error)}`,
+            );
+          }
+        }),
       );
     } catch (error) {
       // A failed sweep must never take the process down; the next tick retries.
