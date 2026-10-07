@@ -9,9 +9,11 @@ import type { DatabaseService } from "../database/database.service";
 import { isHiddenFromViewer } from "../users/member-blocks";
 import {
   attachmentFor,
-  messageRoutines,
-  type MessageRoutines,
-} from "./message-routines";
+  type AttachmentKind,
+  messageObjects,
+  type MessageObjects,
+  NO_OBJECTS,
+} from "./message-attachments";
 
 /**
  * MSG-09: what a moderator may do to messages, and what each participant
@@ -25,8 +27,8 @@ export interface StoredMessage {
   body: string | null;
   deletedAt: Date | null;
   moderationHiddenAt: Date | null;
-  /** MSG-07: what it carries beside its text. */
-  attachmentKind?: "ROUTINE" | null;
+  /** MSG-07 and MSG-10: what it carries beside its text. */
+  attachmentKind?: AttachmentKind | null;
   attachmentId?: string | null;
   createdAt: Date;
 }
@@ -49,7 +51,7 @@ export function isReadableBy(row: StoredMessage, viewerId: string): boolean {
 export function messageFor(
   row: StoredMessage,
   viewerId: string,
-  routines: MessageRoutines = new Map(),
+  objects: MessageObjects = NO_OBJECTS,
 ): ConversationMessage {
   const deleted = row.deletedAt !== null;
   const hidden = !deleted && row.moderationHiddenAt !== null;
@@ -59,7 +61,7 @@ export function messageFor(
     body: isReadableBy(row, viewerId) ? row.body : null,
     deleted,
     hiddenByModeration: hidden,
-    attachment: attachmentFor(row, viewerId, routines),
+    attachment: attachmentFor(row, viewerId, objects),
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -87,7 +89,7 @@ export function captureMessages(
   rows: StoredMessage[],
   reportedId: string,
   reporterId: string,
-  routines: MessageRoutines = new Map(),
+  objects: MessageObjects = NO_OBJECTS,
 ): CapturedMessage[] {
   const ordered = [...rows].sort(
     (a, b) =>
@@ -99,10 +101,22 @@ export function captureMessages(
   return ordered
     .slice(Math.max(0, at - MESSAGE_REPORT_CONTEXT_BEFORE), at + 1)
     .map((row) => {
-      const seen = messageFor(row, reporterId, routines);
-      // MSG-07: a routine by the name the reporter saw, and nothing more of it.
+      const seen = messageFor(row, reporterId, objects);
+      // MSG-07 and MSG-10: what it carried, by the name the reporter saw,
+      // empty when it was no longer available, and nothing more of it.
+      const attachment = seen.attachment;
       const routineName =
-        seen.attachment === null ? null : (seen.attachment.routine?.name ?? "");
+        attachment?.kind === "ROUTINE"
+          ? (attachment.routine?.name ?? "")
+          : null;
+      const workoutName =
+        attachment?.kind === "WORKOUT"
+          ? attachment.workout
+            ? [attachment.workout.routineName, attachment.workout.dayName]
+                .filter(Boolean)
+                .join(" · ")
+            : ""
+          : null;
       return {
         id: row.id,
         fromReporter: row.senderId === reporterId,
@@ -110,6 +124,7 @@ export function captureMessages(
         deleted: seen.deleted,
         isReported: row.id === reportedId,
         routineName,
+        workoutName,
         createdAt: seen.createdAt,
       };
     });
@@ -149,7 +164,7 @@ export interface MessageCaptureData {
 
 type CaptureDb = Pick<
   DatabaseService,
-  "message" | "userBlock" | "user" | "routine"
+  "message" | "userBlock" | "user" | "routine" | "workoutSession"
 >;
 
 /**
@@ -224,7 +239,7 @@ export async function captureReportedMessage(
       rows,
       message.id,
       reporterId,
-      await messageRoutines(db, rows),
+      await messageObjects(db, rows),
     ),
   };
 }

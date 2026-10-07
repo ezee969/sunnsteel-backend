@@ -477,6 +477,10 @@ export class AccountExportService {
           ...(message.attachmentKind === "ROUTINE" && message.attachmentId
             ? { routineId: message.attachmentId }
             : {}),
+          // MSG-10: a workout it shared, by id.
+          ...(message.attachmentKind === "WORKOUT" && message.attachmentId
+            ? { sessionId: message.attachmentId }
+            : {}),
           createdAt: iso(message.createdAt),
         })),
         reportsFiled: reports.map((report) => ({

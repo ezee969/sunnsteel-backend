@@ -40,6 +40,11 @@ export class StartConversationDto implements StartConversationRequest {
   @IsOptional()
   @IsUUID()
   routineId?: string;
+
+  /** MSG-10: one of the sender's own finished workouts. */
+  @IsOptional()
+  @IsUUID()
+  sessionId?: string;
 }
 
 export class SendMessageDto implements SendMessageRequest {
@@ -51,6 +56,10 @@ export class SendMessageDto implements SendMessageRequest {
   @IsOptional()
   @IsUUID()
   routineId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  sessionId?: string;
 }
 
 export class PageQueryDto {

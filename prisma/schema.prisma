@@ -240,9 +240,10 @@ model Message {
   @@index([senderId, createdAt])
 }
 
-/// MSG-07: what a message may carry. MSG-10 adds further kinds.
+/// MSG-07: what a message may carry. MSG-10 adds a finished workout.
 enum MessageAttachmentKind {
   ROUTINE
+  WORKOUT
 }
 
 /// PROF-08 adds ROUTINE: a shared routine is a fourth kind of featured item,

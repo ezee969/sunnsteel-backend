@@ -30,7 +30,7 @@ import { withoutOwnersBlocks } from "./linear-periodization";
 import { canViewRoutine } from "./routine-visibility";
 import { RoutinesService } from "./routines.service";
 import { CustomExercisesService } from "../exercises/custom-exercises.service";
-import { readMessageRoutine } from "../messages/message-routines";
+import { readMessageRoutine } from "../messages/message-attachments";
 
 // base64url of 18 random bytes is 24 characters; anything else is not a token.
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{24}$/;

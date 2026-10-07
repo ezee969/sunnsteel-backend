@@ -25,6 +25,7 @@ import {
   type SendMessageRequest,
   type SendMessageResponse,
   type SharedRoutine,
+  type SharedWorkout,
   type StartConversationRequest,
   type UnreadConversationsResponse,
 } from "@sunsteel/contracts";
@@ -33,12 +34,16 @@ import { hiddenFromViewer, isHiddenFromViewer } from "../users/member-blocks";
 import { normalizeUsername } from "../users/username";
 import { recipientLocale, serverCopy } from "../i18n/server-copy";
 import { messageFor } from "./message-moderation";
+import { WorkoutSessionRecapService } from "../workouts/services/workout-session-recap.service";
 import {
   assertSendableRoutine,
-  messageRoutines,
-  type MessageRoutines,
+  assertSendableWorkout,
+  type AttachmentKind,
+  messageObjects,
+  type MessageObjects,
   readMessageRoutine,
-} from "./message-routines";
+  readMessageWorkout,
+} from "./message-attachments";
 import {
   conversationPairKey,
   decodeKeysetCursor,
@@ -104,15 +109,15 @@ interface ViewerMessaging {
 function toMessage(
   row: MessageRow,
   viewerId: string,
-  routines?: MessageRoutines,
+  objects?: MessageObjects,
 ): ConversationMessage {
-  return messageFor(row, viewerId, routines);
+  return messageFor(row, viewerId, objects);
 }
 
-/** MSG-07: what a send writes -- its text, and the routine it carries. */
+/** MSG-07/MSG-10: what a send writes -- its text, and what it carries. */
 interface MessageContent {
   body: string | null;
-  attachmentKind: "ROUTINE" | null;
+  attachmentKind: AttachmentKind | null;
   attachmentId: string | null;
 }
 
@@ -178,7 +183,10 @@ function isMissingRecord(error: unknown): boolean {
  */
 @Injectable()
 export class MessagesService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(
+    private readonly db: DatabaseService,
+    private readonly recaps: WorkoutSessionRecapService,
+  ) {}
 
   async list(
     viewerId: string,
@@ -286,10 +294,10 @@ export class MessagesService {
     });
     const page = rows.slice(0, take);
     const last = page.at(-1);
-    const routines = await messageRoutines(this.db, page);
+    const objects = await messageObjects(this.db, page);
     return {
       conversation: await this.summary(open, viewerId),
-      messages: page.map((row) => toMessage(row, viewerId, routines)),
+      messages: page.map((row) => toMessage(row, viewerId, objects)),
       nextCursor:
         rows.length > take && last
           ? encodeKeysetCursor({ at: last.createdAt, id: last.id })
@@ -519,6 +527,21 @@ export class MessagesService {
       ),
       message,
     };
+  }
+
+  /** MSG-10: the workout a message shared, opened, as it is now. */
+  workout(
+    viewerId: string,
+    conversationId: string,
+    messageId: string,
+  ): Promise<SharedWorkout> {
+    return readMessageWorkout(
+      this.db,
+      (ownerId, sessionId) => this.recaps.getSessionRecap(ownerId, sessionId),
+      viewerId,
+      messageId,
+      conversationId,
+    );
   }
 
   /** MSG-07: the routine a message shared, in full, as it is now. */
@@ -946,24 +969,33 @@ export class MessagesService {
     row: MessageRow,
     viewerId: string,
   ): Promise<ConversationMessage> {
-    return toMessage(row, viewerId, await messageRoutines(this.db, [row]));
+    return toMessage(row, viewerId, await messageObjects(this.db, [row]));
   }
 
   /**
-   * MSG-07: what a send writes. A routine must be the sender's own and not
-   * hidden by moderation, and with one the text may be left empty.
+   * MSG-07/MSG-10: what a send writes. At most one object, the sender's own
+   * -- a routine not hidden by moderation, or a finished workout -- and with
+   * one the text may be left empty.
    */
   private async content(
     viewerId: string,
     request: SendMessageRequest,
   ): Promise<MessageContent> {
     const routineId = request.routineId ?? null;
-    const body = this.body(request.body, routineId !== null);
+    const sessionId = request.sessionId ?? null;
+    if (routineId && sessionId) {
+      throw new BadRequestException(apiError("MESSAGE_ONE_ATTACHMENT"));
+    }
+    const body = this.body(
+      request.body,
+      routineId !== null || sessionId !== null,
+    );
     if (routineId) await assertSendableRoutine(this.db, viewerId, routineId);
+    if (sessionId) await assertSendableWorkout(this.db, viewerId, sessionId);
     return {
       body,
-      attachmentKind: routineId ? "ROUTINE" : null,
-      attachmentId: routineId,
+      attachmentKind: routineId ? "ROUTINE" : sessionId ? "WORKOUT" : null,
+      attachmentId: routineId ?? sessionId,
     };
   }
 

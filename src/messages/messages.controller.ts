@@ -100,6 +100,19 @@ export class MessagesController {
     return this.messages.routine(req.user.id, id, messageId);
   }
 
+  /**
+   * MSG-10: the workout a message shared, for a participant who can still
+   * read that message. Sending it was the sender's consent.
+   */
+  @Get(":id/messages/:messageId/workout")
+  workout(
+    @Req() req: RequestWithUser,
+    @Param("id", ParseUUIDPipe) id: string,
+    @Param("messageId", ParseUUIDPipe) messageId: string,
+  ) {
+    return this.messages.workout(req.user.id, id, messageId);
+  }
+
   @Delete(":id/messages/:messageId")
   deleteMessage(
     @Req() req: RequestWithUser,

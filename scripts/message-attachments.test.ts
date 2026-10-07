@@ -20,7 +20,11 @@ import {
   reportRefusal,
   type StoredMessage,
 } from '../src/messages/message-moderation';
-import { attachmentFor } from '../src/messages/message-routines';
+import {
+  attachmentFor,
+  sharedWorkoutExercises,
+  toWorkoutSummary,
+} from '../src/messages/message-attachments';
 import { readCloneSource } from '../src/routines/routine-cloning';
 
 const MIGRATION = readFileSync(
@@ -40,7 +44,7 @@ const summary: SharedRoutineSummary = {
   exerciseCount: 22,
   updatedAt: '2026-10-07T08:00:00.000Z',
 };
-const routines = new Map([[ROUTINE, summary]]);
+const objects = { routines: new Map([[ROUTINE, summary]]), workouts: new Map() };
 
 function message(overrides: Partial<StoredMessage> = {}): StoredMessage {
   return {
@@ -59,7 +63,7 @@ function message(overrides: Partial<StoredMessage> = {}): StoredMessage {
 describe('MSG-07 a routine in a message', () => {
   it('reads as the routine is now, for both participants', () => {
     for (const viewer of [SENDER, READER]) {
-      assert.deepEqual(messageFor(message(), viewer, routines).attachment, {
+      assert.deepEqual(messageFor(message(), viewer, objects).attachment, {
         kind: 'ROUTINE',
         routine: summary,
       });
@@ -75,24 +79,24 @@ describe('MSG-07 a routine in a message', () => {
 
   it('carries nothing when it carries nothing', () => {
     const plain = message({ body: 'hi', attachmentKind: null, attachmentId: null });
-    assert.equal(messageFor(plain, READER, routines).attachment, null);
+    assert.equal(messageFor(plain, READER, objects).attachment, null);
   });
 
   it('goes with the text: never once deleted, and not to the other member while hidden', () => {
     const deleted = message({ deletedAt: new Date() });
     for (const viewer of [SENDER, READER]) {
-      assert.equal(attachmentFor(deleted, viewer, routines), null);
+      assert.equal(attachmentFor(deleted, viewer, objects), null);
     }
     const hidden = message({ moderationHiddenAt: new Date() });
-    assert.equal(attachmentFor(hidden, READER, routines), null);
-    assert.deepEqual(attachmentFor(hidden, SENDER, routines), {
+    assert.equal(attachmentFor(hidden, READER, objects), null);
+    assert.deepEqual(attachmentFor(hidden, SENDER, objects), {
       kind: 'ROUTINE',
       routine: summary,
     });
   });
 
   it('may travel without a note, which is no text rather than a deleted one', () => {
-    const seen = messageFor(message(), READER, routines);
+    const seen = messageFor(message(), READER, objects);
     assert.equal(seen.body, null);
     assert.equal(seen.deleted, false);
   });
@@ -104,7 +108,7 @@ describe('MSG-07 a routine in a message', () => {
   });
 
   it('is captured by the name the reporter saw and nothing more of it', () => {
-    const [captured] = captureMessages([message()], 'm1', READER, routines);
+    const [captured] = captureMessages([message()], 'm1', READER, objects);
     assert.equal(captured.routineName, 'Upper / Lower');
     assert.equal(captured.body, null);
     const [gone] = captureMessages([message()], 'm1', READER);
@@ -113,7 +117,7 @@ describe('MSG-07 a routine in a message', () => {
       [message({ body: 'hi', attachmentKind: null, attachmentId: null })],
       'm1',
       READER,
-      routines,
+      objects,
     );
     assert.equal(plain.routineName, null);
   });
@@ -143,7 +147,7 @@ describe('MSG-07 what a send may carry', () => {
   });
 
   it('is a kind of its own, and reading it is a source of its own', () => {
-    assert.deepEqual([...MESSAGE_ATTACHMENT_KINDS], ['ROUTINE']);
+    assert.deepEqual([...MESSAGE_ATTACHMENT_KINDS], ['ROUTINE', 'WORKOUT']);
     assert.ok((SHARED_ROUTINE_SOURCES as readonly string[]).includes('MESSAGE'));
   });
 });
@@ -179,5 +183,118 @@ describe('MSG-07 migration', () => {
   it('is safe to run twice', () => {
     assert.match(MIGRATION, /WHEN duplicate_object THEN NULL/);
     assert.ok(!/ADD COLUMN "/.test(MIGRATION));
+  });
+});
+
+const SESSION = '44444444-4444-4444-8444-444444444444';
+const WORKOUT_MIGRATION = readFileSync(
+  'prisma/migrations/20261007140000_message_workouts/migration.sql',
+  'utf8',
+);
+
+describe('MSG-10 a finished workout in a message', () => {
+  const ended = new Date(Date.UTC(2026, 9, 7, 9, 0));
+  const card = toWorkoutSummary({
+    id: SESSION,
+    startedAt: new Date(Date.UTC(2026, 9, 7, 8, 0)),
+    endedAt: ended,
+    durationSec: null,
+    totalVolumeKg: 6250,
+    completedSets: 18,
+    snapshot: null,
+    routine: { name: 'Upper / Lower' },
+    routineDay: { dayOfWeek: 1, name: 'Upper A', order: 0 },
+  });
+  const workouts = { routines: new Map(), workouts: new Map([[SESSION, card]]) };
+  const shared = message({ attachmentKind: 'WORKOUT', attachmentId: SESSION });
+
+  it('reads as a card of what was trained and its totals', () => {
+    assert.deepEqual(card, {
+      sessionId: SESSION,
+      routineName: 'Upper / Lower',
+      dayName: 'Upper A',
+      endedAt: ended.toISOString(),
+      durationSec: 3600,
+      totalVolumeKg: 6250,
+      completedSets: 18,
+    });
+    assert.deepEqual(messageFor(shared, READER, workouts).attachment, {
+      kind: 'WORKOUT',
+      workout: card,
+    });
+  });
+
+  it('says it is no longer available once the workout is gone', () => {
+    assert.deepEqual(messageFor(shared, READER).attachment, {
+      kind: 'WORKOUT',
+      workout: null,
+    });
+  });
+
+  it('goes with the text, like a routine', () => {
+    assert.equal(attachmentFor({ ...shared, deletedAt: new Date() }, SENDER, workouts), null);
+    const hidden = { ...shared, moderationHiddenAt: new Date() };
+    assert.equal(attachmentFor(hidden, READER, workouts), null);
+    assert.ok(attachmentFor(hidden, SENDER, workouts));
+  });
+
+  it('is captured by the routine and day the reporter saw', () => {
+    const [captured] = captureMessages([shared], 'm1', READER, workouts);
+    assert.equal(captured.workoutName, 'Upper / Lower · Upper A');
+    assert.equal(captured.routineName, null);
+    const [gone] = captureMessages([shared], 'm1', READER);
+    assert.equal(gone.workoutName, '');
+  });
+
+  it('opens to each exercise in the order the day trained it, sets by number, never RPE', () => {
+    const at = (minute: number) => new Date(Date.UTC(2026, 9, 7, 8, minute));
+    const log = (
+      routineExerciseId: string | null,
+      setNumber: number,
+      minute: number,
+      overrides: Record<string, unknown> = {},
+    ) => ({
+      exerciseId: `ex-${routineExerciseId}`,
+      routineExerciseId,
+      setNumber,
+      kind: 'WORKING' as const,
+      weight: 100,
+      reps: 5,
+      completedAt: at(minute),
+      exerciseName: `Exercise ${routineExerciseId}`,
+      ...overrides,
+    });
+    const exercises = sharedWorkoutExercises(
+      [
+        log('b', 2, 30),
+        log('a', 1, 10, { kind: 'WARMUP', weight: 60 }),
+        log('b', 1, 25),
+        log('a', 2, 12),
+        log(null, 1, 5, { exerciseId: 'ex-extra', exerciseName: 'Extra' }),
+      ],
+      ['a', 'b'],
+    );
+    assert.deepEqual(
+      exercises.map((exercise) => exercise.name),
+      ['Exercise a', 'Exercise b', 'Extra'],
+    );
+    assert.deepEqual(exercises[0].sets, [
+      { setNumber: 1, kind: 'WARMUP', weightKg: 60, reps: 5 },
+      { setNumber: 2, kind: 'WORKING', weightKg: 100, reps: 5 },
+    ]);
+    assert.deepEqual(exercises[1].sets.map((set) => set.setNumber), [1, 2]);
+    assert.ok(!('rpe' in exercises[0].sets[0]));
+  });
+
+  it('takes a session id in both writes', async () => {
+    const send = plainToInstance(SendMessageDto, { sessionId: SESSION });
+    assert.deepEqual(await validate(send), []);
+    const start = plainToInstance(StartConversationDto, { recipient: 'ana', sessionId: SESSION });
+    assert.deepEqual(await validate(start), []);
+    assert.ok((MESSAGE_ATTACHMENT_KINDS as readonly string[]).includes('WORKOUT'));
+  });
+
+  it('adds its kind safely, twice', () => {
+    assert.match(WORKOUT_MIGRATION, /ADD VALUE IF NOT EXISTS 'WORKOUT'/);
   });
 });

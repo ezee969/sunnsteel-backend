@@ -438,6 +438,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20261007100000_message_attachments/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// MSG-10: a workout in a message.
+				readFileSync(
+					'prisma/migrations/20261007140000_message_workouts/migration.sql',
+					'utf8',
 				),
     );
     prisma(
