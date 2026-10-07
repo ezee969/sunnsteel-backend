@@ -102,7 +102,7 @@ export function captureMessages(
     .slice(Math.max(0, at - MESSAGE_REPORT_CONTEXT_BEFORE), at + 1)
     .map((row) => {
       const seen = messageFor(row, reporterId, objects);
-      // MSG-07 and MSG-10: what it carried, by the name the reporter saw,
+      // MSG-07, MSG-10, MSG-11: what it carried, by the name the reporter saw,
       // empty when it was no longer available, and nothing more of it.
       const attachment = seen.attachment;
       const routineName =
@@ -117,6 +117,10 @@ export function captureMessages(
                 .join(" · ")
             : ""
           : null;
+      const recordName =
+        attachment?.kind === "RECORD"
+          ? (attachment.record?.exerciseName ?? "")
+          : null;
       return {
         id: row.id,
         fromReporter: row.senderId === reporterId,
@@ -125,6 +129,7 @@ export function captureMessages(
         isReported: row.id === reportedId,
         routineName,
         workoutName,
+        recordName,
         createdAt: seen.createdAt,
       };
     });
@@ -164,7 +169,7 @@ export interface MessageCaptureData {
 
 type CaptureDb = Pick<
   DatabaseService,
-  "message" | "userBlock" | "user" | "routine" | "workoutSession"
+  "message" | "userBlock" | "user" | "routine" | "workoutSession" | "$queryRaw"
 >;
 
 /**

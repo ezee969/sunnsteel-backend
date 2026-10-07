@@ -45,6 +45,11 @@ export class StartConversationDto implements StartConversationRequest {
   @IsOptional()
   @IsUUID()
   sessionId?: string;
+
+  /** MSG-11: one of the sender's own personal records, by its event. */
+  @IsOptional()
+  @IsUUID()
+  recordEventId?: string;
 }
 
 export class SendMessageDto implements SendMessageRequest {
@@ -60,6 +65,11 @@ export class SendMessageDto implements SendMessageRequest {
   @IsOptional()
   @IsUUID()
   sessionId?: string;
+
+  /** MSG-11: one of the sender's own personal records, by its event. */
+  @IsOptional()
+  @IsUUID()
+  recordEventId?: string;
 }
 
 export class PageQueryDto {

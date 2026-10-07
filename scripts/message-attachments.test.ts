@@ -26,6 +26,7 @@ import {
   toWorkoutSummary,
 } from '../src/messages/message-attachments';
 import { readCloneSource } from '../src/routines/routine-cloning';
+import { personalRecordParts } from '../src/workouts/workout-progress-timeline.service';
 
 const MIGRATION = readFileSync(
   'prisma/migrations/20261007100000_message_attachments/migration.sql',
@@ -44,7 +45,11 @@ const summary: SharedRoutineSummary = {
   exerciseCount: 22,
   updatedAt: '2026-10-07T08:00:00.000Z',
 };
-const objects = { routines: new Map([[ROUTINE, summary]]), workouts: new Map() };
+const objects = {
+  routines: new Map([[ROUTINE, summary]]),
+  workouts: new Map(),
+  records: new Map(),
+};
 
 function message(overrides: Partial<StoredMessage> = {}): StoredMessage {
   return {
@@ -147,7 +152,7 @@ describe('MSG-07 what a send may carry', () => {
   });
 
   it('is a kind of its own, and reading it is a source of its own', () => {
-    assert.deepEqual([...MESSAGE_ATTACHMENT_KINDS], ['ROUTINE', 'WORKOUT']);
+    assert.deepEqual([...MESSAGE_ATTACHMENT_KINDS], ['ROUTINE', 'WORKOUT', 'RECORD']);
     assert.ok((SHARED_ROUTINE_SOURCES as readonly string[]).includes('MESSAGE'));
   });
 });
@@ -205,7 +210,11 @@ describe('MSG-10 a finished workout in a message', () => {
     routine: { name: 'Upper / Lower' },
     routineDay: { dayOfWeek: 1, name: 'Upper A', order: 0 },
   });
-  const workouts = { routines: new Map(), workouts: new Map([[SESSION, card]]) };
+  const workouts = {
+    routines: new Map(),
+    workouts: new Map([[SESSION, card]]),
+    records: new Map(),
+  };
   const shared = message({ attachmentKind: 'WORKOUT', attachmentId: SESSION });
 
   it('reads as a card of what was trained and its totals', () => {
@@ -296,5 +305,79 @@ describe('MSG-10 a finished workout in a message', () => {
 
   it('adds its kind safely, twice', () => {
     assert.match(WORKOUT_MIGRATION, /ADD VALUE IF NOT EXISTS 'WORKOUT'/);
+  });
+});
+
+const RECORD_EVENT = '55555555-5555-4555-8555-555555555555';
+const RECORD_MIGRATION = readFileSync(
+  'prisma/migrations/20261007180000_message_records/migration.sql',
+  'utf8',
+);
+
+describe('MSG-11 a personal record in a message', () => {
+  const record = {
+    eventId: RECORD_EVENT,
+    exerciseId: 'bench',
+    exerciseName: 'Bench Press',
+    occurredAt: '2026-10-07T09:00:00.000Z',
+    current: { weightKg: 100, reps: 5, estimated1rmKg: 116.7 },
+    previous: { weightKg: 95, reps: 5, estimated1rmKg: 110.8 },
+    reason: 'HEAVIER_LOAD' as const,
+  };
+  const records = {
+    routines: new Map(),
+    workouts: new Map(),
+    records: new Map([[RECORD_EVENT, record]]),
+  };
+  const shared = message({ attachmentKind: 'RECORD', attachmentId: RECORD_EVENT });
+
+  it('reads as that record as set, with the best it beat', () => {
+    assert.deepEqual(messageFor(shared, READER, records).attachment, {
+      kind: 'RECORD',
+      record,
+    });
+  });
+
+  it('says it is no longer available once a correction removed it', () => {
+    assert.deepEqual(messageFor(shared, READER).attachment, {
+      kind: 'RECORD',
+      record: null,
+    });
+  });
+
+  it('goes with the text, like the other kinds', () => {
+    assert.equal(attachmentFor({ ...shared, deletedAt: new Date() }, SENDER, records), null);
+    assert.equal(attachmentFor({ ...shared, moderationHiddenAt: new Date() }, READER, records), null);
+  });
+
+  it('is captured by its lift, and nothing more of it', () => {
+    const [captured] = captureMessages([shared], 'm1', READER, records);
+    assert.equal(captured.recordName, 'Bench Press');
+    assert.equal(captured.workoutName, null);
+    const [gone] = captureMessages([shared], 'm1', READER);
+    assert.equal(gone.recordName, '');
+  });
+
+  it('is worded as the timeline words it, and a stale record is no record', () => {
+    const row = (weight: number, reps: number, previous: unknown) => ({
+      id: 'e',
+      payload: { exerciseId: 'bench', exerciseName: 'Bench Press', weight, reps, estimated1rm: weight * (1 + reps / 30) },
+      previousPayload: previous,
+    });
+    const best = { exerciseId: 'bench', exerciseName: 'Bench Press', weight: 95, reps: 5, estimated1rm: 110.8 };
+    assert.equal(personalRecordParts(row(100, 5, null))?.reason, 'FIRST_RECORDED_BEST');
+    assert.equal(personalRecordParts(row(100, 5, best))?.reason, 'HEAVIER_LOAD');
+    assert.equal(personalRecordParts(row(95, 6, best))?.reason, 'MORE_REPS_AT_SAME_LOAD');
+    assert.equal(personalRecordParts(row(90, 8, best)), null);
+  });
+
+  it('takes a record event id in both writes', async () => {
+    const send = plainToInstance(SendMessageDto, { recordEventId: RECORD_EVENT });
+    assert.deepEqual(await validate(send), []);
+    assert.ok((MESSAGE_ATTACHMENT_KINDS as readonly string[]).includes('RECORD'));
+  });
+
+  it('adds its kind safely, twice', () => {
+    assert.match(RECORD_MIGRATION, /ADD VALUE IF NOT EXISTS 'RECORD'/);
   });
 });

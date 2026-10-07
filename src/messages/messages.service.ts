@@ -36,6 +36,7 @@ import { recipientLocale, serverCopy } from "../i18n/server-copy";
 import { messageFor } from "./message-moderation";
 import { WorkoutSessionRecapService } from "../workouts/services/workout-session-recap.service";
 import {
+  assertSendableRecord,
   assertSendableRoutine,
   assertSendableWorkout,
   type AttachmentKind,
@@ -983,19 +984,27 @@ export class MessagesService {
   ): Promise<MessageContent> {
     const routineId = request.routineId ?? null;
     const sessionId = request.sessionId ?? null;
-    if (routineId && sessionId) {
+    const recordEventId = request.recordEventId ?? null;
+    const given = [routineId, sessionId, recordEventId].filter(Boolean).length;
+    if (given > 1) {
       throw new BadRequestException(apiError("MESSAGE_ONE_ATTACHMENT"));
     }
-    const body = this.body(
-      request.body,
-      routineId !== null || sessionId !== null,
-    );
+    const body = this.body(request.body, given === 1);
     if (routineId) await assertSendableRoutine(this.db, viewerId, routineId);
     if (sessionId) await assertSendableWorkout(this.db, viewerId, sessionId);
+    if (recordEventId) {
+      await assertSendableRecord(this.db, viewerId, recordEventId);
+    }
     return {
       body,
-      attachmentKind: routineId ? "ROUTINE" : sessionId ? "WORKOUT" : null,
-      attachmentId: routineId ?? sessionId,
+      attachmentKind: routineId
+        ? "ROUTINE"
+        : sessionId
+          ? "WORKOUT"
+          : recordEventId
+            ? "RECORD"
+            : null,
+      attachmentId: routineId ?? sessionId ?? recordEventId,
     };
   }
 

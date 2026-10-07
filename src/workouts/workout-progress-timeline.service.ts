@@ -109,6 +109,77 @@ function sessionContext(snapshot: WorkoutSessionSnapshotV1) {
 }
 
 /**
+ * The parts of one `PERSONAL_RECORD` event the timeline and a shared record
+ * (MSG-11) word alike: its lift, the performance, the best earlier record
+ * and why it beat it. Null when it does not beat that best (a stale row,
+ * TD-58); throws on a malformed payload.
+ */
+export function personalRecordParts(row: {
+  id: string;
+  payload: unknown;
+  previousPayload: unknown | null;
+}): Pick<
+  ProgressTimelinePersonalRecordItem,
+  "exerciseId" | "exerciseName" | "current" | "previous" | "reason"
+> | null {
+  const payload = objectValue(row.payload);
+  const current = recordPerformance(row.payload);
+  const previous = row.previousPayload
+    ? recordPerformance(row.previousPayload)
+    : null;
+  if (
+    !payload ||
+    typeof payload.exerciseId !== "string" ||
+    typeof payload.exerciseName !== "string" ||
+    !current ||
+    (row.previousPayload && !previous)
+  ) {
+    throw new Error(`Invalid PERSONAL_RECORD event payload: ${row.id}`);
+  }
+  const reason = !previous
+    ? "FIRST_RECORDED_BEST"
+    : current.weightKg > previous.weightKg
+      ? "HEAVIER_LOAD"
+      : current.weightKg === previous.weightKg && current.reps > previous.reps
+        ? "MORE_REPS_AT_SAME_LOAD"
+        : null;
+  if (!reason) return null;
+  return {
+    exerciseId: payload.exerciseId,
+    exerciseName: payload.exerciseName,
+    current,
+    previous,
+    reason,
+  };
+}
+
+/**
+ * The best earlier record of the same lift, as raw SQL over `events`: the
+ * lateral join the timeline and a shared record (MSG-11) both read.
+ */
+export function previousRecordJoin(): Prisma.Sql {
+  return Prisma.sql`LEFT JOIN LATERAL (
+            SELECT prior."payload"
+            FROM "TrainingEvent" prior
+            WHERE events."type" = 'PERSONAL_RECORD'
+              AND prior."userId" = events."userId"
+              AND prior."type" = 'PERSONAL_RECORD'
+              AND prior."payload"->>'exerciseId' = events."payload"->>'exerciseId'
+              AND (
+                prior."occurredAt" < events."occurredAt"
+                OR (
+                  prior."occurredAt" = events."occurredAt"
+                  AND prior."id" < events."id"
+                )
+              )
+            ORDER BY ${recordValue("prior", "weight")} DESC NULLS LAST,
+              ${recordValue("prior", "reps")} DESC NULLS LAST,
+              prior."occurredAt" DESC, prior."id" DESC
+            LIMIT 1
+          ) previous ON TRUE`;
+}
+
+/**
  * Maps one event row. A record that does not beat the one before it is
  * answered as null and left out of the page: the query already drops such
  * events, and one stale row (TD-58) must never fail the whole timeline.
@@ -118,38 +189,14 @@ export function mapProgressTimelineItem(
   snapshot: WorkoutSessionSnapshotV1,
 ): ProgressTimelineItem | null {
   if (row.type === "PERSONAL_RECORD") {
-    const payload = objectValue(row.payload);
-    const current = recordPerformance(row.payload);
-    const previous = row.previousPayload
-      ? recordPerformance(row.previousPayload)
-      : null;
-    if (
-      !payload ||
-      typeof payload.exerciseId !== "string" ||
-      typeof payload.exerciseName !== "string" ||
-      !current ||
-      (row.previousPayload && !previous)
-    ) {
-      throw new Error(`Invalid PERSONAL_RECORD event payload: ${row.id}`);
-    }
-    const reason = !previous
-      ? "FIRST_RECORDED_BEST"
-      : current.weightKg > previous.weightKg
-        ? "HEAVIER_LOAD"
-        : current.weightKg === previous.weightKg && current.reps > previous.reps
-          ? "MORE_REPS_AT_SAME_LOAD"
-          : null;
-    if (!reason) return null;
+    const parts = personalRecordParts(row);
+    if (!parts) return null;
     const item: ProgressTimelinePersonalRecordItem = {
       eventId: row.id,
       type: row.type,
       occurredAt: row.occurredAt.toISOString(),
       session: sessionContext(snapshot),
-      exerciseId: payload.exerciseId,
-      exerciseName: payload.exerciseName,
-      current,
-      previous,
-      reason,
+      ...parts,
     };
     return item;
   }
@@ -187,7 +234,12 @@ export class WorkoutProgressTimelineService {
                   ? query.type
                   : { in: ["PERSONAL_RECORD", "PROGRESSION_CHANGED"] },
                 ...(query.exerciseId
-                  ? { payload: { path: ["exerciseId"], equals: query.exerciseId } }
+                  ? {
+                      payload: {
+                        path: ["exerciseId"],
+                        equals: query.exerciseId,
+                      },
+                    }
                   : {}),
               },
               select: { id: true, occurredAt: true },
@@ -234,25 +286,7 @@ export class WorkoutProgressTimelineService {
             events."payload",
             previous."payload" AS "previousPayload"
           FROM "TrainingEvent" events
-          LEFT JOIN LATERAL (
-            SELECT prior."payload"
-            FROM "TrainingEvent" prior
-            WHERE events."type" = 'PERSONAL_RECORD'
-              AND prior."userId" = events."userId"
-              AND prior."type" = 'PERSONAL_RECORD'
-              AND prior."payload"->>'exerciseId' = events."payload"->>'exerciseId'
-              AND (
-                prior."occurredAt" < events."occurredAt"
-                OR (
-                  prior."occurredAt" = events."occurredAt"
-                  AND prior."id" < events."id"
-                )
-              )
-            ORDER BY ${recordValue("prior", "weight")} DESC NULLS LAST,
-              ${recordValue("prior", "reps")} DESC NULLS LAST,
-              prior."occurredAt" DESC, prior."id" DESC
-            LIMIT 1
-          ) previous ON TRUE
+          ${previousRecordJoin()}
           WHERE events."userId" = ${userId}
             ${typeFilter}
             ${exerciseFilter}

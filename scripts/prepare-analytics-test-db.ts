@@ -444,6 +444,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20261007140000_message_workouts/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// MSG-11: a personal record in a message.
+				readFileSync(
+					'prisma/migrations/20261007180000_message_records/migration.sql',
+					'utf8',
 				),
     );
     prisma(

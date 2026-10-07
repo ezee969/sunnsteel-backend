@@ -1,8 +1,9 @@
 import { NotFoundException } from "@nestjs/common";
-import { WorkoutSessionStatus } from "@prisma/client";
+import { Prisma, WorkoutSessionStatus } from "@prisma/client";
 import {
   apiError,
   type MessageAttachment,
+  type MessageRecordSummary,
   type MessageWorkoutSummary,
   type SharedRoutine,
   type SharedRoutineSummary,
@@ -20,11 +21,15 @@ import {
 import { captureRoutineSetup } from "../routines/routine-versions";
 import { isHiddenFromViewer } from "../users/member-blocks";
 import { readSnapshot } from "../workouts/analytics/session-snapshot";
+import {
+  personalRecordParts,
+  previousRecordJoin,
+} from "../workouts/workout-progress-timeline.service";
 import { routineDayName } from "../workouts/workout-session.selects";
 
 /**
- * MSG-07 and MSG-10: what a message carries beside its text -- one of the
- * sender's routines or finished workouts. Sending it is the sender's consent,
+ * MSG-07, MSG-10 and MSG-11: what a message carries beside its text -- one
+ * of the sender's routines, finished workouts or personal records. Sending it is the sender's consent,
  * like a `ROUT-04` or `SOC-07` link, to the conversation's other participant:
  * they may open it whatever the sender's privacy, until the message is
  * deleted. Nothing is copied into the message; the card and the object are
@@ -32,7 +37,7 @@ import { routineDayName } from "../workouts/workout-session.selects";
  * hidden object reads as no longer available.
  */
 
-export type AttachmentKind = "ROUTINE" | "WORKOUT";
+export type AttachmentKind = "ROUTINE" | "WORKOUT" | "RECORD";
 
 export interface AttachmentRef {
   senderId: string;
@@ -44,11 +49,13 @@ export interface AttachmentRef {
 export interface MessageObjects {
   routines: ReadonlyMap<string, SharedRoutineSummary>;
   workouts: ReadonlyMap<string, MessageWorkoutSummary>;
+  records: ReadonlyMap<string, MessageRecordSummary>;
 }
 
 export const NO_OBJECTS: MessageObjects = {
   routines: new Map(),
   workouts: new Map(),
+  records: new Map(),
 };
 
 /**
@@ -67,15 +74,69 @@ export function attachmentFor(
   if (!row.attachmentKind || !row.attachmentId) return null;
   if (row.deletedAt !== null) return null;
   if (row.moderationHiddenAt !== null && row.senderId !== viewerId) return null;
-  return row.attachmentKind === "ROUTINE"
-    ? {
+  switch (row.attachmentKind) {
+    case "ROUTINE":
+      return {
         kind: "ROUTINE",
         routine: objects.routines.get(row.attachmentId) ?? null,
-      }
-    : {
+      };
+    case "WORKOUT":
+      return {
         kind: "WORKOUT",
         workout: objects.workouts.get(row.attachmentId) ?? null,
       };
+    case "RECORD":
+      return {
+        kind: "RECORD",
+        record: objects.records.get(row.attachmentId) ?? null,
+      };
+  }
+}
+
+interface RecordEventRow {
+  id: string;
+  userId: string;
+  occurredAt: Date;
+  payload: unknown;
+  previousPayload: unknown | null;
+}
+
+/**
+ * MSG-11: personal records by their events, each as its owner set it --
+ * the best it beat read as the progress timeline reads it -- keyed by event
+ * id. A record that is not its sender's, that a correction removed, or that
+ * no longer beats the best before it (TD-58) is left out, and its card then
+ * reads as no longer available.
+ */
+export async function readRecordSummaries(
+  db: Pick<DatabaseService, "$queryRaw">,
+  owners: ReadonlyMap<string, string>,
+): Promise<Map<string, MessageRecordSummary>> {
+  if (owners.size === 0) return new Map();
+  const rows = await db.$queryRaw<RecordEventRow[]>(Prisma.sql`
+    SELECT events."id", events."userId", events."occurredAt", events."payload",
+      previous."payload" AS "previousPayload"
+    FROM "TrainingEvent" events
+    ${previousRecordJoin()}
+    WHERE events."id" = ANY(${[...owners.keys()]}::text[])
+      AND events."type" = 'PERSONAL_RECORD'`);
+  const out = new Map<string, MessageRecordSummary>();
+  for (const row of rows) {
+    if (owners.get(row.id) !== row.userId) continue;
+    let parts: ReturnType<typeof personalRecordParts>;
+    try {
+      parts = personalRecordParts(row);
+    } catch {
+      continue;
+    }
+    if (!parts) continue;
+    out.set(row.id, {
+      eventId: row.id,
+      occurredAt: row.occurredAt.toISOString(),
+      ...parts,
+    });
+  }
+  return out;
 }
 
 const WORKOUT_SUMMARY_SELECT = {
@@ -137,7 +198,10 @@ export function toWorkoutSummary(
   };
 }
 
-type ObjectDb = Pick<DatabaseService, "routine" | "workoutSession">;
+type ObjectDb = Pick<
+  DatabaseService,
+  "routine" | "workoutSession" | "$queryRaw"
+>;
 
 /**
  * The objects some messages carry, read once for the page. One counts only
@@ -151,12 +215,15 @@ export async function messageObjects(
 ): Promise<MessageObjects> {
   const routineIds = new Map<string, string>();
   const sessionIds = new Map<string, string>();
+  const recordIds = new Map<string, string>();
   for (const row of rows) {
     if (!row.attachmentId) continue;
     if (row.attachmentKind === "ROUTINE") {
       routineIds.set(row.attachmentId, row.senderId);
     } else if (row.attachmentKind === "WORKOUT") {
       sessionIds.set(row.attachmentId, row.senderId);
+    } else if (row.attachmentKind === "RECORD") {
+      recordIds.set(row.attachmentId, row.senderId);
     }
   }
   const routines = routineIds.size
@@ -196,6 +263,7 @@ export async function messageObjects(
           : [],
       ),
     ),
+    records: await readRecordSummaries(db, recordIds),
   };
 }
 
@@ -214,6 +282,17 @@ export async function assertSendableRoutine(
     select: { id: true },
   });
   if (!routine) throw new NotFoundException(apiError("ROUTINE_NOT_FOUND"));
+}
+
+/** MSG-11: only the sender's own record, one that still stands. */
+export async function assertSendableRecord(
+  db: Pick<DatabaseService, "$queryRaw">,
+  senderId: string,
+  eventId: string,
+): Promise<void> {
+  const records = await readRecordSummaries(db, new Map([[eventId, senderId]]));
+  // Only a client sending an id it was never shown reaches this.
+  if (!records.has(eventId)) throw new NotFoundException("Record not found");
 }
 
 export async function assertSendableWorkout(

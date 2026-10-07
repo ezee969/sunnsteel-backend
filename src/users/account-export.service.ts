@@ -481,6 +481,10 @@ export class AccountExportService {
           ...(message.attachmentKind === "WORKOUT" && message.attachmentId
             ? { sessionId: message.attachmentId }
             : {}),
+          // MSG-11: a record it shared, by its event.
+          ...(message.attachmentKind === "RECORD" && message.attachmentId
+            ? { recordEventId: message.attachmentId }
+            : {}),
           createdAt: iso(message.createdAt),
         })),
         reportsFiled: reports.map((report) => ({
