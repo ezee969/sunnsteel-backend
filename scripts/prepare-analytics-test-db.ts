@@ -432,6 +432,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20261006200000_message_notifications/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// MSG-07: a routine in a message.
+				readFileSync(
+					'prisma/migrations/20261007100000_message_attachments/migration.sql',
+					'utf8',
 				),
     );
     prisma(

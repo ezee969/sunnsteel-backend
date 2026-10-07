@@ -21,9 +21,10 @@ import {
   MESSAGES_PAGE_SIZE,
   MESSAGES_PER_MINUTE_MAX,
   NEW_CONVERSATIONS_PER_DAY_MAX,
-  normalizeMessageBody,
+  messageNote,
   type SendMessageRequest,
   type SendMessageResponse,
+  type SharedRoutine,
   type StartConversationRequest,
   type UnreadConversationsResponse,
 } from "@sunsteel/contracts";
@@ -32,6 +33,12 @@ import { hiddenFromViewer, isHiddenFromViewer } from "../users/member-blocks";
 import { normalizeUsername } from "../users/username";
 import { recipientLocale, serverCopy } from "../i18n/server-copy";
 import { messageFor } from "./message-moderation";
+import {
+  assertSendableRoutine,
+  messageRoutines,
+  type MessageRoutines,
+  readMessageRoutine,
+} from "./message-routines";
 import {
   conversationPairKey,
   decodeKeysetCursor,
@@ -60,6 +67,8 @@ const MESSAGE_SELECT = {
   body: true,
   deletedAt: true,
   moderationHiddenAt: true,
+  attachmentKind: true,
+  attachmentId: true,
   createdAt: true,
 } as const satisfies Prisma.MessageSelect;
 
@@ -92,8 +101,19 @@ interface ViewerMessaging {
   restricted: boolean;
 }
 
-function toMessage(row: MessageRow, viewerId: string): ConversationMessage {
-  return messageFor(row, viewerId);
+function toMessage(
+  row: MessageRow,
+  viewerId: string,
+  routines?: MessageRoutines,
+): ConversationMessage {
+  return messageFor(row, viewerId, routines);
+}
+
+/** MSG-07: what a send writes -- its text, and the routine it carries. */
+interface MessageContent {
+  body: string | null;
+  attachmentKind: "ROUTINE" | null;
+  attachmentId: string | null;
 }
 
 /**
@@ -266,9 +286,10 @@ export class MessagesService {
     });
     const page = rows.slice(0, take);
     const last = page.at(-1);
+    const routines = await messageRoutines(this.db, page);
     return {
       conversation: await this.summary(open, viewerId),
-      messages: page.map((row) => toMessage(row, viewerId)),
+      messages: page.map((row) => toMessage(row, viewerId, routines)),
       nextCursor:
         rows.length > take && last
           ? encodeKeysetCursor({ at: last.createdAt, id: last.id })
@@ -285,7 +306,7 @@ export class MessagesService {
     viewerId: string,
     request: StartConversationRequest,
   ): Promise<SendMessageResponse> {
-    const body = this.body(request.body);
+    const content = await this.content(viewerId, request);
     const recipient = await this.db.user.findFirst({
       where: {
         OR: [
@@ -379,7 +400,7 @@ export class MessagesService {
               ],
             },
             messages: {
-              create: { senderId: viewerId, body, createdAt: now },
+              create: { senderId: viewerId, ...content, createdAt: now },
             },
           },
           select: { id: true, messages: { select: MESSAGE_SELECT } },
@@ -399,7 +420,7 @@ export class MessagesService {
     if (admission === "INBOX") {
       await this.schedulePush(created.id, viewerId, recipient.id, now);
     }
-    const message = toMessage(created.messages[0], viewerId);
+    const message = await this.messageOut(created.messages[0], viewerId);
     return {
       conversation: await this.summary(open, viewerId, message),
       message,
@@ -411,7 +432,7 @@ export class MessagesService {
     conversationId: string,
     request: SendMessageRequest,
   ): Promise<SendMessageResponse> {
-    const body = this.body(request.body);
+    const content = await this.content(viewerId, request);
     const open = await this.open(viewerId, conversationId);
     if (open.viewer.hidden) {
       throw new ForbiddenException(apiError("MESSAGING_UNAVAILABLE"));
@@ -457,7 +478,12 @@ export class MessagesService {
           data: { lastReadAt: now },
         });
         return tx.message.create({
-          data: { conversationId, senderId: viewerId, body, createdAt: now },
+          data: {
+            conversationId,
+            senderId: viewerId,
+            ...content,
+            createdAt: now,
+          },
           select: MESSAGE_SELECT,
         });
       });
@@ -470,7 +496,7 @@ export class MessagesService {
     if ((outcome === "SEND" || outcome === "ACCEPT_AND_SEND") && open.other) {
       await this.schedulePush(conversationId, viewerId, open.other.id, now);
     }
-    const message = toMessage(row, viewerId);
+    const message = await this.messageOut(row, viewerId);
     return {
       conversation: await this.summary(
         {
@@ -493,6 +519,15 @@ export class MessagesService {
       ),
       message,
     };
+  }
+
+  /** MSG-07: the routine a message shared, in full, as it is now. */
+  routine(
+    viewerId: string,
+    conversationId: string,
+    messageId: string,
+  ): Promise<SharedRoutine> {
+    return readMessageRoutine(this.db, viewerId, messageId, conversationId);
   }
 
   /** Deletes the viewer's own message for both; its place stays. */
@@ -620,7 +655,7 @@ export class MessagesService {
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         select: MESSAGE_SELECT,
       });
-      newest = row ? toMessage(row, viewerId) : null;
+      newest = row ? await this.messageOut(row, viewerId) : null;
     }
     return {
       id: open.id,
@@ -906,9 +941,38 @@ export class MessagesService {
     };
   }
 
-  private body(text: string): string {
-    const body = normalizeMessageBody(text);
-    if (!body) {
+  /** One message as the viewer reads it, with what it carries resolved. */
+  private async messageOut(
+    row: MessageRow,
+    viewerId: string,
+  ): Promise<ConversationMessage> {
+    return toMessage(row, viewerId, await messageRoutines(this.db, [row]));
+  }
+
+  /**
+   * MSG-07: what a send writes. A routine must be the sender's own and not
+   * hidden by moderation, and with one the text may be left empty.
+   */
+  private async content(
+    viewerId: string,
+    request: SendMessageRequest,
+  ): Promise<MessageContent> {
+    const routineId = request.routineId ?? null;
+    const body = this.body(request.body, routineId !== null);
+    if (routineId) await assertSendableRoutine(this.db, viewerId, routineId);
+    return {
+      body,
+      attachmentKind: routineId ? "ROUTINE" : null,
+      attachmentId: routineId,
+    };
+  }
+
+  private body(
+    text: string | undefined,
+    hasAttachment: boolean,
+  ): string | null {
+    const body = messageNote(text, hasAttachment);
+    if (body === undefined) {
       throw new BadRequestException(
         apiError("MESSAGE_LENGTH", { max: MESSAGE_BODY_MAX }),
       );

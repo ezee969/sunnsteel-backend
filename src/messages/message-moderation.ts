@@ -1,7 +1,4 @@
-import {
-  BadRequestException,
-  NotFoundException,
-} from "@nestjs/common";
+import { BadRequestException, NotFoundException } from "@nestjs/common";
 import {
   apiError,
   type CapturedMessage,
@@ -10,6 +7,11 @@ import {
 } from "@sunsteel/contracts";
 import type { DatabaseService } from "../database/database.service";
 import { isHiddenFromViewer } from "../users/member-blocks";
+import {
+  attachmentFor,
+  messageRoutines,
+  type MessageRoutines,
+} from "./message-routines";
 
 /**
  * MSG-09: what a moderator may do to messages, and what each participant
@@ -23,7 +25,19 @@ export interface StoredMessage {
   body: string | null;
   deletedAt: Date | null;
   moderationHiddenAt: Date | null;
+  /** MSG-07: what it carries beside its text. */
+  attachmentKind?: "ROUTINE" | null;
+  attachmentId?: string | null;
   createdAt: Date;
+}
+
+/**
+ * Whether a participant reads a message's content at all: not once it is
+ * deleted, nor while moderation hides it from them (its author still does).
+ */
+export function isReadableBy(row: StoredMessage, viewerId: string): boolean {
+  if (row.deletedAt !== null) return false;
+  return row.moderationHiddenAt === null || row.senderId === viewerId;
 }
 
 /**
@@ -35,16 +49,17 @@ export interface StoredMessage {
 export function messageFor(
   row: StoredMessage,
   viewerId: string,
+  routines: MessageRoutines = new Map(),
 ): ConversationMessage {
   const deleted = row.deletedAt !== null;
   const hidden = !deleted && row.moderationHiddenAt !== null;
-  const sentByMe = row.senderId === viewerId;
   return {
     id: row.id,
-    sentByMe,
-    body: deleted || (hidden && !sentByMe) ? null : row.body,
+    sentByMe: row.senderId === viewerId,
+    body: isReadableBy(row, viewerId) ? row.body : null,
     deleted,
     hiddenByModeration: hidden,
+    attachment: attachmentFor(row, viewerId, routines),
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -59,8 +74,8 @@ export function reportRefusal(
   reporterId: string,
 ): "OWN" | "UNREADABLE" | null {
   if (row.senderId === reporterId) return "OWN";
-  const seen = messageFor(row, reporterId);
-  return seen.body === null ? "UNREADABLE" : null;
+  // MSG-07: a routine sent without a note has no text and is still readable.
+  return isReadableBy(row, reporterId) ? null : "UNREADABLE";
 }
 
 /**
@@ -72,6 +87,7 @@ export function captureMessages(
   rows: StoredMessage[],
   reportedId: string,
   reporterId: string,
+  routines: MessageRoutines = new Map(),
 ): CapturedMessage[] {
   const ordered = [...rows].sort(
     (a, b) =>
@@ -83,13 +99,17 @@ export function captureMessages(
   return ordered
     .slice(Math.max(0, at - MESSAGE_REPORT_CONTEXT_BEFORE), at + 1)
     .map((row) => {
-      const seen = messageFor(row, reporterId);
+      const seen = messageFor(row, reporterId, routines);
+      // MSG-07: a routine by the name the reporter saw, and nothing more of it.
+      const routineName =
+        seen.attachment === null ? null : (seen.attachment.routine?.name ?? "");
       return {
         id: row.id,
         fromReporter: row.senderId === reporterId,
         body: seen.body,
         deleted: seen.deleted,
         isReported: row.id === reportedId,
+        routineName,
         createdAt: seen.createdAt,
       };
     });
@@ -115,6 +135,8 @@ const STORED_MESSAGE_SELECT = {
   body: true,
   deletedAt: true,
   moderationHiddenAt: true,
+  attachmentKind: true,
+  attachmentId: true,
   createdAt: true,
 } as const;
 
@@ -125,7 +147,10 @@ export interface MessageCaptureData {
   messages: CapturedMessage[];
 }
 
-type CaptureDb = Pick<DatabaseService, "message" | "userBlock" | "user">;
+type CaptureDb = Pick<
+  DatabaseService,
+  "message" | "userBlock" | "user" | "routine"
+>;
 
 /**
  * What a report of `messageId` by `reporterId` captures. The reporter must be
@@ -190,10 +215,16 @@ export async function captureReportedMessage(
     take: MESSAGE_REPORT_CONTEXT_BEFORE,
     select: STORED_MESSAGE_SELECT,
   });
+  const rows = [...before, message];
   return {
     messageId: message.id,
     conversationId: message.conversationId,
     authorId: message.senderId,
-    messages: captureMessages([...before, message], message.id, reporterId),
+    messages: captureMessages(
+      rows,
+      message.id,
+      reporterId,
+      await messageRoutines(db, rows),
+    ),
   };
 }

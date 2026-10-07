@@ -270,6 +270,8 @@ export class AccountExportService {
         select: {
           conversationId: true,
           body: true,
+          attachmentKind: true,
+          attachmentId: true,
           createdAt: true,
           conversation: {
             select: {
@@ -412,7 +414,9 @@ export class AccountExportService {
       })),
       recentSearches: recentSearches.flatMap((row) => {
         const target =
-          row.kind === "MEMBER" ? recentMembers.get(row.targetId) : row.targetId;
+          row.kind === "MEMBER"
+            ? recentMembers.get(row.targetId)
+            : row.targetId;
         return target
           ? [{ kind: row.kind, target, openedAt: iso(row.openedAt) }]
           : [];
@@ -463,20 +467,18 @@ export class AccountExportService {
           reaction: reaction.reaction,
           createdAt: iso(reaction.createdAt),
         })),
-        messagesSent: messagesSent.flatMap((message) =>
-          message.body === null
-            ? []
-            : [
-                {
-                  to: message.conversation.participants[0]
-                    ? member(message.conversation.participants[0].user)
-                    : null,
-                  conversationId: message.conversationId,
-                  body: message.body,
-                  createdAt: iso(message.createdAt),
-                },
-              ],
-        ),
+        // MSG-07: a routine sent without a note is still the member's message.
+        messagesSent: messagesSent.map((message) => ({
+          to: message.conversation.participants[0]
+            ? member(message.conversation.participants[0].user)
+            : null,
+          conversationId: message.conversationId,
+          body: message.body ?? "",
+          ...(message.attachmentKind === "ROUTINE" && message.attachmentId
+            ? { routineId: message.attachmentId }
+            : {}),
+          createdAt: iso(message.createdAt),
+        })),
         reportsFiled: reports.map((report) => ({
           subjectKind: report.subjectKind,
           reason: report.reason,

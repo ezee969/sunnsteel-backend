@@ -31,15 +31,26 @@ export class StartConversationDto implements StartConversationRequest {
   @MaxLength(100)
   recipient!: string;
 
+  /** MSG-07: optional beside a routine; the service refuses an empty message. */
+  @IsOptional()
   @IsString()
   @MaxLength(BODY_REQUEST_MAX)
-  body!: string;
+  body?: string;
+
+  @IsOptional()
+  @IsUUID()
+  routineId?: string;
 }
 
 export class SendMessageDto implements SendMessageRequest {
+  @IsOptional()
   @IsString()
   @MaxLength(BODY_REQUEST_MAX)
-  body!: string;
+  body?: string;
+
+  @IsOptional()
+  @IsUUID()
+  routineId?: string;
 }
 
 export class PageQueryDto {

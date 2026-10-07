@@ -29,10 +29,7 @@ export class MessagesController {
   constructor(private readonly messages: MessagesService) {}
 
   @Get()
-  list(
-    @Req() req: RequestWithUser,
-    @Query() query: ListConversationsQueryDto,
-  ) {
+  list(@Req() req: RequestWithUser, @Query() query: ListConversationsQueryDto) {
     return this.messages.list(req.user.id, query.cursor, query.box);
   }
 
@@ -88,6 +85,19 @@ export class MessagesController {
     @Body() dto: SendMessageDto,
   ) {
     return this.messages.send(req.user.id, id, dto);
+  }
+
+  /**
+   * MSG-07: the routine a message shared, for a participant who can still
+   * read that message. Sending it was the sender's consent.
+   */
+  @Get(":id/messages/:messageId/routine")
+  routine(
+    @Req() req: RequestWithUser,
+    @Param("id", ParseUUIDPipe) id: string,
+    @Param("messageId", ParseUUIDPipe) messageId: string,
+  ) {
+    return this.messages.routine(req.user.id, id, messageId);
   }
 
   @Delete(":id/messages/:messageId")

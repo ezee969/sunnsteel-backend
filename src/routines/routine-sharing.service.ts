@@ -30,6 +30,7 @@ import { withoutOwnersBlocks } from "./linear-periodization";
 import { canViewRoutine } from "./routine-visibility";
 import { RoutinesService } from "./routines.service";
 import { CustomExercisesService } from "../exercises/custom-exercises.service";
+import { readMessageRoutine } from "../messages/message-routines";
 
 // base64url of 18 random bytes is 24 characters; anything else is not a token.
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{24}$/;
@@ -351,7 +352,10 @@ export class RoutineSharingService {
     const shared =
       source.kind === "LINK"
         ? await this.readByToken(source.token)
-        : await this.readVisibleRoutine(userId, source.routineId);
+        : source.kind === "MESSAGE"
+          ? // MSG-07: a message that shared it is the sender's consent.
+            await readMessageRoutine(this.db, userId, source.messageId)
+          : await this.readVisibleRoutine(userId, source.routineId);
 
     // The setup names exercises by id, exactly as a stored version does, so a
     // routine sharing an exercise that has since been withdrawn is refused

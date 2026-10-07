@@ -16,4 +16,10 @@ export class CloneRoutineDto implements CloneRoutineRequest {
   @IsString()
   @IsNotEmpty()
   routineId?: string;
+
+  /** MSG-07: a message that shared the routine with the viewer. */
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  messageId?: string;
 }

@@ -19,22 +19,26 @@ import { setupToRoutineUpdate } from "./routine-versions";
 
 export type CloneSource =
   | { kind: "LINK"; token: string }
-  | { kind: "VISIBILITY"; routineId: string };
+  | { kind: "VISIBILITY"; routineId: string }
+  | { kind: "MESSAGE"; messageId: string };
 
 /**
- * Exactly one source. Both at once is rejected rather than silently preferring
- * one: a link and a visibility read answer different questions about who may
- * read the routine, and guessing which the caller meant could widen access.
+ * Exactly one source. Two at once is rejected rather than silently preferring
+ * one: a link, a visibility read and a message (MSG-07) answer different
+ * questions about who may read the routine, and guessing which the caller
+ * meant could widen access.
  */
 export function readCloneSource(request: CloneRoutineRequest): CloneSource {
   const token = request.token?.trim();
   const routineId = request.routineId?.trim();
-  if (!!token === !!routineId) {
+  const messageId = request.messageId?.trim();
+  const given = [token, routineId, messageId].filter(Boolean).length;
+  if (given !== 1) {
     throw new BadRequestException(apiError("CLONE_SOURCE_REQUIRED"));
   }
-  return token
-    ? { kind: "LINK", token }
-    : { kind: "VISIBILITY", routineId: routineId! };
+  if (token) return { kind: "LINK", token };
+  if (routineId) return { kind: "VISIBILITY", routineId };
+  return { kind: "MESSAGE", messageId: messageId! };
 }
 
 /**
