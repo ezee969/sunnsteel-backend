@@ -1,4 +1,4 @@
-import { apiError } from "@sunsteel/contracts";
+import { ACTIVITY_TYPES, apiError } from "@sunsteel/contracts";
 import {
   ConflictException,
   Injectable,
@@ -24,6 +24,47 @@ import {
  * `supabase/migrations/*_avatars_bucket.sql`; see `removeStoredAvatars`.
  */
 export const AVATAR_BUCKET = "avatars";
+
+/**
+ * What a brand-new account starts with, written only when the account is
+ * created so no existing member's choices change. The schema defaults stay
+ * PRIVATE and off, and a missing activity row still reads as PRIVATE.
+ *
+ * Every privacy setting that would otherwise start at Only me starts at
+ * Followers (the rank keeps its own Everyone default), and every notification
+ * category starts on. The partner categories are switched on with their
+ * boundary, so only activity from the account's first moment can alert.
+ */
+export function newAccountDefaults(now: Date) {
+  return {
+    bioVisibility: "FOLLOWERS",
+    locationVisibility: "FOLLOWERS",
+    trainingIdentityVisibility: "FOLLOWERS",
+    historyVisibility: "FOLLOWERS",
+    recordsVisibility: "FOLLOWERS",
+    routinesVisibility: "FOLLOWERS",
+    achievementsVisibility: "FOLLOWERS",
+    bodyMetricsVisibility: "FOLLOWERS",
+    bodyProgressVisibility: "FOLLOWERS",
+    notifyRestAlert: true,
+    notifyTrainingReminder: true,
+    notifyStreakAtRisk: true,
+    notifyMessages: true,
+    notifyPartnerSession: true,
+    notifyPartnerAchievement: true,
+    partnerSessionAlertsEnabledAt: now,
+    partnerAchievementAlertsEnabledAt: now,
+    activitySharingDefaults: {
+      create: ACTIVITY_TYPES.map((type) => ({
+        type,
+        audience: "FOLLOWERS",
+      })),
+    },
+  } satisfies Omit<
+    Prisma.UserCreateInput,
+    "email" | "username" | "name" | "supabaseUserId"
+  >;
+}
 
 function isMissing(error: {
   status?: number;
@@ -167,6 +208,7 @@ export class SupabaseService {
           username: createInitialUsername(userName, supabaseUser.id),
           name: userName,
           supabaseUserId: supabaseUser.id,
+          ...newAccountDefaults(new Date()),
         },
       });
     } catch (error) {

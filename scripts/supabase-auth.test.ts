@@ -15,6 +15,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
+import { ACTIVITY_TYPES } from '@sunsteel/contracts';
 import {
   identityFromClaims,
   InvalidAccessTokenError,
@@ -368,6 +369,61 @@ describe('TD-43 getOrCreateUser from token claims', () => {
     assert.equal(user.supabaseUserId, 'supabase-1');
     assert.equal(fake.counts.create, 1);
     assert.equal(calls.user, 1);
+  });
+
+  it('starts a new account at Followers with every notification on', async () => {
+    live();
+    const fake = fakeDatabase();
+    const user = (await service(fake.db).getOrCreateUser(
+      identity(),
+      token(),
+    )) as unknown as Record<string, unknown>;
+    for (const field of [
+      'bioVisibility',
+      'locationVisibility',
+      'trainingIdentityVisibility',
+      'historyVisibility',
+      'recordsVisibility',
+      'routinesVisibility',
+      'achievementsVisibility',
+      'bodyMetricsVisibility',
+      'bodyProgressVisibility',
+    ]) {
+      assert.equal(user[field], 'FOLLOWERS', field);
+    }
+    // The rank keeps its own Everyone default from the schema.
+    assert.equal(user.rankVisibility, undefined);
+    for (const field of [
+      'notifyRestAlert',
+      'notifyTrainingReminder',
+      'notifyStreakAtRisk',
+      'notifyMessages',
+      'notifyPartnerSession',
+      'notifyPartnerAchievement',
+    ]) {
+      assert.equal(user[field], true, field);
+    }
+    assert.ok(user.partnerSessionAlertsEnabledAt instanceof Date);
+    assert.ok(user.partnerAchievementAlertsEnabledAt instanceof Date);
+    const sharing = user.activitySharingDefaults as {
+      create: { type: string; audience: string }[];
+    };
+    assert.deepEqual(
+      sharing.create.map((row) => row.type).sort(),
+      [...ACTIVITY_TYPES].sort(),
+    );
+    assert.ok(sharing.create.every((row) => row.audience === 'FOLLOWERS'));
+  });
+
+  it('leaves an existing account it links exactly as it was', async () => {
+    live();
+    const fake = fakeDatabase([row({ supabaseUserId: null })]);
+    const user = (await service(fake.db).getOrCreateUser(
+      identity(),
+      token(),
+    )) as unknown as Record<string, unknown>;
+    assert.equal(user.bioVisibility, undefined);
+    assert.equal(user.notifyPartnerSession, undefined);
   });
 
   it('never recreates an account for a sign-in Supabase no longer has', async () => {
