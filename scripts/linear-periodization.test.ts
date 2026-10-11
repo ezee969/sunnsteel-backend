@@ -6,12 +6,14 @@ import {
   advanceLinearPeriodization,
   continueLinearPeriodization,
   type LinearPeriodizationState,
+  lpAtStep,
   lpEstimate,
   lpLoadKg,
   lpRecommendation,
   lpStep,
   lpStoredSets,
   roundToIncrement,
+  sameLpPosition,
   startLinearPeriodization,
 } from "@sunsteel/contracts";
 
@@ -429,5 +431,80 @@ describe("LP sessions (ROUT-17)", () => {
       ...logs.map((log) => ({ ...log, weight: 65, kind: "WORKING" as const })),
     ]);
     assert.deepEqual(outcome, { updates: [], changes: [] });
+  });
+});
+
+describe("A block started part of the way through (ROUT-20)", () => {
+  it("stores a block that starts at week 3 at week 3's load", () => {
+    const result = normalizeLinearExercise({
+      progressionScheme: "LINEAR_PERIODIZATION",
+      minWeightIncrement: 2.5,
+      linearPeriodization: startLinearPeriodization(100, 1, 3),
+      sets: [],
+    });
+    assert.equal(result.linearPeriodization?.step, 3);
+    assert.deepEqual(
+      result.sets.map((set) => [set.weight, set.reps]),
+      [
+        [70, null],
+        [70, null],
+        [70, null],
+      ],
+    );
+  });
+
+  it("advances from the week it started at, never counting the ones before", () => {
+    const state = startLinearPeriodization(100, 1, 3);
+    const next = advanceLinearPeriodization(
+      state,
+      allDone(state, [10, 10, 12]),
+      context("a"),
+    );
+    assert.equal(next?.step, 4);
+    assert.deepEqual(next?.samples, []);
+  });
+
+  it("reaches an estimate when it starts at week 8", () => {
+    const state = startLinearPeriodization(100, 1, 8);
+    const finished = advanceLinearPeriodization(
+      state,
+      allDone(state, [3, 3, 3]),
+      context("a"),
+    );
+    assert.equal(finished?.phase, "FINISHED");
+    assert.equal(finished?.samples.length, 3);
+    // 85 × (1 + 4.5/30) = 97.75 for each set → 97.5 on the increment
+    assert.equal(finished?.estimatedMaxKg, 97.5);
+  });
+
+  it("moves a block to another week keeping its reference and earlier samples", () => {
+    let state: LinearPeriodizationState = startLinearPeriodization(100, 2, 7);
+    state = advanceLinearPeriodization(
+      state,
+      allDone(state, [5, 5, 4]),
+      context("s7"),
+    )!;
+    assert.equal(state.step, 8);
+    const back = lpAtStep(state, 7);
+    assert.equal(back.step, 7);
+    assert.equal(back.cycle, 2);
+    assert.equal(back.referenceMaxKg, 100);
+    assert.deepEqual(back.samples, []);
+    const stored = normalizeLinearExercise({
+      progressionScheme: "LINEAR_PERIODIZATION",
+      minWeightIncrement: 2.5,
+      linearPeriodization: lpAtStep(state, 8),
+      sets: [],
+    });
+    assert.equal(stored.linearPeriodization?.samples.length, 3);
+    assert.equal(stored.sets[0].weight, 85);
+  });
+
+  it("keeps an edit made since the workout started out of the workout's reach", () => {
+    const started = startLinearPeriodization(100, 1, 2);
+    // moveLinearSlot writes only while the row still reads the workout's state.
+    assert.equal(sameLpPosition(started, started), true);
+    assert.equal(sameLpPosition(lpAtStep(started, 5), started), false);
+    assert.equal(sameLpPosition(lpAtStep(started, 2), started), true);
   });
 });
