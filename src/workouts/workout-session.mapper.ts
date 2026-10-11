@@ -112,5 +112,6 @@ export function toWorkoutSessionResponse(
     trainingBlock: snapshot?.trainingBlock ?? sessionTrainingBlock(session),
     temporaryOverride:
       snapshot?.temporaryOverride ?? sessionTemporaryOverride(session),
+    origin: session.origin,
   };
 }

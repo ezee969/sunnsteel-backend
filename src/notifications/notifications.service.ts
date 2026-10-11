@@ -20,6 +20,10 @@ import {
   retentionStart,
 } from "./notification-sources";
 import { PartnerActivityAlertsService } from "./partner-activity-alerts.service";
+import {
+  loggedLaterSessionIds,
+  notFromSessions,
+} from "../workouts/logged-sessions";
 
 const json = (value: unknown) =>
   JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
@@ -292,12 +296,15 @@ export class NotificationsService {
 
   private async gather(userId: string, now: Date) {
     const since = lookbackStart(now);
+    // LIVE-23: a workout logged after it happened is never announced.
+    const logged = await loggedLaterSessionIds(this.db, [userId]);
     const [events, follows, comments] = await Promise.all([
       this.db.trainingEvent.findMany({
         where: {
           userId,
           occurredAt: { gte: since },
           type: { in: [...NOTIFICATION_EVENT_TYPES] },
+          ...notFromSessions(logged),
         },
         select: {
           type: true,

@@ -95,6 +95,10 @@ import {
   normalizeCommentBody,
   summarizeComments,
 } from "./activity-rules";
+import {
+  loggedLaterSessionIds,
+  notFromSessions,
+} from "../workouts/logged-sessions";
 
 const AUTHOR_SELECT = {
   id: true,
@@ -988,11 +992,17 @@ export class ActivityService {
       if (parts.length) perAuthor.push({ userId: author.row.id, OR: parts });
     }
     if (perAuthor.length === 0) return [];
+    // LIVE-23: a workout logged after it happened is never announced.
+    const logged = await loggedLaterSessionIds(
+      this.db,
+      authors.map((author) => author.row.id),
+    );
     return this.db.trainingEvent.findMany({
       where: {
         AND: [
           { OR: perAuthor },
           ELIGIBLE_EVENT_WHERE,
+          notFromSessions(logged),
           ...(cursor ? [{ occurredAt: { lte: cursor.at } }] : []),
         ],
       },

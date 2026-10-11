@@ -27,7 +27,8 @@ const valuesOf = (log: CorrectableLog): SetLogValues => ({
   isCompleted: log.isCompleted,
 });
 
-function assertValues(values: SetLogValues) {
+/** The bounds every corrected or logged-later set meets (LIVE-17, LIVE-23). */
+export function assertValues(values: SetLogValues) {
   const { weightKgMax, repsMax, rpeMin, rpeMax } = SESSION_CORRECTION_LIMITS;
   if (
     values.weight !== null &&

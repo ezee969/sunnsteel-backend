@@ -20,9 +20,11 @@ import { StartWorkoutResponseDto } from "./dto/start-workout-response.dto";
 import { FinishWorkoutDto } from "./dto/finish-workout.dto";
 import { UpsertSetLogDto } from "./dto/upsert-set-log.dto";
 import { CorrectSessionDto } from "./dto/correct-session.dto";
+import { LogPastWorkoutDto } from "./dto/log-past-workout.dto";
 import { UpdateSessionNotesDto } from "./dto/update-session-notes.dto";
 import {
   WorkoutSessionCorrectionService,
+  WorkoutSessionLoggedService,
   WorkoutSessionNotesService,
 } from "./services";
 import { SubstituteSessionExerciseDto } from "./dto/substitute-session-exercise.dto";
@@ -48,6 +50,7 @@ export class WorkoutsController {
     private readonly workoutsService: WorkoutsService,
     private readonly restAlerts: RestAlertService,
     private readonly corrections: WorkoutSessionCorrectionService,
+    private readonly logged: WorkoutSessionLoggedService,
     private readonly notes: WorkoutSessionNotesService,
     private readonly goalSuggestions: WorkoutGoalSuggestionsService,
   ) {}
@@ -67,6 +70,24 @@ export class WorkoutsController {
     @Body() dto: FinishWorkoutDto,
   ) {
     return this.workoutsService.finishSession(req.user.id, id, dto);
+  }
+
+  // LIVE-23: a workout done before the routine existed, logged after it
+  // happened, and its removal. Both replay the history they change.
+  @Post("sessions/logged")
+  async logPastWorkout(
+    @Req() req: RequestWithUser,
+    @Body() dto: LogPastWorkoutDto,
+  ) {
+    return this.logged.log(req.user.id, dto);
+  }
+
+  @Delete("sessions/:id/logged")
+  async removeLoggedWorkout(
+    @Req() req: RequestWithUser,
+    @Param("id") id: string,
+  ) {
+    return this.logged.remove(req.user.id, id);
   }
 
   @Get("sessions/active")

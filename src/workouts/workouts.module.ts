@@ -5,6 +5,7 @@ import { WorkoutsService } from "./workouts.service";
 import {
   WorkoutSessionCorrectionService,
   WorkoutSessionFinishService,
+  WorkoutSessionLoggedService,
   WorkoutSessionNotesService,
   WorkoutSessionLogService,
   WorkoutSessionRecapService,
@@ -48,6 +49,7 @@ import { PushModule } from "../notifications/push/push.module";
     WorkoutSessionFinishService,
     WorkoutSessionCorrectionService,
     WorkoutSessionNotesService,
+    WorkoutSessionLoggedService,
     WorkoutSessionLogService,
     WorkoutSessionRecapService,
     WorkoutSessionSubstitutionService,

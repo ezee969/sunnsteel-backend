@@ -450,6 +450,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20261007180000_message_records/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// LIVE-23: workouts logged later.
+				readFileSync(
+					'prisma/migrations/20261011200000_logged_workouts/migration.sql',
+					'utf8',
 				),
     );
     prisma(

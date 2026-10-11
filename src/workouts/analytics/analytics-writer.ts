@@ -44,6 +44,10 @@ export async function summarizeSession(
       completedSets: contribution.completedSets,
     },
   });
+  // LIVE-23: a workout logged after it happened counts for its member but is
+  // never announced, and SESSION_COMPLETED is what the activity feed, partner
+  // alerts and comebacks read, so it has none.
+  if (session.origin === 'LOGGED_LATER') return { session, contribution };
   await tx.trainingEvent.upsert({
     where: { eventKey: `session:${sessionId}:completed:v1` },
     update: {},
@@ -63,10 +67,18 @@ export async function summarizeSession(
   return { session, contribution };
 }
 
+/**
+ * `replay` is true when a generation is rebuilt from history: a milestone it
+ * reaches for the first time was not earned at that moment in the app, so it
+ * is recognized from history (`backfilled`) rather than announced as new --
+ * which is what a past workout logged later (LIVE-23) or a changed time zone
+ * makes possible.
+ */
 export async function applyContribution(
   tx: Prisma.TransactionClient,
   projection: WorkoutAnalyticsProjection,
   summary: Awaited<ReturnType<typeof summarizeSession>>,
+  replay = false,
 ) {
   const { session, contribution } = summary;
   const date = localDate(session.endedAt!, projection.timeZone);
@@ -188,7 +200,7 @@ export async function applyContribution(
     sourceSessionId: session.id,
     occurredAt: session.endedAt!,
     totals: achievementTotals(updatedProjection, recordCount),
-    backfilled: false,
+    backfilled: replay,
   });
   return updatedProjection;
 }

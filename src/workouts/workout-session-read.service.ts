@@ -43,6 +43,7 @@ export function toWorkoutSessionSummary(
     endedAt: session.endedAt ? session.endedAt.toISOString() : null,
     durationSec: session.durationSec ?? undefined,
     notes: session.notes ?? undefined,
+    origin: session.origin,
     totalVolume: undefined,
     totalSets: undefined,
     totalExercises: undefined,

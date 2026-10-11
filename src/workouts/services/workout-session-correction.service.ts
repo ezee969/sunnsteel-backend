@@ -79,6 +79,7 @@ const CLOSED_CODES: Record<string, ApiErrorCode> = {
   LATER_SESSION: "CORRECTION_LATER_SESSION",
   WINDOW_PASSED: "CORRECTION_WINDOW_PASSED",
   LIMIT_REACHED: "CORRECTION_LIMIT_REACHED",
+  LOGGED_LATER: "CORRECTION_LOGGED_LATER",
 };
 
 const progressionKey = (sessionId: string, routineExerciseId: string) =>
@@ -101,7 +102,12 @@ function mapCorrection(row: {
 async function readWindow(
   db: Tx | DatabaseService,
   userId: string,
-  session: { id: string; status: string; endedAt: Date | null },
+  session: {
+    id: string;
+    status: string;
+    endedAt: Date | null;
+    origin?: string;
+  },
   correctionCount: number,
 ): Promise<SessionCorrectionWindow> {
   const [laterCompleted, laterStarted] = session.endedAt
@@ -129,6 +135,8 @@ async function readWindow(
     isLatest: laterCompleted === 0,
     laterSessionStarted: laterStarted > 0,
     correctionCount,
+    // LIVE-23: a workout logged later is removed and logged again instead.
+    loggedLater: session.origin === "LOGGED_LATER",
   });
 }
 
@@ -152,7 +160,7 @@ export class WorkoutSessionCorrectionService {
   ): Promise<SessionCorrectionsResponse> {
     const session = await this.db.workoutSession.findFirst({
       where: { id: sessionId, userId },
-      select: { id: true, status: true, endedAt: true },
+      select: { id: true, status: true, endedAt: true, origin: true },
     });
     if (!session)
       throw new NotFoundException(apiError("WORKOUT_SESSION_NOT_FOUND"));

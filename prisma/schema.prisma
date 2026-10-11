@@ -1024,6 +1024,12 @@ enum WorkoutSessionStatus {
   ABORTED
 }
 
+/// LIVE-23: LIVE is trained in the app; LOGGED_LATER recorded after it happened.
+enum WorkoutSessionOrigin {
+  LIVE
+  LOGGED_LATER
+}
+
 model WorkoutSession {
   sourceRoutineId       String?
   sourceRoutineDayId    String?
@@ -1038,6 +1044,9 @@ model WorkoutSession {
   routineDayId          String?
   routineDay            RoutineDay?             @relation(fields: [routineDayId], references: [id], onDelete: SetNull)
   status                WorkoutSessionStatus    @default(IN_PROGRESS)
+  // LIVE-23: a workout logged after it happened never moves the routine and
+  // never reaches activity, partner alerts or notifications.
+  origin                WorkoutSessionOrigin    @default(LIVE)
   startedAt             DateTime                @default(now())
   endedAt               DateTime?
   durationSec           Int?

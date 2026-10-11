@@ -10,6 +10,7 @@ import { DatabaseService } from '../../database/database.service';
 import { lockTrainingAccount } from './analytics-lock';
 import { applyContribution, summarizeSession } from './analytics-writer';
 import { ensureSessionSnapshot } from './session-snapshot';
+import { removeStaleRecordEvents } from './stale-record-events';
 
 @Injectable()
 export class AnalyticsService {
@@ -214,6 +215,7 @@ export class AnalyticsService {
               tx,
               projection,
               await summarizeSession(tx, session.id),
+              true,
             );
           const last = sessions.at(-1);
           await tx.analyticsBackfillJob.update({
@@ -230,6 +232,10 @@ export class AnalyticsService {
           // With the account locked there is no unobserved finish between this
           // empty-tail read and the swap. Future finishes see the new active row.
           if (sessions.length === 0) {
+            // TD-58/LIVE-23: a replay only adds events, so a record that a
+            // workout logged earlier in history now beats would otherwise
+            // stand. A no-op when nothing was written before an existing one.
+            await removeStaleRecordEvents(tx, userId);
             await tx.workoutAnalyticsProjection.updateMany({
               where: { userId, active: true },
               data: { active: false },
