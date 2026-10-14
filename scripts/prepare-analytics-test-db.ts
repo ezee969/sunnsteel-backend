@@ -456,6 +456,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20261011200000_logged_workouts/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// Hip adduction and abduction movement patterns.
+				readFileSync(
+					'prisma/migrations/20261014120000_hip_adduction_abduction/migration.sql',
+					'utf8',
 				),
     );
     prisma(
