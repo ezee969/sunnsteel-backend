@@ -63,13 +63,13 @@ export function sentryOptions(env: Env): Sentry.NodeOptions | null {
     dsn,
     environment: env.SENTRY_ENVIRONMENT || env.NODE_ENV || 'development',
     release: env.RAILWAY_GIT_COMMIT_SHA || undefined,
-    // No IP address, cookie or request body is collected; `redactEvent` is
+    // No cookie, request body or query string is collected; `redactEvent` is
     // the second line for whatever an integration adds.
     sendDefaultPii: false,
     integrations: [
       Sentry.httpIntegration({ maxIncomingRequestBodySize: 'none' }),
       Sentry.requestDataIntegration({
-        include: { cookies: false, data: false, query_string: false, ip: false },
+        include: { cookies: false, data: false, query_string: false },
       }),
       Sentry.prismaIntegration(),
     ],

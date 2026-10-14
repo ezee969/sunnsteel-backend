@@ -4,7 +4,8 @@ import type { Breadcrumb, Event } from '@sentry/nestjs';
  * PLAT-02: what may leave the server in an error report or a trace.
  *
  * Nothing a member typed (request bodies, notes, messages, search queries), no
- * credential (bearer tokens, cookies, share tokens) and no address is sent.
+ * credential (bearer tokens, cookies, share tokens) is sent. The caller's
+ * address is kept, by the owner's decision of 2026-10-14.
  * The SDK is configured not to collect most of it in the first place
  * (`instrument.ts`); this is the second line, applied to every event and
  * transaction just before it is sent.
@@ -31,17 +32,6 @@ const URL_KEYS = [
   'to',
 ];
 
-/** Attributes naming the caller's address. */
-const ADDRESS_KEYS = [
-  'client.address',
-  'client.port',
-  'http.client_ip',
-  'net.peer.ip',
-  'net.peer.port',
-  'net.sock.peer.addr',
-  'net.sock.peer.port',
-];
-
 /** Every captured request or response header is dropped, filtered or not. */
 const HEADER_PREFIXES = ['http.request.header.', 'http.response.header.'];
 
@@ -66,7 +56,6 @@ function scrubData(data: Record<string, unknown> | undefined): void {
     if (typeof value === 'string') data[key] = scrubUrl(value);
   }
   for (const key of QUERY_KEYS) delete data[key];
-  for (const key of ADDRESS_KEYS) delete data[key];
   for (const key of Object.keys(data)) {
     if (HEADER_PREFIXES.some(prefix => key.startsWith(prefix))) delete data[key];
   }
@@ -96,9 +85,13 @@ export function redactEvent<T extends Event>(event: T): T {
     }
   }
 
-  // An account is named by its id only: never an email, a username or an IP.
+  // An account is named by its id, never an email or a username.
   if (event.user) {
-    event.user = event.user.id === undefined ? {} : { id: String(event.user.id) };
+    const { id, ip_address } = event.user;
+    event.user = {
+      ...(id === undefined ? {} : { id: String(id) }),
+      ...(ip_address ? { ip_address } : {}),
+    };
   }
 
   if (event.transaction) event.transaction = scrubUrl(event.transaction);

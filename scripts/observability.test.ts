@@ -74,12 +74,14 @@ describe("PLAT-02 what leaves the server", () => {
     assert.equal(event.request?.cookies, undefined);
     assert.equal(event.request?.query_string, undefined);
     assert.equal(event.request?.env, undefined);
-    assert.deepEqual(event.user, { id: "user-1" });
+    assert.deepEqual(event.user, { id: "user-1", ip_address: "203.0.113.9" });
   });
 
-  it("names nobody when the account is unknown", () => {
-    const event = redactEvent({ user: { ip_address: "203.0.113.9" } } as Event);
-    assert.deepEqual(event.user, {});
+  it("keeps the address but never an email or a username", () => {
+    const event = redactEvent({
+      user: { ip_address: "203.0.113.9", username: "ana" },
+    } as Event);
+    assert.deepEqual(event.user, { ip_address: "203.0.113.9" });
   });
 
   it("scrubs breadcrumbs, spans and the trace, and drops console lines", () => {
@@ -125,6 +127,7 @@ describe("PLAT-02 what leaves the server", () => {
     assert.equal(event.transaction, "GET /api/shared/sessions/[token]");
     assert.deepEqual(event.contexts?.trace?.data, {
       "url.full": "http://x/api/shared/sessions/[token]",
+      "net.peer.ip": "203.0.113.9",
     });
     assert.equal(event.spans?.[0].description, "GET http://x/api/search");
     assert.deepEqual(event.spans?.[0].data, {
