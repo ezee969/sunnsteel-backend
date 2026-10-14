@@ -24,6 +24,7 @@ import {
   achievementKey,
   attachmentFor,
   readAchievementSummaries,
+  readComebackSummaries,
   sharedWorkoutExercises,
   toWorkoutSummary,
 } from '../src/messages/message-attachments';
@@ -52,6 +53,7 @@ const objects = {
   workouts: new Map(),
   records: new Map(),
   achievements: new Map(),
+  comebacks: new Map(),
 };
 
 function message(overrides: Partial<StoredMessage> = {}): StoredMessage {
@@ -157,7 +159,7 @@ describe('MSG-07 what a send may carry', () => {
   it('is a kind of its own, and reading it is a source of its own', () => {
     assert.deepEqual(
       [...MESSAGE_ATTACHMENT_KINDS],
-      ['ROUTINE', 'WORKOUT', 'RECORD', 'ACHIEVEMENT'],
+      ['ROUTINE', 'WORKOUT', 'RECORD', 'ACHIEVEMENT', 'COMEBACK'],
     );
     assert.ok((SHARED_ROUTINE_SOURCES as readonly string[]).includes('MESSAGE'));
   });
@@ -221,6 +223,7 @@ describe('MSG-10 a finished workout in a message', () => {
     workouts: new Map([[SESSION, card]]),
     records: new Map(),
     achievements: new Map(),
+    comebacks: new Map(),
   };
   const shared = message({ attachmentKind: 'WORKOUT', attachmentId: SESSION });
 
@@ -336,6 +339,7 @@ describe('MSG-11 a personal record in a message', () => {
     workouts: new Map(),
     records: new Map([[RECORD_EVENT, record]]),
     achievements: new Map(),
+    comebacks: new Map(),
   };
   const shared = message({ attachmentKind: 'RECORD', attachmentId: RECORD_EVENT });
 
@@ -410,6 +414,7 @@ describe('MSG-12 an earned milestone in a message', () => {
     workouts: new Map(),
     records: new Map(),
     achievements: new Map([[achievementKey(SENDER, 'sessions:10'), milestone]]),
+    comebacks: new Map(),
   };
   const shared = message({ attachmentKind: 'ACHIEVEMENT', attachmentId: 'sessions:10' });
 
@@ -499,5 +504,110 @@ describe('MSG-12 an earned milestone in a message', () => {
 
   it('adds its kind safely, twice', () => {
     assert.match(ACHIEVEMENT_MIGRATION, /ADD VALUE IF NOT EXISTS 'ACHIEVEMENT'/);
+  });
+});
+
+const COMEBACK_MIGRATION = readFileSync(
+  'prisma/migrations/20261014160000_message_comebacks/migration.sql',
+  'utf8',
+);
+const E = (n: number) => `${String(n).padStart(8, '0')}-0000-4000-8000-000000000000`;
+
+describe('MSG-13 a comeback in a message', () => {
+  // Sessions on Sep 1, then nothing until Sep 20, 22 and 24: back after 18
+  // full days away, recognized on the third active day.
+  const day = (n: number, d: number) => ({
+    id: E(n),
+    sessionId: `s${n}`,
+    occurredAt: new Date(Date.UTC(2026, 8, d, 10)),
+  });
+  const history = [day(4, 24), day(3, 22), day(2, 20), day(1, 1)];
+  const ID = `comeback:${E(2)}:${E(4)}:v1`;
+  let asked: unknown[] = [];
+  const db = (projection: { timeZone: string } | null) => ({
+    workoutAnalyticsProjection: { findFirst: async () => projection },
+    trainingEvent: {
+      findMany: async (query: unknown) => {
+        asked.push(query);
+        return history;
+      },
+    },
+  });
+
+  it('reads the comeback its sender holds, as Achievements derives it, nothing of its sessions', async () => {
+    asked = [];
+    const read = await readComebackSummaries(db({ timeZone: 'UTC' }) as never, [
+      { senderId: SENDER, comebackId: ID },
+      { senderId: SENDER, comebackId: `comeback:${E(9)}:${E(9)}:v1` },
+    ]);
+    assert.deepEqual([...read.keys()], [achievementKey(SENDER, ID)]);
+    assert.deepEqual(read.get(achievementKey(SENDER, ID)), {
+      id: ID,
+      inactiveDays: 18,
+      returnedAt: '2026-09-20T10:00:00.000Z',
+      recognizedAt: '2026-09-24T10:00:00.000Z',
+      activeDays: 3,
+      windowDays: 5,
+    });
+    assert.equal(asked.length, 1);
+    assert.deepEqual((asked[0] as { where: unknown }).where, {
+      userId: SENDER,
+      type: 'SESSION_COMPLETED',
+    });
+  });
+
+  it('holds none before the sender\'s analytics are ready', async () => {
+    const read = await readComebackSummaries(db(null) as never, [
+      { senderId: SENDER, comebackId: ID },
+    ]);
+    assert.equal(read.size, 0);
+  });
+
+  it("reads as its sender's comeback, and no longer available once they no longer hold it", () => {
+    const card = {
+      id: ID,
+      inactiveDays: 18,
+      returnedAt: '2026-09-20T10:00:00.000Z',
+      recognizedAt: '2026-09-24T10:00:00.000Z',
+      activeDays: 3,
+      windowDays: 5,
+    };
+    const held = {
+      routines: new Map(),
+      workouts: new Map(),
+      records: new Map(),
+      achievements: new Map(),
+      comebacks: new Map([[achievementKey(SENDER, ID), card]]),
+    };
+    const shared = message({ attachmentKind: 'COMEBACK', attachmentId: ID });
+    assert.deepEqual(messageFor(shared, READER, held).attachment, {
+      kind: 'COMEBACK',
+      comeback: card,
+    });
+    assert.deepEqual(messageFor(shared, READER).attachment, {
+      kind: 'COMEBACK',
+      comeback: null,
+    });
+    assert.equal(attachmentFor({ ...shared, deletedAt: new Date() }, SENDER, held), null);
+    const [captured] = captureMessages([shared], 'm1', READER, held);
+    assert.equal(captured.comebackId, ID);
+    assert.equal(captured.achievementId, null);
+    const [gone] = captureMessages([shared], 'm1', READER);
+    assert.equal(gone.comebackId, '');
+  });
+
+  it('takes a recognition id in both writes, and nothing else', async () => {
+    const send = plainToInstance(SendMessageDto, { comebackId: ID });
+    assert.deepEqual(await validate(send), []);
+    const start = plainToInstance(StartConversationDto, { recipient: 'ana', comebackId: ID });
+    assert.deepEqual(await validate(start), []);
+    for (const bad of ['comeback:x:y:v1', `comeback:${E(2)}:${E(4)}:v2`, E(2)]) {
+      const refused = plainToInstance(SendMessageDto, { comebackId: bad });
+      assert.equal((await validate(refused)).length, 1, bad);
+    }
+  });
+
+  it('adds its kind safely, twice', () => {
+    assert.match(COMEBACK_MIGRATION, /ADD VALUE IF NOT EXISTS 'COMEBACK'/);
   });
 });

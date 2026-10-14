@@ -468,6 +468,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20261014140000_message_achievements/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// MSG-13: a comeback in a message.
+				readFileSync(
+					'prisma/migrations/20261014160000_message_comebacks/migration.sql',
+					'utf8',
 				),
     );
     prisma(

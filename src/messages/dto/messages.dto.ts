@@ -3,6 +3,7 @@ import {
   IsUUID,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
   MinLength,
 } from "class-validator";
@@ -28,6 +29,10 @@ const BODY_REQUEST_MAX = MESSAGE_BODY_MAX * 2 + 200;
 
 /** MSG-12: a milestone is named by its catalog id (`sessions:10`). */
 const ACHIEVEMENT_IDS = ACHIEVEMENT_DEFINITIONS.map(({ id }) => id);
+
+/** MSG-13: a comeback's id names its two completion events. */
+const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+const COMEBACK_ID = new RegExp(`^comeback:${UUID}:${UUID}:v1$`);
 
 export class StartConversationDto implements StartConversationRequest {
   @IsString()
@@ -59,6 +64,11 @@ export class StartConversationDto implements StartConversationRequest {
   @IsOptional()
   @IsIn(ACHIEVEMENT_IDS)
   achievementId?: string;
+
+  /** MSG-13: one of the sender's own comebacks, by its recognition id. */
+  @IsOptional()
+  @Matches(COMEBACK_ID)
+  comebackId?: string;
 }
 
 export class SendMessageDto implements SendMessageRequest {
@@ -84,6 +94,11 @@ export class SendMessageDto implements SendMessageRequest {
   @IsOptional()
   @IsIn(ACHIEVEMENT_IDS)
   achievementId?: string;
+
+  /** MSG-13: one of the sender's own comebacks, by its recognition id. */
+  @IsOptional()
+  @Matches(COMEBACK_ID)
+  comebackId?: string;
 }
 
 export class PageQueryDto {

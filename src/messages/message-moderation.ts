@@ -126,6 +126,11 @@ export function captureMessages(
         attachment?.kind === "ACHIEVEMENT"
           ? (attachment.achievement?.id ?? "")
           : null;
+      // MSG-13: a comeback, by its id.
+      const comebackId =
+        attachment?.kind === "COMEBACK"
+          ? (attachment.comeback?.id ?? "")
+          : null;
       return {
         id: row.id,
         fromReporter: row.senderId === reporterId,
@@ -136,6 +141,7 @@ export function captureMessages(
         workoutName,
         recordName,
         achievementId,
+        comebackId,
         createdAt: seen.createdAt,
       };
     });
@@ -181,6 +187,7 @@ type CaptureDb = Pick<
   | "routine"
   | "workoutSession"
   | "trainingEvent"
+  | "workoutAnalyticsProjection"
   | "$queryRaw"
 >;
 

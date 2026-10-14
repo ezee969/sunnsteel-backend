@@ -1,9 +1,11 @@
 import { NotFoundException } from "@nestjs/common";
 import { Prisma, WorkoutSessionStatus } from "@prisma/client";
 import {
+  COMEBACK_SESSION_LOOKBACK,
   apiError,
   type MessageAchievementSummary,
   type MessageAttachment,
+  type MessageComebackSummary,
   type MessageRecordSummary,
   type MessageWorkoutSummary,
   type SharedRoutine,
@@ -20,6 +22,7 @@ import {
   toSharedRoutineSummary,
 } from "../routines/routine-summary";
 import { parseAchievementEvent } from "../achievements/achievements.service";
+import { comebackRecognitionSummary } from "../achievements/comeback-recognition";
 import { captureRoutineSetup } from "../routines/routine-versions";
 import { isHiddenFromViewer } from "../users/member-blocks";
 import { readSnapshot } from "../workouts/analytics/session-snapshot";
@@ -30,9 +33,9 @@ import {
 import { routineDayName } from "../workouts/workout-session.selects";
 
 /**
- * MSG-07, MSG-10, MSG-11 and MSG-12: what a message carries beside its text
- * -- one of the sender's routines, finished workouts, personal records or
- * earned milestones. Sending it is the sender's consent,
+ * MSG-07, MSG-10, MSG-11, MSG-12 and MSG-13: what a message carries beside
+ * its text -- one of the sender's routines, finished workouts, personal
+ * records, earned milestones or comebacks. Sending it is the sender's consent,
  * like a `ROUT-04` or `SOC-07` link, to the conversation's other participant:
  * they may open it whatever the sender's privacy, until the message is
  * deleted. Nothing is copied into the message; the card and the object are
@@ -40,7 +43,12 @@ import { routineDayName } from "../workouts/workout-session.selects";
  * hidden object reads as no longer available.
  */
 
-export type AttachmentKind = "ROUTINE" | "WORKOUT" | "RECORD" | "ACHIEVEMENT";
+export type AttachmentKind =
+  | "ROUTINE"
+  | "WORKOUT"
+  | "RECORD"
+  | "ACHIEVEMENT"
+  | "COMEBACK";
 
 export interface AttachmentRef {
   senderId: string;
@@ -55,6 +63,8 @@ export interface MessageObjects {
   records: ReadonlyMap<string, MessageRecordSummary>;
   /** MSG-12: keyed by `achievementKey`, since every member has `sessions:1`. */
   achievements: ReadonlyMap<string, MessageAchievementSummary>;
+  /** MSG-13: keyed by `achievementKey` too -- a comeback is its holder's. */
+  comebacks: ReadonlyMap<string, MessageComebackSummary>;
 }
 
 export const NO_OBJECTS: MessageObjects = {
@@ -62,9 +72,13 @@ export const NO_OBJECTS: MessageObjects = {
   workouts: new Map(),
   records: new Map(),
   achievements: new Map(),
+  comebacks: new Map(),
 };
 
-/** MSG-12: a milestone id is the same for every member; its holder is not. */
+/**
+ * MSG-12/MSG-13: an object a member holds rather than owns by id -- a
+ * milestone id is the same for every member -- is keyed by its holder too.
+ */
 export const achievementKey = (senderId: string, achievementId: string) =>
   `${senderId}|${achievementId}`;
 
@@ -105,6 +119,14 @@ export function attachmentFor(
         kind: "ACHIEVEMENT",
         achievement:
           objects.achievements.get(
+            achievementKey(row.senderId, row.attachmentId),
+          ) ?? null,
+      };
+    case "COMEBACK":
+      return {
+        kind: "COMEBACK",
+        comeback:
+          objects.comebacks.get(
             achievementKey(row.senderId, row.attachmentId),
           ) ?? null,
       };
@@ -207,6 +229,60 @@ export async function readAchievementSummaries(
   return out;
 }
 
+/**
+ * MSG-13: comebacks by their recognition ids, each as its holder holds it
+ * now, keyed by `achievementKey`. A comeback is derived on read from the
+ * holder's completion events, exactly as Achievements derives it -- their
+ * READY projection's time zone and the most recent
+ * `COMEBACK_SESSION_LOOKBACK` completions -- so the two never disagree. Its id
+ * names the completion events it rests on, which are written once per
+ * session and never rewritten; one whose sessions are gone, or that fell out
+ * of the scan, is left out and its card reads as no longer available.
+ * Nothing of the sessions behind it is kept.
+ */
+export async function readComebackSummaries(
+  db: Pick<DatabaseService, "workoutAnalyticsProjection" | "trainingEvent">,
+  wanted: ReadonlyArray<{ senderId: string; comebackId: string }>,
+): Promise<Map<string, MessageComebackSummary>> {
+  const out = new Map<string, MessageComebackSummary>();
+  const senders = new Map<string, Set<string>>();
+  for (const { senderId, comebackId } of wanted) {
+    const ids = senders.get(senderId) ?? new Set<string>();
+    ids.add(comebackId);
+    senders.set(senderId, ids);
+  }
+  for (const [senderId, ids] of senders) {
+    const projection = await db.workoutAnalyticsProjection.findFirst({
+      where: { userId: senderId, active: true, state: "READY" },
+      select: { timeZone: true },
+    });
+    if (!projection) continue;
+    const events = await db.trainingEvent.findMany({
+      where: { userId: senderId, type: "SESSION_COMPLETED" },
+      orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
+      take: COMEBACK_SESSION_LOOKBACK + 1,
+      select: { id: true, sessionId: true, occurredAt: true },
+    });
+    const summary = comebackRecognitionSummary(
+      events.slice(0, COMEBACK_SESSION_LOOKBACK),
+      projection.timeZone,
+      events.length > COMEBACK_SESSION_LOOKBACK,
+    );
+    for (const recognition of summary.recognitions) {
+      if (!ids.has(recognition.id)) continue;
+      out.set(achievementKey(senderId, recognition.id), {
+        id: recognition.id,
+        inactiveDays: recognition.inactiveDays,
+        returnedAt: recognition.returnedAt,
+        recognizedAt: recognition.recognizedAt,
+        activeDays: recognition.activeDays,
+        windowDays: recognition.windowDays,
+      });
+    }
+  }
+  return out;
+}
+
 const WORKOUT_SUMMARY_SELECT = {
   id: true,
   userId: true,
@@ -268,7 +344,11 @@ export function toWorkoutSummary(
 
 type ObjectDb = Pick<
   DatabaseService,
-  "routine" | "workoutSession" | "trainingEvent" | "$queryRaw"
+  | "routine"
+  | "workoutSession"
+  | "trainingEvent"
+  | "workoutAnalyticsProjection"
+  | "$queryRaw"
 >;
 
 /**
@@ -285,6 +365,7 @@ export async function messageObjects(
   const sessionIds = new Map<string, string>();
   const recordIds = new Map<string, string>();
   const achievements: Array<{ senderId: string; achievementId: string }> = [];
+  const comebacks: Array<{ senderId: string; comebackId: string }> = [];
   for (const row of rows) {
     if (!row.attachmentId) continue;
     if (row.attachmentKind === "ROUTINE") {
@@ -298,6 +379,8 @@ export async function messageObjects(
         senderId: row.senderId,
         achievementId: row.attachmentId,
       });
+    } else if (row.attachmentKind === "COMEBACK") {
+      comebacks.push({ senderId: row.senderId, comebackId: row.attachmentId });
     }
   }
   const routines = routineIds.size
@@ -339,6 +422,7 @@ export async function messageObjects(
     ),
     records: await readRecordSummaries(db, recordIds),
     achievements: await readAchievementSummaries(db, achievements),
+    comebacks: await readComebackSummaries(db, comebacks),
   };
 }
 
@@ -381,6 +465,17 @@ export async function assertSendableAchievement(
   ]);
   // Only a client sending an id it was never shown reaches this.
   if (held.size === 0) throw new NotFoundException("Achievement not found");
+}
+
+/** MSG-13: only a comeback the sender holds. */
+export async function assertSendableComeback(
+  db: Pick<DatabaseService, "workoutAnalyticsProjection" | "trainingEvent">,
+  senderId: string,
+  comebackId: string,
+): Promise<void> {
+  const held = await readComebackSummaries(db, [{ senderId, comebackId }]);
+  // Only a client sending an id it was never shown reaches this.
+  if (held.size === 0) throw new NotFoundException("Comeback not found");
 }
 
 export async function assertSendableWorkout(

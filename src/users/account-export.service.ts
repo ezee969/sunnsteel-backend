@@ -489,6 +489,10 @@ export class AccountExportService {
           ...(message.attachmentKind === "ACHIEVEMENT" && message.attachmentId
             ? { achievementId: message.attachmentId }
             : {}),
+          // MSG-13: a comeback it shared, by its id.
+          ...(message.attachmentKind === "COMEBACK" && message.attachmentId
+            ? { comebackId: message.attachmentId }
+            : {}),
           createdAt: iso(message.createdAt),
         })),
         reportsFiled: reports.map((report) => ({
