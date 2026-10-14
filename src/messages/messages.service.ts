@@ -36,6 +36,7 @@ import { recipientLocale, serverCopy } from "../i18n/server-copy";
 import { messageFor } from "./message-moderation";
 import { WorkoutSessionRecapService } from "../workouts/services/workout-session-recap.service";
 import {
+  assertSendableAchievement,
   assertSendableRecord,
   assertSendableRoutine,
   assertSendableWorkout,
@@ -985,7 +986,10 @@ export class MessagesService {
     const routineId = request.routineId ?? null;
     const sessionId = request.sessionId ?? null;
     const recordEventId = request.recordEventId ?? null;
-    const given = [routineId, sessionId, recordEventId].filter(Boolean).length;
+    const achievementId = request.achievementId ?? null;
+    const given = [routineId, sessionId, recordEventId, achievementId].filter(
+      Boolean,
+    ).length;
     if (given > 1) {
       throw new BadRequestException(apiError("MESSAGE_ONE_ATTACHMENT"));
     }
@@ -995,6 +999,9 @@ export class MessagesService {
     if (recordEventId) {
       await assertSendableRecord(this.db, viewerId, recordEventId);
     }
+    if (achievementId) {
+      await assertSendableAchievement(this.db, viewerId, achievementId);
+    }
     return {
       body,
       attachmentKind: routineId
@@ -1003,8 +1010,10 @@ export class MessagesService {
           ? "WORKOUT"
           : recordEventId
             ? "RECORD"
-            : null,
-      attachmentId: routineId ?? sessionId ?? recordEventId,
+            : achievementId
+              ? "ACHIEVEMENT"
+              : null,
+      attachmentId: routineId ?? sessionId ?? recordEventId ?? achievementId,
     };
   }
 

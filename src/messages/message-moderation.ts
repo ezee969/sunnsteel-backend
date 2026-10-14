@@ -121,6 +121,11 @@ export function captureMessages(
         attachment?.kind === "RECORD"
           ? (attachment.record?.exerciseName ?? "")
           : null;
+      // MSG-12: a milestone, by its id; the reader's language names it.
+      const achievementId =
+        attachment?.kind === "ACHIEVEMENT"
+          ? (attachment.achievement?.id ?? "")
+          : null;
       return {
         id: row.id,
         fromReporter: row.senderId === reporterId,
@@ -130,6 +135,7 @@ export function captureMessages(
         routineName,
         workoutName,
         recordName,
+        achievementId,
         createdAt: seen.createdAt,
       };
     });
@@ -169,7 +175,13 @@ export interface MessageCaptureData {
 
 type CaptureDb = Pick<
   DatabaseService,
-  "message" | "userBlock" | "user" | "routine" | "workoutSession" | "$queryRaw"
+  | "message"
+  | "userBlock"
+  | "user"
+  | "routine"
+  | "workoutSession"
+  | "trainingEvent"
+  | "$queryRaw"
 >;
 
 /**

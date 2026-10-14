@@ -2,6 +2,7 @@ import { NotFoundException } from "@nestjs/common";
 import { Prisma, WorkoutSessionStatus } from "@prisma/client";
 import {
   apiError,
+  type MessageAchievementSummary,
   type MessageAttachment,
   type MessageRecordSummary,
   type MessageWorkoutSummary,
@@ -18,6 +19,7 @@ import {
   ROUTINE_SUMMARY_SELECT,
   toSharedRoutineSummary,
 } from "../routines/routine-summary";
+import { parseAchievementEvent } from "../achievements/achievements.service";
 import { captureRoutineSetup } from "../routines/routine-versions";
 import { isHiddenFromViewer } from "../users/member-blocks";
 import { readSnapshot } from "../workouts/analytics/session-snapshot";
@@ -28,8 +30,9 @@ import {
 import { routineDayName } from "../workouts/workout-session.selects";
 
 /**
- * MSG-07, MSG-10 and MSG-11: what a message carries beside its text -- one
- * of the sender's routines, finished workouts or personal records. Sending it is the sender's consent,
+ * MSG-07, MSG-10, MSG-11 and MSG-12: what a message carries beside its text
+ * -- one of the sender's routines, finished workouts, personal records or
+ * earned milestones. Sending it is the sender's consent,
  * like a `ROUT-04` or `SOC-07` link, to the conversation's other participant:
  * they may open it whatever the sender's privacy, until the message is
  * deleted. Nothing is copied into the message; the card and the object are
@@ -37,7 +40,7 @@ import { routineDayName } from "../workouts/workout-session.selects";
  * hidden object reads as no longer available.
  */
 
-export type AttachmentKind = "ROUTINE" | "WORKOUT" | "RECORD";
+export type AttachmentKind = "ROUTINE" | "WORKOUT" | "RECORD" | "ACHIEVEMENT";
 
 export interface AttachmentRef {
   senderId: string;
@@ -50,13 +53,20 @@ export interface MessageObjects {
   routines: ReadonlyMap<string, SharedRoutineSummary>;
   workouts: ReadonlyMap<string, MessageWorkoutSummary>;
   records: ReadonlyMap<string, MessageRecordSummary>;
+  /** MSG-12: keyed by `achievementKey`, since every member has `sessions:1`. */
+  achievements: ReadonlyMap<string, MessageAchievementSummary>;
 }
 
 export const NO_OBJECTS: MessageObjects = {
   routines: new Map(),
   workouts: new Map(),
   records: new Map(),
+  achievements: new Map(),
 };
+
+/** MSG-12: a milestone id is the same for every member; its holder is not. */
+export const achievementKey = (senderId: string, achievementId: string) =>
+  `${senderId}|${achievementId}`;
 
 /**
  * Whether the viewer reads what a message carries: never once it is deleted,
@@ -89,6 +99,14 @@ export function attachmentFor(
       return {
         kind: "RECORD",
         record: objects.records.get(row.attachmentId) ?? null,
+      };
+    case "ACHIEVEMENT":
+      return {
+        kind: "ACHIEVEMENT",
+        achievement:
+          objects.achievements.get(
+            achievementKey(row.senderId, row.attachmentId),
+          ) ?? null,
       };
   }
 }
@@ -134,6 +152,56 @@ export async function readRecordSummaries(
       eventId: row.id,
       occurredAt: row.occurredAt.toISOString(),
       ...parts,
+    });
+  }
+  return out;
+}
+
+/**
+ * MSG-12: earned milestones by their stable ids, each as its holder holds it
+ * now, keyed by `achievementKey`. A correction removes an achievement event
+ * and a later award writes a new one, so a message names the milestone, not
+ * the event; one its sender no longer holds is left out, and its card then
+ * reads as no longer available. Nothing of the session behind it is kept.
+ */
+export async function readAchievementSummaries(
+  db: Pick<DatabaseService, "trainingEvent">,
+  wanted: ReadonlyArray<{ senderId: string; achievementId: string }>,
+): Promise<Map<string, MessageAchievementSummary>> {
+  if (wanted.length === 0) return new Map();
+  const keys = new Set(
+    wanted.map(({ senderId, achievementId }) =>
+      achievementKey(senderId, achievementId),
+    ),
+  );
+  const events = await db.trainingEvent.findMany({
+    where: {
+      userId: { in: [...new Set(wanted.map(({ senderId }) => senderId))] },
+      type: "ACHIEVEMENT_UNLOCKED",
+    },
+    orderBy: [{ occurredAt: "asc" }, { id: "asc" }],
+    select: {
+      id: true,
+      userId: true,
+      sessionId: true,
+      occurredAt: true,
+      payload: true,
+    },
+  });
+  const out = new Map<string, MessageAchievementSummary>();
+  for (const event of events) {
+    const earned = parseAchievementEvent(event);
+    if (!earned) continue;
+    const key = achievementKey(event.userId, earned.id);
+    if (!keys.has(key) || out.has(key)) continue;
+    out.set(key, {
+      id: earned.id,
+      category: earned.category,
+      threshold: earned.threshold,
+      title: earned.title,
+      description: earned.description,
+      unlockedAt: earned.unlockedAt,
+      backfilled: earned.backfilled,
     });
   }
   return out;
@@ -200,7 +268,7 @@ export function toWorkoutSummary(
 
 type ObjectDb = Pick<
   DatabaseService,
-  "routine" | "workoutSession" | "$queryRaw"
+  "routine" | "workoutSession" | "trainingEvent" | "$queryRaw"
 >;
 
 /**
@@ -216,6 +284,7 @@ export async function messageObjects(
   const routineIds = new Map<string, string>();
   const sessionIds = new Map<string, string>();
   const recordIds = new Map<string, string>();
+  const achievements: Array<{ senderId: string; achievementId: string }> = [];
   for (const row of rows) {
     if (!row.attachmentId) continue;
     if (row.attachmentKind === "ROUTINE") {
@@ -224,6 +293,11 @@ export async function messageObjects(
       sessionIds.set(row.attachmentId, row.senderId);
     } else if (row.attachmentKind === "RECORD") {
       recordIds.set(row.attachmentId, row.senderId);
+    } else if (row.attachmentKind === "ACHIEVEMENT") {
+      achievements.push({
+        senderId: row.senderId,
+        achievementId: row.attachmentId,
+      });
     }
   }
   const routines = routineIds.size
@@ -264,6 +338,7 @@ export async function messageObjects(
       ),
     ),
     records: await readRecordSummaries(db, recordIds),
+    achievements: await readAchievementSummaries(db, achievements),
   };
 }
 
@@ -293,6 +368,19 @@ export async function assertSendableRecord(
   const records = await readRecordSummaries(db, new Map([[eventId, senderId]]));
   // Only a client sending an id it was never shown reaches this.
   if (!records.has(eventId)) throw new NotFoundException("Record not found");
+}
+
+/** MSG-12: only a milestone the sender holds. */
+export async function assertSendableAchievement(
+  db: Pick<DatabaseService, "trainingEvent">,
+  senderId: string,
+  achievementId: string,
+): Promise<void> {
+  const held = await readAchievementSummaries(db, [
+    { senderId, achievementId },
+  ]);
+  // Only a client sending an id it was never shown reaches this.
+  if (held.size === 0) throw new NotFoundException("Achievement not found");
 }
 
 export async function assertSendableWorkout(

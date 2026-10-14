@@ -462,6 +462,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20261014120000_hip_adduction_abduction/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// MSG-12: an earned milestone in a message.
+				readFileSync(
+					'prisma/migrations/20261014140000_message_achievements/migration.sql',
+					'utf8',
 				),
     );
     prisma(

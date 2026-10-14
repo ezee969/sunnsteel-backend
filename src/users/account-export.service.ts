@@ -485,6 +485,10 @@ export class AccountExportService {
           ...(message.attachmentKind === "RECORD" && message.attachmentId
             ? { recordEventId: message.attachmentId }
             : {}),
+          // MSG-12: a milestone it shared, by its id.
+          ...(message.attachmentKind === "ACHIEVEMENT" && message.attachmentId
+            ? { achievementId: message.attachmentId }
+            : {}),
           createdAt: iso(message.createdAt),
         })),
         reportsFiled: reports.map((report) => ({

@@ -7,6 +7,7 @@ import {
   MinLength,
 } from "class-validator";
 import {
+  ACHIEVEMENT_DEFINITIONS,
   CONVERSATION_BOXES,
   type ConversationBox,
   MESSAGE_BODY_MAX,
@@ -24,6 +25,9 @@ import {
  * only bounds the request, and `normalizeMessageBody` refuses with a code.
  */
 const BODY_REQUEST_MAX = MESSAGE_BODY_MAX * 2 + 200;
+
+/** MSG-12: a milestone is named by its catalog id (`sessions:10`). */
+const ACHIEVEMENT_IDS = ACHIEVEMENT_DEFINITIONS.map(({ id }) => id);
 
 export class StartConversationDto implements StartConversationRequest {
   @IsString()
@@ -50,6 +54,11 @@ export class StartConversationDto implements StartConversationRequest {
   @IsOptional()
   @IsUUID()
   recordEventId?: string;
+
+  /** MSG-12: one of the sender's own earned milestones, by its id. */
+  @IsOptional()
+  @IsIn(ACHIEVEMENT_IDS)
+  achievementId?: string;
 }
 
 export class SendMessageDto implements SendMessageRequest {
@@ -70,6 +79,11 @@ export class SendMessageDto implements SendMessageRequest {
   @IsOptional()
   @IsUUID()
   recordEventId?: string;
+
+  /** MSG-12: one of the sender's own earned milestones, by its id. */
+  @IsOptional()
+  @IsIn(ACHIEVEMENT_IDS)
+  achievementId?: string;
 }
 
 export class PageQueryDto {

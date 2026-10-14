@@ -240,12 +240,13 @@ model Message {
   @@index([senderId, createdAt])
 }
 
-/// MSG-07: what a message may carry. MSG-10 adds a finished workout and
-/// MSG-11 a personal record.
+/// MSG-07: what a message may carry. MSG-10 adds a finished workout,
+/// MSG-11 a personal record and MSG-12 an earned milestone.
 enum MessageAttachmentKind {
   ROUTINE
   WORKOUT
   RECORD
+  ACHIEVEMENT
 }
 
 /// PROF-08 adds ROUTINE: a shared routine is a fourth kind of featured item,

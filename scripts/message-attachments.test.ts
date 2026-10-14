@@ -21,7 +21,9 @@ import {
   type StoredMessage,
 } from '../src/messages/message-moderation';
 import {
+  achievementKey,
   attachmentFor,
+  readAchievementSummaries,
   sharedWorkoutExercises,
   toWorkoutSummary,
 } from '../src/messages/message-attachments';
@@ -49,6 +51,7 @@ const objects = {
   routines: new Map([[ROUTINE, summary]]),
   workouts: new Map(),
   records: new Map(),
+  achievements: new Map(),
 };
 
 function message(overrides: Partial<StoredMessage> = {}): StoredMessage {
@@ -152,7 +155,10 @@ describe('MSG-07 what a send may carry', () => {
   });
 
   it('is a kind of its own, and reading it is a source of its own', () => {
-    assert.deepEqual([...MESSAGE_ATTACHMENT_KINDS], ['ROUTINE', 'WORKOUT', 'RECORD']);
+    assert.deepEqual(
+      [...MESSAGE_ATTACHMENT_KINDS],
+      ['ROUTINE', 'WORKOUT', 'RECORD', 'ACHIEVEMENT'],
+    );
     assert.ok((SHARED_ROUTINE_SOURCES as readonly string[]).includes('MESSAGE'));
   });
 });
@@ -214,6 +220,7 @@ describe('MSG-10 a finished workout in a message', () => {
     routines: new Map(),
     workouts: new Map([[SESSION, card]]),
     records: new Map(),
+    achievements: new Map(),
   };
   const shared = message({ attachmentKind: 'WORKOUT', attachmentId: SESSION });
 
@@ -328,6 +335,7 @@ describe('MSG-11 a personal record in a message', () => {
     routines: new Map(),
     workouts: new Map(),
     records: new Map([[RECORD_EVENT, record]]),
+    achievements: new Map(),
   };
   const shared = message({ attachmentKind: 'RECORD', attachmentId: RECORD_EVENT });
 
@@ -379,5 +387,117 @@ describe('MSG-11 a personal record in a message', () => {
 
   it('adds its kind safely, twice', () => {
     assert.match(RECORD_MIGRATION, /ADD VALUE IF NOT EXISTS 'RECORD'/);
+  });
+});
+
+const ACHIEVEMENT_MIGRATION = readFileSync(
+  'prisma/migrations/20261014140000_message_achievements/migration.sql',
+  'utf8',
+);
+
+describe('MSG-12 an earned milestone in a message', () => {
+  const milestone = {
+    id: 'sessions:10',
+    category: 'SESSIONS' as const,
+    threshold: 10,
+    title: '10 Sessions',
+    description: 'Complete 10 training sessions.',
+    unlockedAt: '2026-10-07T09:00:00.000Z',
+    backfilled: false,
+  };
+  const held = {
+    routines: new Map(),
+    workouts: new Map(),
+    records: new Map(),
+    achievements: new Map([[achievementKey(SENDER, 'sessions:10'), milestone]]),
+  };
+  const shared = message({ attachmentKind: 'ACHIEVEMENT', attachmentId: 'sessions:10' });
+
+  it('reads as the milestone its sender holds, for both participants', () => {
+    for (const viewer of [SENDER, READER]) {
+      assert.deepEqual(messageFor(shared, viewer, held).attachment, {
+        kind: 'ACHIEVEMENT',
+        achievement: milestone,
+      });
+    }
+  });
+
+  it("is its sender's milestone, never the reader's of the same id", () => {
+    const readers = { ...held, achievements: new Map([[achievementKey(READER, 'sessions:10'), milestone]]) };
+    assert.deepEqual(messageFor(shared, READER, readers).attachment, {
+      kind: 'ACHIEVEMENT',
+      achievement: null,
+    });
+  });
+
+  it('goes with the text, like the other kinds', () => {
+    assert.equal(attachmentFor({ ...shared, deletedAt: new Date() }, SENDER, held), null);
+    assert.equal(attachmentFor({ ...shared, moderationHiddenAt: new Date() }, READER, held), null);
+  });
+
+  it('is captured by its id, empty once it is no longer held', () => {
+    const [captured] = captureMessages([shared], 'm1', READER, held);
+    assert.equal(captured.achievementId, 'sessions:10');
+    assert.equal(captured.recordName, null);
+    const [gone] = captureMessages([shared], 'm1', READER);
+    assert.equal(gone.achievementId, '');
+  });
+
+  it("reads each holder's own event, the first award once, nothing of the session", async () => {
+    const event = (id: string, userId: string, achievementId: string, day: number) => ({
+      id,
+      userId,
+      sessionId: 'session-behind-it',
+      occurredAt: new Date(Date.UTC(2026, 9, day)),
+      payload: {
+        schemaVersion: 1,
+        id: achievementId,
+        category: achievementId.startsWith('sessions') ? 'SESSIONS' : 'RECORDS',
+        threshold: Number(achievementId.split(':')[1]),
+        backfilled: false,
+      },
+    });
+    let asked: unknown;
+    const db = {
+      trainingEvent: {
+        findMany: async (query: unknown) => {
+          asked = query;
+          return [
+            event('e1', SENDER, 'sessions:10', 7),
+            event('e2', SENDER, 'sessions:10', 8),
+            event('e3', READER, 'sessions:10', 9),
+            event('e4', SENDER, 'records:1', 9),
+            { ...event('e5', SENDER, 'sessions:25', 9), payload: { schemaVersion: 1, id: 'sessions:25', category: 'SETS', threshold: 25, backfilled: false } },
+          ];
+        },
+      },
+    };
+    const read = await readAchievementSummaries(db as never, [
+      { senderId: SENDER, achievementId: 'sessions:10' },
+      { senderId: SENDER, achievementId: 'sessions:25' },
+    ]);
+    assert.deepEqual([...read.keys()], [achievementKey(SENDER, 'sessions:10')]);
+    const card = read.get(achievementKey(SENDER, 'sessions:10'));
+    assert.equal(card?.unlockedAt, '2026-10-07T00:00:00.000Z');
+    assert.equal(card?.title, '10 Sessions');
+    assert.ok(card && !('sourceSessionId' in card) && !('eventId' in card));
+    assert.deepEqual((asked as { where: unknown }).where, {
+      userId: { in: [SENDER] },
+      type: 'ACHIEVEMENT_UNLOCKED',
+    });
+    assert.equal((await readAchievementSummaries(db as never, [])).size, 0);
+  });
+
+  it('takes a catalog milestone id in both writes, and nothing else', async () => {
+    const send = plainToInstance(SendMessageDto, { achievementId: 'streak_days:5' });
+    assert.deepEqual(await validate(send), []);
+    const start = plainToInstance(StartConversationDto, { recipient: 'ana', achievementId: 'sessions:10' });
+    assert.deepEqual(await validate(start), []);
+    const unknown = plainToInstance(SendMessageDto, { achievementId: 'sessions:11' });
+    assert.equal((await validate(unknown)).length, 1);
+  });
+
+  it('adds its kind safely, twice', () => {
+    assert.match(ACHIEVEMENT_MIGRATION, /ADD VALUE IF NOT EXISTS 'ACHIEVEMENT'/);
   });
 });
