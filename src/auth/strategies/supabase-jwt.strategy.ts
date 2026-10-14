@@ -3,6 +3,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { Strategy as BearerStrategy } from 'passport-http-bearer';
 import { SupabaseService } from '../supabase.service';
 import { User } from '@prisma/client';
+import * as Sentry from '@sentry/nestjs';
 
 @Injectable()
 export class SupabaseJwtStrategy extends PassportStrategy(
@@ -22,7 +23,10 @@ export class SupabaseJwtStrategy extends PassportStrategy(
       }
 
       const supabaseUser = await this.supabaseService.verifyToken(token);
-      return this.supabaseService.getOrCreateUser(supabaseUser, token);
+      const user = await this.supabaseService.getOrCreateUser(supabaseUser, token);
+      // PLAT-02: a report names the account by its id only (see redactEvent).
+      Sentry.setUser({ id: user.id });
+      return user;
     } catch (error) {
       this.logger.warn(`Token validation failed: ${error instanceof Error ? error.message : 'unknown error'}`);
       throw new UnauthorizedException('Token validation failed');

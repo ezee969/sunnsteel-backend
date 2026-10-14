@@ -4,6 +4,9 @@ if (!globalThis.crypto) {
   globalThis.crypto = webcrypto as Crypto;
 }
 
+// PLAT-02: before Nest, Express, pg and Prisma are required, so they are traced.
+import './observability/instrument';
+
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';

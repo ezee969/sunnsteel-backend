@@ -12,6 +12,7 @@ import {
   type ApiErrorCode,
   type ApiErrorParams,
 } from "@sunsteel/contracts";
+import * as Sentry from "@sentry/nestjs";
 import type { Request, Response } from "express";
 
 type ErrorPayload = {
@@ -48,6 +49,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
       code && isApiErrorCode(code) && status !== HttpStatus.TOO_MANY_REQUESTS
         ? apiErrorMessage(code, params)
         : this.resolveMessage(status, payload, exception);
+
+    // PLAT-02: a server fault is reported; a refusal (4xx) is the API working.
+    // A no-op without SENTRY_DSN.
+    if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
+      Sentry.captureException(exception);
+    }
 
     const stack = exception instanceof Error ? exception.stack : undefined;
     this.logger.error(

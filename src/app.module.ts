@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { SentryModule } from '@sentry/nestjs/setup';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import type { IncomingHttpHeaders } from 'node:http';
 import { clientIp } from './common/client-ip';
@@ -26,6 +27,8 @@ import { MessagesModule } from './messages/messages.module';
 
 @Module({
   imports: [
+    // PLAT-02: names each trace by its route; inert without SENTRY_DSN.
+    SentryModule.forRoot(),
     ConfigModule.forRoot({
       isGlobal: true,
     }),
