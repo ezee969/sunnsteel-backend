@@ -493,6 +493,10 @@ export class AccountExportService {
           ...(message.attachmentKind === "COMEBACK" && message.attachmentId
             ? { comebackId: message.attachmentId }
             : {}),
+          // MSG-14: a month of training it shared, by its id.
+          ...(message.attachmentKind === "PROGRESS" && message.attachmentId
+            ? { progressId: message.attachmentId }
+            : {}),
           createdAt: iso(message.createdAt),
         })),
         reportsFiled: reports.map((report) => ({

@@ -12,6 +12,7 @@ import {
   CONVERSATION_BOXES,
   type ConversationBox,
   MESSAGE_BODY_MAX,
+  MESSAGE_PROGRESS_ID,
   MESSAGE_PERMISSIONS,
   type MarkConversationReadRequest,
   type MessagePermission,
@@ -69,6 +70,11 @@ export class StartConversationDto implements StartConversationRequest {
   @IsOptional()
   @Matches(COMEBACK_ID)
   comebackId?: string;
+
+  /** MSG-14: one month of the sender's own training, `progress:YYYY-MM`. */
+  @IsOptional()
+  @Matches(MESSAGE_PROGRESS_ID)
+  progressId?: string;
 }
 
 export class SendMessageDto implements SendMessageRequest {
@@ -99,6 +105,11 @@ export class SendMessageDto implements SendMessageRequest {
   @IsOptional()
   @Matches(COMEBACK_ID)
   comebackId?: string;
+
+  /** MSG-14: one month of the sender's own training, `progress:YYYY-MM`. */
+  @IsOptional()
+  @Matches(MESSAGE_PROGRESS_ID)
+  progressId?: string;
 }
 
 export class PageQueryDto {

@@ -241,13 +241,15 @@ model Message {
 }
 
 /// MSG-07: what a message may carry. MSG-10 adds a finished workout,
-/// MSG-11 a personal record, MSG-12 an earned milestone and MSG-13 a comeback.
+/// MSG-11 a personal record, MSG-12 an earned milestone, MSG-13 a comeback
+/// and MSG-14 a month of training.
 enum MessageAttachmentKind {
   ROUTINE
   WORKOUT
   RECORD
   ACHIEVEMENT
   COMEBACK
+  PROGRESS
 }
 
 /// PROF-08 adds ROUTINE: a shared routine is a fourth kind of featured item,

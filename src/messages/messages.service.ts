@@ -38,6 +38,7 @@ import { WorkoutSessionRecapService } from "../workouts/services/workout-session
 import {
   assertSendableAchievement,
   assertSendableComeback,
+  assertSendableProgress,
   assertSendableRecord,
   assertSendableRoutine,
   assertSendableWorkout,
@@ -989,12 +990,14 @@ export class MessagesService {
     const recordEventId = request.recordEventId ?? null;
     const achievementId = request.achievementId ?? null;
     const comebackId = request.comebackId ?? null;
+    const progressId = request.progressId ?? null;
     const given = [
       routineId,
       sessionId,
       recordEventId,
       achievementId,
       comebackId,
+      progressId,
     ].filter(Boolean).length;
     if (given > 1) {
       throw new BadRequestException(apiError("MESSAGE_ONE_ATTACHMENT"));
@@ -1011,6 +1014,9 @@ export class MessagesService {
     if (comebackId) {
       await assertSendableComeback(this.db, viewerId, comebackId);
     }
+    if (progressId) {
+      await assertSendableProgress(this.db, viewerId, progressId);
+    }
     return {
       body,
       attachmentKind: routineId
@@ -1023,9 +1029,16 @@ export class MessagesService {
               ? "ACHIEVEMENT"
               : comebackId
                 ? "COMEBACK"
-                : null,
+                : progressId
+                  ? "PROGRESS"
+                  : null,
       attachmentId:
-        routineId ?? sessionId ?? recordEventId ?? achievementId ?? comebackId,
+        routineId ??
+        sessionId ??
+        recordEventId ??
+        achievementId ??
+        comebackId ??
+        progressId,
     };
   }
 

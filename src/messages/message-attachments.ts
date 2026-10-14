@@ -2,10 +2,12 @@ import { NotFoundException } from "@nestjs/common";
 import { Prisma, WorkoutSessionStatus } from "@prisma/client";
 import {
   COMEBACK_SESSION_LOOKBACK,
+  MESSAGE_PROGRESS_ID,
   apiError,
   type MessageAchievementSummary,
   type MessageAttachment,
   type MessageComebackSummary,
+  type MessageProgressSummary,
   type MessageRecordSummary,
   type MessageWorkoutSummary,
   type SharedRoutine,
@@ -23,6 +25,7 @@ import {
 } from "../routines/routine-summary";
 import { parseAchievementEvent } from "../achievements/achievements.service";
 import { comebackRecognitionSummary } from "../achievements/comeback-recognition";
+import { localDate } from "../workouts/analytics/analytics-contribution";
 import { captureRoutineSetup } from "../routines/routine-versions";
 import { isHiddenFromViewer } from "../users/member-blocks";
 import { readSnapshot } from "../workouts/analytics/session-snapshot";
@@ -33,9 +36,10 @@ import {
 import { routineDayName } from "../workouts/workout-session.selects";
 
 /**
- * MSG-07, MSG-10, MSG-11, MSG-12 and MSG-13: what a message carries beside
- * its text -- one of the sender's routines, finished workouts, personal
- * records, earned milestones or comebacks. Sending it is the sender's consent,
+ * MSG-07 and MSG-10 to MSG-14: what a message carries beside its text -- one
+ * of the sender's routines, finished workouts, personal records, earned
+ * milestones, comebacks or months of training. Sending it is the sender's
+ * consent,
  * like a `ROUT-04` or `SOC-07` link, to the conversation's other participant:
  * they may open it whatever the sender's privacy, until the message is
  * deleted. Nothing is copied into the message; the card and the object are
@@ -48,7 +52,8 @@ export type AttachmentKind =
   | "WORKOUT"
   | "RECORD"
   | "ACHIEVEMENT"
-  | "COMEBACK";
+  | "COMEBACK"
+  | "PROGRESS";
 
 export interface AttachmentRef {
   senderId: string;
@@ -65,6 +70,8 @@ export interface MessageObjects {
   achievements: ReadonlyMap<string, MessageAchievementSummary>;
   /** MSG-13: keyed by `achievementKey` too -- a comeback is its holder's. */
   comebacks: ReadonlyMap<string, MessageComebackSummary>;
+  /** MSG-14: keyed by `achievementKey` -- every member has a `progress:2026-10`. */
+  progress: ReadonlyMap<string, MessageProgressSummary>;
 }
 
 export const NO_OBJECTS: MessageObjects = {
@@ -73,6 +80,7 @@ export const NO_OBJECTS: MessageObjects = {
   records: new Map(),
   achievements: new Map(),
   comebacks: new Map(),
+  progress: new Map(),
 };
 
 /**
@@ -127,6 +135,14 @@ export function attachmentFor(
         kind: "COMEBACK",
         comeback:
           objects.comebacks.get(
+            achievementKey(row.senderId, row.attachmentId),
+          ) ?? null,
+      };
+    case "PROGRESS":
+      return {
+        kind: "PROGRESS",
+        progress:
+          objects.progress.get(
             achievementKey(row.senderId, row.attachmentId),
           ) ?? null,
       };
@@ -283,6 +299,88 @@ export async function readComebackSummaries(
   return out;
 }
 
+/** MSG-14: `YYYY-MM` from `progress:YYYY-MM`, or null for anything else. */
+export function progressMonth(progressId: string): string | null {
+  const match = MESSAGE_PROGRESS_ID.exec(progressId);
+  return match ? `${match[1]}-${match[2]}` : null;
+}
+
+/** MSG-14: the UTC instant a `YYYY-MM-DD` starts, padded by `days`. */
+function utcDay(date: string, days: number): Date {
+  const at = new Date(`${date}T00:00:00.000Z`);
+  at.setUTCDate(at.getUTCDate() + days);
+  return at;
+}
+
+/**
+ * MSG-14: months of training by their ids, each as the sender's stored
+ * training reads now, keyed by `achievementKey`. A month is a calendar month
+ * in the sender's time zone, read from the same DAY rollups and local dates
+ * the analytics write: workouts, days with one, completed sets and volume
+ * summed, and the personal records whose local date falls in it. A month
+ * after the sender's current one, or a sender without a READY projection,
+ * has none, and its card then reads as no longer available. A month with no
+ * training is still a month: its card says so.
+ */
+export async function readProgressSummaries(
+  db: Pick<DatabaseService, "workoutAnalyticsProjection" | "workoutRollup" | "trainingEvent">,
+  wanted: ReadonlyArray<{ senderId: string; progressId: string }>,
+  now: Date = new Date(),
+): Promise<Map<string, MessageProgressSummary>> {
+  const out = new Map<string, MessageProgressSummary>();
+  const senders = new Map<string, Set<string>>();
+  for (const { senderId, progressId } of wanted) {
+    if (!progressMonth(progressId)) continue;
+    const ids = senders.get(senderId) ?? new Set<string>();
+    ids.add(progressId);
+    senders.set(senderId, ids);
+  }
+  for (const [senderId, ids] of senders) {
+    const projection = await db.workoutAnalyticsProjection.findFirst({
+      where: { userId: senderId, active: true, state: "READY" },
+      select: { id: true, timeZone: true },
+    });
+    if (!projection) continue;
+    const currentMonth = localDate(now, projection.timeZone).slice(0, 7);
+    for (const id of ids) {
+      const month = progressMonth(id)!;
+      if (month > currentMonth) continue;
+      const days = await db.workoutRollup.findMany({
+        where: {
+          projectionId: projection.id,
+          period: "DAY",
+          date: { gte: `${month}-01`, lte: `${month}-31` },
+        },
+        select: { sessions: true, completedSets: true, volumeKg: true },
+      });
+      const records = await db.trainingEvent.findMany({
+        where: {
+          userId: senderId,
+          type: "PERSONAL_RECORD",
+          occurredAt: {
+            gte: utcDay(`${month}-01`, -1),
+            lt: utcDay(`${month}-01`, 33),
+          },
+        },
+        select: { occurredAt: true },
+      });
+      out.set(achievementKey(senderId, id), {
+        id,
+        month,
+        complete: month < currentMonth,
+        workouts: days.reduce((sum, day) => sum + day.sessions, 0),
+        trainingDays: days.filter((day) => day.sessions > 0).length,
+        completedSets: days.reduce((sum, day) => sum + day.completedSets, 0),
+        volumeKg: days.reduce((sum, day) => sum + day.volumeKg, 0),
+        personalRecords: records.filter((record) =>
+          localDate(record.occurredAt, projection.timeZone).startsWith(month),
+        ).length,
+      });
+    }
+  }
+  return out;
+}
+
 const WORKOUT_SUMMARY_SELECT = {
   id: true,
   userId: true,
@@ -348,6 +446,7 @@ type ObjectDb = Pick<
   | "workoutSession"
   | "trainingEvent"
   | "workoutAnalyticsProjection"
+  | "workoutRollup"
   | "$queryRaw"
 >;
 
@@ -366,6 +465,7 @@ export async function messageObjects(
   const recordIds = new Map<string, string>();
   const achievements: Array<{ senderId: string; achievementId: string }> = [];
   const comebacks: Array<{ senderId: string; comebackId: string }> = [];
+  const progress: Array<{ senderId: string; progressId: string }> = [];
   for (const row of rows) {
     if (!row.attachmentId) continue;
     if (row.attachmentKind === "ROUTINE") {
@@ -381,6 +481,8 @@ export async function messageObjects(
       });
     } else if (row.attachmentKind === "COMEBACK") {
       comebacks.push({ senderId: row.senderId, comebackId: row.attachmentId });
+    } else if (row.attachmentKind === "PROGRESS") {
+      progress.push({ senderId: row.senderId, progressId: row.attachmentId });
     }
   }
   const routines = routineIds.size
@@ -423,6 +525,7 @@ export async function messageObjects(
     records: await readRecordSummaries(db, recordIds),
     achievements: await readAchievementSummaries(db, achievements),
     comebacks: await readComebackSummaries(db, comebacks),
+    progress: await readProgressSummaries(db, progress),
   };
 }
 
@@ -476,6 +579,20 @@ export async function assertSendableComeback(
   const held = await readComebackSummaries(db, [{ senderId, comebackId }]);
   // Only a client sending an id it was never shown reaches this.
   if (held.size === 0) throw new NotFoundException("Comeback not found");
+}
+
+/**
+ * MSG-14: only a month of the sender's own training that has begun, while
+ * their analytics are ready.
+ */
+export async function assertSendableProgress(
+  db: Pick<DatabaseService, "workoutAnalyticsProjection" | "workoutRollup" | "trainingEvent">,
+  senderId: string,
+  progressId: string,
+): Promise<void> {
+  const read = await readProgressSummaries(db, [{ senderId, progressId }]);
+  // Only a client sending a month it was never offered reaches this.
+  if (read.size === 0) throw new NotFoundException("Progress not found");
 }
 
 export async function assertSendableWorkout(

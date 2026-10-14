@@ -131,6 +131,11 @@ export function captureMessages(
         attachment?.kind === "COMEBACK"
           ? (attachment.comeback?.id ?? "")
           : null;
+      // MSG-14: a month of training, by its id.
+      const progressId =
+        attachment?.kind === "PROGRESS"
+          ? (attachment.progress?.id ?? "")
+          : null;
       return {
         id: row.id,
         fromReporter: row.senderId === reporterId,
@@ -142,6 +147,7 @@ export function captureMessages(
         recordName,
         achievementId,
         comebackId,
+        progressId,
         createdAt: seen.createdAt,
       };
     });
@@ -188,6 +194,7 @@ type CaptureDb = Pick<
   | "workoutSession"
   | "trainingEvent"
   | "workoutAnalyticsProjection"
+  | "workoutRollup"
   | "$queryRaw"
 >;
 

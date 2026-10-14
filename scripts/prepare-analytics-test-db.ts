@@ -474,6 +474,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20261014160000_message_comebacks/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// MSG-14: a month of training in a message.
+				readFileSync(
+					'prisma/migrations/20261014180000_message_progress/migration.sql',
+					'utf8',
 				),
     );
     prisma(

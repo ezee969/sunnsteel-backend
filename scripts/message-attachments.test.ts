@@ -25,6 +25,8 @@ import {
   attachmentFor,
   readAchievementSummaries,
   readComebackSummaries,
+  progressMonth,
+  readProgressSummaries,
   sharedWorkoutExercises,
   toWorkoutSummary,
 } from '../src/messages/message-attachments';
@@ -54,6 +56,7 @@ const objects = {
   records: new Map(),
   achievements: new Map(),
   comebacks: new Map(),
+  progress: new Map(),
 };
 
 function message(overrides: Partial<StoredMessage> = {}): StoredMessage {
@@ -159,7 +162,7 @@ describe('MSG-07 what a send may carry', () => {
   it('is a kind of its own, and reading it is a source of its own', () => {
     assert.deepEqual(
       [...MESSAGE_ATTACHMENT_KINDS],
-      ['ROUTINE', 'WORKOUT', 'RECORD', 'ACHIEVEMENT', 'COMEBACK'],
+      ['ROUTINE', 'WORKOUT', 'RECORD', 'ACHIEVEMENT', 'COMEBACK', 'PROGRESS'],
     );
     assert.ok((SHARED_ROUTINE_SOURCES as readonly string[]).includes('MESSAGE'));
   });
@@ -224,6 +227,7 @@ describe('MSG-10 a finished workout in a message', () => {
     records: new Map(),
     achievements: new Map(),
     comebacks: new Map(),
+    progress: new Map(),
   };
   const shared = message({ attachmentKind: 'WORKOUT', attachmentId: SESSION });
 
@@ -340,6 +344,7 @@ describe('MSG-11 a personal record in a message', () => {
     records: new Map([[RECORD_EVENT, record]]),
     achievements: new Map(),
     comebacks: new Map(),
+    progress: new Map(),
   };
   const shared = message({ attachmentKind: 'RECORD', attachmentId: RECORD_EVENT });
 
@@ -415,6 +420,7 @@ describe('MSG-12 an earned milestone in a message', () => {
     records: new Map(),
     achievements: new Map([[achievementKey(SENDER, 'sessions:10'), milestone]]),
     comebacks: new Map(),
+    progress: new Map(),
   };
   const shared = message({ attachmentKind: 'ACHIEVEMENT', attachmentId: 'sessions:10' });
 
@@ -578,6 +584,7 @@ describe('MSG-13 a comeback in a message', () => {
       records: new Map(),
       achievements: new Map(),
       comebacks: new Map([[achievementKey(SENDER, ID), card]]),
+      progress: new Map(),
     };
     const shared = message({ attachmentKind: 'COMEBACK', attachmentId: ID });
     assert.deepEqual(messageFor(shared, READER, held).attachment, {
@@ -609,5 +616,112 @@ describe('MSG-13 a comeback in a message', () => {
 
   it('adds its kind safely, twice', () => {
     assert.match(COMEBACK_MIGRATION, /ADD VALUE IF NOT EXISTS 'COMEBACK'/);
+  });
+});
+
+const PROGRESS_MIGRATION = readFileSync(
+  'prisma/migrations/20261014180000_message_progress/migration.sql',
+  'utf8',
+);
+
+describe('MSG-14 a month of training in a message', () => {
+  const NOW = new Date(Date.UTC(2026, 9, 14, 12));
+  let rollupQueries: unknown[] = [];
+  const db = (projection: { id: string; timeZone: string } | null) => ({
+    workoutAnalyticsProjection: { findFirst: async () => projection },
+    workoutRollup: {
+      findMany: async (query: unknown) => {
+        rollupQueries.push(query);
+        return [
+          { sessions: 1, completedSets: 12, volumeKg: 3000.5 },
+          { sessions: 2, completedSets: 20, volumeKg: 5000 },
+          { sessions: 0, completedSets: 0, volumeKg: 0 },
+        ];
+      },
+    },
+    trainingEvent: {
+      findMany: async () => [
+        // In Madrid, 23:30 UTC on Sep 30 is already Oct 1.
+        { occurredAt: new Date(Date.UTC(2026, 8, 30, 23, 30)) },
+        { occurredAt: new Date(Date.UTC(2026, 9, 10, 9)) },
+        // Nov 1 local: not October.
+        { occurredAt: new Date(Date.UTC(2026, 9, 31, 23, 30)) },
+        // Sep 30 local: not October.
+        { occurredAt: new Date(Date.UTC(2026, 8, 30, 12)) },
+      ],
+    },
+  });
+  const MADRID = { id: 'p1', timeZone: 'Europe/Madrid' };
+
+  it('reads a month as the stored training reads it, records by local date, nothing of any workout', async () => {
+    rollupQueries = [];
+    const read = await readProgressSummaries(db(MADRID) as never, [
+      { senderId: SENDER, progressId: 'progress:2026-10' },
+    ], NOW);
+    assert.deepEqual(read.get(achievementKey(SENDER, 'progress:2026-10')), {
+      id: 'progress:2026-10',
+      month: '2026-10',
+      complete: false,
+      workouts: 3,
+      trainingDays: 2,
+      completedSets: 32,
+      volumeKg: 8000.5,
+      personalRecords: 2,
+    });
+    assert.deepEqual((rollupQueries[0] as { where: unknown }).where, {
+      projectionId: 'p1',
+      period: 'DAY',
+      date: { gte: '2026-10-01', lte: '2026-10-31' },
+    });
+  });
+
+  it('calls a month over complete, and has no month after the current one', async () => {
+    const read = await readProgressSummaries(db(MADRID) as never, [
+      { senderId: SENDER, progressId: 'progress:2026-09' },
+      { senderId: SENDER, progressId: 'progress:2026-11' },
+    ], NOW);
+    assert.equal(read.get(achievementKey(SENDER, 'progress:2026-09'))?.complete, true);
+    assert.equal(read.has(achievementKey(SENDER, 'progress:2026-11')), false);
+  });
+
+  it('has none before the sender\'s analytics are ready, and none for a malformed id', async () => {
+    assert.equal((await readProgressSummaries(db(null) as never, [
+      { senderId: SENDER, progressId: 'progress:2026-10' },
+    ], NOW)).size, 0);
+    assert.equal(progressMonth('progress:2026-13'), null);
+    assert.equal(progressMonth('progress:2026-10'), '2026-10');
+  });
+
+  it("reads as its sender's month, going with the text, captured by its id", () => {
+    const card = {
+      id: 'progress:2026-10', month: '2026-10', complete: false, workouts: 3,
+      trainingDays: 2, completedSets: 32, volumeKg: 8000.5, personalRecords: 2,
+    };
+    const held = {
+      routines: new Map(), workouts: new Map(), records: new Map(),
+      achievements: new Map(), comebacks: new Map(),
+      progress: new Map([[achievementKey(SENDER, 'progress:2026-10'), card]]),
+    };
+    const shared = message({ attachmentKind: 'PROGRESS', attachmentId: 'progress:2026-10' });
+    assert.deepEqual(messageFor(shared, READER, held).attachment, { kind: 'PROGRESS', progress: card });
+    assert.deepEqual(messageFor(shared, READER).attachment, { kind: 'PROGRESS', progress: null });
+    assert.equal(attachmentFor({ ...shared, deletedAt: new Date() }, SENDER, held), null);
+    const [captured] = captureMessages([shared], 'm1', READER, held);
+    assert.equal(captured.progressId, 'progress:2026-10');
+    assert.equal(captured.comebackId, null);
+    const [gone] = captureMessages([shared], 'm1', READER);
+    assert.equal(gone.progressId, '');
+  });
+
+  it('takes a month id in both writes, and nothing else', async () => {
+    assert.deepEqual(await validate(plainToInstance(SendMessageDto, { progressId: 'progress:2026-10' })), []);
+    assert.deepEqual(await validate(plainToInstance(StartConversationDto, { recipient: 'ana', progressId: 'progress:2026-01' })), []);
+    for (const bad of ['progress:2026-13', 'progress:26-10', '2026-10', 'progress:2026-10-01']) {
+      assert.equal((await validate(plainToInstance(SendMessageDto, { progressId: bad }))).length, 1, bad);
+    }
+  });
+
+  it('adds its kind safely, twice', () => {
+    assert.match(PROGRESS_MIGRATION, /ADD VALUE IF NOT EXISTS 'PROGRESS'/);
   });
 });
