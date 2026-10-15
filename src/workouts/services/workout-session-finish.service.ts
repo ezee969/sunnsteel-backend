@@ -1,4 +1,8 @@
-import { apiError } from "@sunsteel/contracts";
+import {
+  apiError,
+  earliestWorkoutEnd,
+  finishEndTime,
+} from "@sunsteel/contracts";
 import { progressionRuns } from "../session-training-block";
 import {
   BadRequestException,
@@ -79,15 +83,30 @@ export class WorkoutSessionFinishService {
           };
         }
 
-        const now = new Date();
+        // LIVE-24: the end the member chose, never before the start or the
+        // last completed set and never in the future; now when none is given.
+        const completedAts = dto.endedAt
+          ? (
+              await tx.setLog.findMany({
+                where: { sessionId: id, isCompleted: true },
+                select: { completedAt: true },
+              })
+            ).map((log) => log.completedAt)
+          : [];
+        const endedAt = finishEndTime(
+          dto.endedAt,
+          earliestWorkoutEnd({ startedAt: session.startedAt, completedAts }),
+        );
+        if (!endedAt)
+          throw new BadRequestException(apiError("WORKOUT_END_TIME_RANGE"));
         const claimed = await tx.workoutSession.updateMany({
           where: { id, userId, status: "IN_PROGRESS" },
           data: {
             status,
-            endedAt: now,
+            endedAt,
             durationSec: Math.max(
               0,
-              Math.round((now.getTime() - session.startedAt.getTime()) / 1000),
+              Math.round((endedAt.getTime() - session.startedAt.getTime()) / 1000),
             ),
             notes: dto.notes,
           },
@@ -151,7 +170,7 @@ export class WorkoutSessionFinishService {
             progressionLogs,
             {
               sessionId: id,
-              finishedAt: now.toISOString(),
+              finishedAt: endedAt.toISOString(),
               runs: progressionRuns(session),
               substitutedIds: new Set(
                 readSubstitutions(session.exerciseSubstitutions).map(
@@ -188,7 +207,7 @@ export class WorkoutSessionFinishService {
               routineId: session.routineId ?? snapshot.sourceRoutineId,
               routineName: snapshot.routine?.name ?? "",
               change,
-              at: now,
+              at: endedAt,
             });
           }
           // LIVE-20: warm-ups that follow the working load move with it.
@@ -196,7 +215,7 @@ export class WorkoutSessionFinishService {
             ...outcome.updates.map((update) => update.routineExerciseId),
             ...linearBlockChanges.map((change) => change.routineExerciseId),
           ]);
-          await writeProgressionEvents(tx, userId, id, now, progressionChanges);
+          await writeProgressionEvents(tx, userId, id, endedAt, progressionChanges);
 
           const summary = await summarizeSession(tx, id);
           const active = await tx.workoutAnalyticsProjection.findFirst({

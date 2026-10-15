@@ -1,4 +1,4 @@
-import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsISO8601, IsOptional, IsString } from 'class-validator';
 import { FinishStatus } from '@sunsteel/contracts';
 
 export class FinishWorkoutDto {
@@ -8,4 +8,9 @@ export class FinishWorkoutDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  // LIVE-24: when the workout ended; bounded in the finish service.
+  @IsOptional()
+  @IsISO8601({ strict: true })
+  endedAt?: string;
 }

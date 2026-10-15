@@ -16,6 +16,8 @@ import {
   sessionCorrectionWindow,
   apiError,
   type ApiErrorCode,
+  correctedEndTime,
+  earliestWorkoutEnd,
 } from "@sunsteel/contracts";
 import { DatabaseService } from "../../database/database.service";
 import {
@@ -31,6 +33,7 @@ import {
   weekDate,
 } from "../analytics/analytics-contribution";
 import { ensureSessionSnapshot } from "../analytics/session-snapshot";
+import { startHistoryRebuild } from "../analytics/history-rebuild";
 import { CorrectSessionDto } from "../dto/correct-session.dto";
 import {
   buildProgressionOutcome,
@@ -41,7 +44,9 @@ import {
   beatsRecord,
   contributionDelta,
   correctedPrescription,
+  correctionEndTime,
   type CorrectableLog,
+  moveEndStampedSets,
   planSetCorrections,
   prescriptionIntact,
 } from "../session-correction-rules";
@@ -91,11 +96,14 @@ function mapCorrection(row: {
   id: string;
   createdAt: Date;
   changes: Prisma.JsonValue;
+  endedAtBefore: Date | null;
+  endedAtAfter: Date | null;
 }): SessionCorrection {
   return {
     id: row.id,
     createdAt: row.createdAt.toISOString(),
     changes: row.changes as unknown as SessionSetCorrection[],
+    endedAt: correctionEndTime(row),
   };
 }
 
@@ -226,8 +234,42 @@ export class WorkoutSessionCorrectionService {
             })
           ).map((exercise) => [exercise.id, exercise.name]),
         );
-        const changes = planSetCorrections(logs, dto.sets, exerciseNames);
-        const corrected = applySetCorrections(logs, changes, endedAt);
+        const changes = planSetCorrections(
+          logs,
+          dto.sets,
+          exerciseNames,
+          dto.endedAt !== undefined,
+        );
+        let corrected = applySetCorrections(logs, changes, endedAt);
+
+        // LIVE-24: the end only moves earlier, never before the start or the
+        // last set as corrected; a set a correction ticked was stamped with
+        // the end, so it moves with it.
+        let end = endedAt;
+        if (dto.endedAt !== undefined) {
+          const requested = correctedEndTime(
+            dto.endedAt,
+            earliestWorkoutEnd({
+              startedAt: session.startedAt,
+              completedAts: corrected
+                .filter((log) => log.isCompleted)
+                .map((log) => log.completedAt),
+              movesWithEnd: endedAt,
+            }),
+            endedAt,
+          );
+          if (!requested)
+            throw new BadRequestException(
+              apiError("CORRECTION_END_TIME_RANGE"),
+            );
+          end = requested;
+        }
+        const endMoved = end.getTime() !== endedAt.getTime();
+        if (changes.length === 0 && !endMoved)
+          throw new BadRequestException(
+            apiError("CORRECTION_NOTHING_TO_CORRECT"),
+          );
+        if (endMoved) corrected = moveEndStampedSets(corrected, endedAt, end);
 
         const snapshot = await ensureSessionSnapshot(tx, sessionId);
         const substitutions = readSubstitutions(session.exerciseSubstitutions);
@@ -260,7 +302,7 @@ export class WorkoutSessionCorrectionService {
         const after = sessionContribution(
           corrected,
           snapshot,
-          endedAt,
+          end,
           substitutions,
         );
 
@@ -279,11 +321,35 @@ export class WorkoutSessionCorrectionService {
           });
         }
 
+        if (endMoved) {
+          // Sets stamped with the end that this correction did not change.
+          await tx.setLog.updateMany({
+            where: { sessionId, completedAt: endedAt },
+            data: { completedAt: end },
+          });
+          // Every fact dated at the end -- the workout completed, its load
+          // changes, the milestones it reached -- moves with it.
+          await tx.trainingEvent.updateMany({
+            where: { userId, sessionId, occurredAt: endedAt },
+            data: { occurredAt: end },
+          });
+        }
         await tx.workoutSession.update({
           where: { id: sessionId },
           data: {
             totalVolumeKg: after.volumeKg,
             completedSets: after.completedSets,
+            ...(endMoved
+              ? {
+                  endedAt: end,
+                  durationSec: Math.max(
+                    0,
+                    Math.round(
+                      (end.getTime() - session.startedAt.getTime()) / 1000,
+                    ),
+                  ),
+                }
+              : {}),
           },
         });
         await tx.trainingEvent.updateMany({
@@ -303,6 +369,7 @@ export class WorkoutSessionCorrectionService {
           projection,
           sessionId,
           endedAt,
+          end,
           before,
           after,
           correctionId,
@@ -322,7 +389,7 @@ export class WorkoutSessionCorrectionService {
           tx,
           userId,
           sessionId,
-          endedAt,
+          end,
           updatedProjection,
           removedEntryKeys,
         );
@@ -333,7 +400,7 @@ export class WorkoutSessionCorrectionService {
               tx,
               userId,
               sessionId,
-              endedAt,
+              end,
               snapshot.routineDay.exercises ?? [],
               logs,
               corrected,
@@ -345,7 +412,7 @@ export class WorkoutSessionCorrectionService {
           : await this.rederiveLinearBlocks(
               tx,
               userId,
-              session,
+              { ...session, endedAt: end },
               snapshot,
               corrected,
               swapped,
@@ -359,11 +426,17 @@ export class WorkoutSessionCorrectionService {
             sessionId,
             userId,
             changes: json(changes),
+            ...(endMoved ? { endedAtBefore: endedAt, endedAtAfter: end } : {}),
           },
         });
         return {
           correction: mapCorrection(row),
-          window: await readWindow(tx, userId, session, correctionCount + 1),
+          window: await readWindow(
+            tx,
+            userId,
+            { ...session, endedAt: end },
+            correctionCount + 1,
+          ),
           progressionKept,
           linearBlockKept,
         };
@@ -372,18 +445,32 @@ export class WorkoutSessionCorrectionService {
     );
   }
 
-  /** Swaps this workout's old contribution for the corrected one, in place. */
+  /**
+   * Swaps this workout's old contribution for the corrected one, in place.
+   * LIVE-24: an end moved to another local day changes the day and week the
+   * workout counted for, and with them streaks and active weeks, so history
+   * is then replayed in a new generation (as LIVE-23 does) while this one
+   * keeps serving with the delta applied on the old day.
+   */
   private async replaceContribution(
     tx: Tx,
-    projection: { id: string; timeZone: string; checksum: string },
+    projection: {
+      id: string;
+      userId: string;
+      timeZone: string;
+      checksum: string;
+    },
     sessionId: string,
     endedAt: Date,
+    end: Date,
     before: ReturnType<typeof sessionContribution>,
     after: ReturnType<typeof sessionContribution>,
     correctionId: string,
   ) {
     const delta = contributionDelta(before, after);
     const date = localDate(endedAt, projection.timeZone);
+    if (localDate(end, projection.timeZone) !== date)
+      await startHistoryRebuild(tx, projection.userId);
     for (const periodDate of [
       ["DAY", date],
       ["WEEK", weekDate(date)],
@@ -422,7 +509,7 @@ export class WorkoutSessionCorrectionService {
         checksum: contributionChecksum(
           projection.checksum,
           `${sessionId}:correction:${correctionId}`,
-          endedAt,
+          end,
           after,
         ),
       },

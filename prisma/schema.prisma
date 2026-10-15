@@ -1147,6 +1147,9 @@ model SessionCorrection {
   userId    String
   user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   changes   Json
+  // LIVE-24: the end time a correction moved, as it was and as it became.
+  endedAtBefore DateTime?
+  endedAtAfter  DateTime?
   createdAt DateTime       @default(now())
 
   @@index([sessionId, createdAt])

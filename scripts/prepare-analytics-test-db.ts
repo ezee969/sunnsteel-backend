@@ -480,6 +480,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20261014180000_message_progress/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// LIVE-24: a correction's end time.
+				readFileSync(
+					'prisma/migrations/20261015100000_correction_end_time/migration.sql',
+					'utf8',
 				),
     );
     prisma(

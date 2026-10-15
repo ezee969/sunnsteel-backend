@@ -1,6 +1,10 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
 import {
+  correctedEndTime,
+  earliestWorkoutEnd,
+  finishEndTime,
+  finishNeedsEndTime,
   SESSION_CORRECTION_WINDOW_HOURS,
   SESSION_CORRECTIONS_MAX,
   sessionCorrectionWindow,
@@ -10,7 +14,9 @@ import {
   beatsRecord,
   contributionDelta,
   correctedPrescription,
+  correctionEndTime,
   type CorrectableLog,
+  moveEndStampedSets,
   planSetCorrections,
   prescriptionIntact,
 } from '../src/workouts/session-correction-rules';
@@ -227,4 +233,89 @@ test('the rollup delta is the corrected contribution minus the old one, muscle b
     ['SHOULDERS', { volumeKg: 10, completedSets: 0.5 }],
     ['TRICEPS', { volumeKg: -2756.25, completedSets: -1 }],
   ]);
+});
+
+// LIVE-24 -- when the workout ended.
+
+const startedAt = new Date('2026-09-23T08:00:00.000Z');
+const at = (time: string) => new Date(`2026-09-23T${time}:00.000Z`);
+
+test('a workout ends no earlier than its start or its last completed set', () => {
+  assert.deepEqual(
+    earliestWorkoutEnd({ startedAt, completedAts: [] }),
+    startedAt,
+  );
+  assert.deepEqual(
+    earliestWorkoutEnd({
+      startedAt,
+      completedAts: [at('08:20'), null, at('09:05'), at('08:40')],
+    }),
+    at('09:05'),
+  );
+  // A set a correction ticked was stamped with the end and moves with it.
+  assert.deepEqual(
+    earliestWorkoutEnd({
+      startedAt,
+      completedAts: [at('09:05'), endedAt],
+      movesWithEnd: endedAt,
+    }),
+    at('09:05'),
+  );
+});
+
+test('finish takes now, or a chosen end between the earliest and now', () => {
+  const now = at('18:00');
+  const earliest = at('09:05');
+  assert.deepEqual(finishEndTime(undefined, earliest, now), now);
+  assert.deepEqual(finishEndTime(at('09:30'), earliest, now), at('09:30'));
+  assert.deepEqual(finishEndTime(earliest, earliest, now), earliest);
+  assert.equal(finishEndTime(at('09:00'), earliest, now), null);
+  // A phone clock a minute fast reads as now; one far ahead is refused.
+  assert.deepEqual(
+    finishEndTime(new Date(now.getTime() + 60_000), earliest, now),
+    now,
+  );
+  assert.equal(finishEndTime(at('18:10'), earliest, now), null);
+  assert.equal(finishEndTime('not a date', earliest, now), null);
+});
+
+test('Finish asks for the end only after a pause of half an hour', () => {
+  const now = at('10:00');
+  assert.equal(finishNeedsEndTime(at('09:31'), now), false);
+  assert.equal(finishNeedsEndTime(at('09:30'), now), true);
+  assert.equal(finishNeedsEndTime(at('02:00'), now), true);
+});
+
+test('a corrected end only moves earlier, and not before the earliest end', () => {
+  const earliest = at('09:05');
+  assert.deepEqual(correctedEndTime(at('09:15'), earliest, endedAt), at('09:15'));
+  assert.deepEqual(correctedEndTime(endedAt, earliest, endedAt), endedAt);
+  assert.equal(correctedEndTime(at('10:01'), earliest, endedAt), null);
+  assert.equal(correctedEndTime(at('09:00'), earliest, endedAt), null);
+});
+
+test('moving the end moves only the sets stamped with it', () => {
+  const logs = [
+    log('a', { completedAt: at('09:05') }),
+    log('b', { completedAt: endedAt }),
+    log('c', { isCompleted: false, completedAt: null }),
+  ];
+  const moved = moveEndStampedSets(logs, endedAt, at('09:10'));
+  assert.deepEqual(
+    moved.map(entry => entry.completedAt),
+    [at('09:05'), at('09:10'), null],
+  );
+});
+
+test('an end-time correction may leave every set alone, and is recorded', () => {
+  assert.deepEqual(planSetCorrections([log('a')], [], names, true), []);
+  assert.throws(() => planSetCorrections([log('a')], [], names));
+  assert.deepEqual(
+    correctionEndTime({ endedAtBefore: endedAt, endedAtAfter: at('09:10') }),
+    { before: endedAt.toISOString(), after: at('09:10').toISOString() },
+  );
+  assert.equal(
+    correctionEndTime({ endedAtBefore: null, endedAtAfter: null }),
+    null,
+  );
 });

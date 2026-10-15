@@ -5,9 +5,9 @@ import type {
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
-  ArrayMinSize,
   IsArray,
   IsBoolean,
+  IsISO8601,
   IsNumber,
   IsOptional,
   IsString,
@@ -39,10 +39,15 @@ class CorrectSessionSetDto implements CorrectSessionSetRequest {
 }
 
 export class CorrectSessionDto implements CorrectSessionRequest {
+  // LIVE-24: empty when only the end time is corrected; a request that
+  // changes nothing is still refused by planSetCorrections.
   @IsArray()
-  @ArrayMinSize(1)
   @ArrayMaxSize(200)
   @ValidateNested({ each: true })
   @Type(() => CorrectSessionSetDto)
   sets!: CorrectSessionSetDto[];
+
+  @IsOptional()
+  @IsISO8601({ strict: true })
+  endedAt?: string;
 }

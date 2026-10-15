@@ -14,6 +14,7 @@ import { toRoutineResponse } from "../routines/routine.mapper";
 import { readRoutineSetup } from "../routines/routine-versions";
 import { buildWorkoutSessionSelect } from "../workouts/workout-session.selects";
 import { toWorkoutSessionResponse } from "../workouts/workout-session.mapper";
+import { correctionEndTime } from "../workouts/session-correction-rules";
 import { UsersService } from "./users.service";
 import {
   BODY_MEASUREMENT_SELECT,
@@ -364,6 +365,7 @@ export class AccountExportService {
         sessionId: correction.sessionId,
         createdAt: correction.createdAt.toISOString(),
         changes: correction.changes as unknown as SessionSetCorrection[],
+        endedAt: correctionEndTime(correction),
       })),
       personalRecords: records.map((record) => ({
         exerciseId: record.exerciseId,

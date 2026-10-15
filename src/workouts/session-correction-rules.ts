@@ -2,6 +2,7 @@ import { BadRequestException } from "@nestjs/common";
 import {
   type CorrectSessionSetRequest,
   SESSION_CORRECTION_LIMITS,
+  type SessionEndTimeCorrection,
   type SessionSetCorrection,
   type SetLogValues,
   setLogValuesDiffer,
@@ -61,12 +62,14 @@ export function assertValues(values: SetLogValues) {
  * The changes a request makes to this workout's own logs. Unknown or repeated
  * set ids are refused; sets whose values do not change are ignored; a request
  * that changes nothing is refused, because an empty correction would add a
- * line to the trail that records no correction.
+ * line to the trail that records no correction. LIVE-24: a request that also
+ * moves the end time (`endTimeChanges`) may leave every set alone.
  */
 export function planSetCorrections(
   logs: CorrectableLog[],
   requested: CorrectSessionSetRequest[],
   exerciseNames: Map<string, string>,
+  endTimeChanges = false,
 ): SessionSetCorrection[] {
   const byId = new Map(logs.map((log) => [log.id, log]));
   const seen = new Set<string>();
@@ -100,9 +103,39 @@ export function planSetCorrections(
       after,
     });
   }
-  if (changes.length === 0)
+  if (changes.length === 0 && !endTimeChanges)
     throw new BadRequestException(apiError("CORRECTION_NOTHING_TO_CORRECT"));
   return changes;
+}
+
+/**
+ * LIVE-24. The logs once the end moves from `from` to `to`: a set whose
+ * completion was stamped with the end itself -- one a correction ticked --
+ * moves with it; every other set keeps the time it was really done.
+ */
+export function moveEndStampedSets<T extends CorrectableLog>(
+  logs: T[],
+  from: Date,
+  to: Date,
+): T[] {
+  return logs.map((log) =>
+    log.completedAt && log.completedAt.getTime() === from.getTime()
+      ? { ...log, completedAt: to }
+      : log,
+  );
+}
+
+/** LIVE-24: the end time a saved correction moved, or null. */
+export function correctionEndTime(row: {
+  endedAtBefore: Date | null;
+  endedAtAfter: Date | null;
+}): SessionEndTimeCorrection | null {
+  return row.endedAtBefore && row.endedAtAfter
+    ? {
+        before: row.endedAtBefore.toISOString(),
+        after: row.endedAtAfter.toISOString(),
+      }
+    : null;
 }
 
 /**
