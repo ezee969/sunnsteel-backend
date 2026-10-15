@@ -1,0 +1,41 @@
+name: Notify end-to-end
+
+# PLAT-03: the end-to-end path lives in the frontend repository and builds the
+# backend from its main. When main changes here, ask it to run against this
+# commit, so a backend change that breaks sign-in, routines or training is
+# caught without waiting for a frontend change.
+#
+# A repository's own GITHUB_TOKEN cannot start a workflow in another one, so
+# this needs E2E_DISPATCH_TOKEN: a fine-grained token on
+# ezee969/sunnsteel-frontend with "Contents: read and write" (what
+# repository_dispatch requires). Until it exists the job skips, and the
+# frontend's daily run still covers the backend.
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ask the frontend to run the end-to-end path
+        env:
+          TOKEN: ${{ secrets.E2E_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "E2E_DISPATCH_TOKEN is not set; skipping (the frontend's daily run covers the backend)."
+            exit 0
+          fi
+          # Never fails: Railway waits for this repository's checks
+          # (checkSuites) and skips the deploy on a red one, and a dispatch
+          # that did not go through must not hold production back.
+          if curl -sf -X POST \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/ezee969/sunnsteel-frontend/dispatches \
+            -d "{\"event_type\":\"backend-main\",\"client_payload\":{\"sha\":\"${GITHUB_SHA}\"}}"; then
+            echo "Asked the frontend to run the end-to-end path against ${GITHUB_SHA}."
+          else
+            echo "::warning::Could not ask the frontend to run the end-to-end path; check E2E_DISPATCH_TOKEN."
+          fi
