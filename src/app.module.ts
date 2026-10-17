@@ -24,6 +24,7 @@ import { ModerationModule } from './moderation/moderation.module';
 import { SearchModule } from './search/search.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { MessagesModule } from './messages/messages.module';
+import { BillingModule } from './billing/billing.module';
 
 @Module({
   imports: [
@@ -68,6 +69,7 @@ import { MessagesModule } from './messages/messages.module';
     SearchModule,
     RealtimeModule,
     MessagesModule,
+    BillingModule,
   ],
   providers: [
     {

@@ -101,6 +101,8 @@ export class AccountExportService {
       recentSearches,
       goalSuggestionDismissals,
       messagesSent,
+      entitlementGrants,
+      subscriptions,
     ] = await Promise.all([
       this.db.routine.findMany({
         where: { userId },
@@ -285,6 +287,15 @@ export class AccountExportService {
         },
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       }),
+      // BILL-01: every plan grant, revoked and expired ones included.
+      this.db.entitlementGrant.findMany({
+        where: { userId },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      }),
+      this.db.subscription.findMany({
+        where: { userId },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      }),
     ]);
     // Another member is named by username, never by id, as everywhere in the
     // file; one whose account is gone has nothing left to name.
@@ -408,6 +419,25 @@ export class AccountExportService {
         date: override.date,
         kind: override.kind,
         toDate: override.toDate,
+      })),
+      entitlementGrants: entitlementGrants.map((grant) => ({
+        planId: grant.planId,
+        source: grant.source,
+        startsAt: iso(grant.startsAt),
+        expiresAt: grant.expiresAt ? iso(grant.expiresAt) : null,
+        revokedAt: grant.revokedAt ? iso(grant.revokedAt) : null,
+        note: grant.note,
+        createdAt: iso(grant.createdAt),
+      })),
+      subscriptions: subscriptions.map((subscription) => ({
+        planId: subscription.planId,
+        status: subscription.status,
+        provider: subscription.provider,
+        externalId: subscription.externalId,
+        currentPeriodEnd: subscription.currentPeriodEnd
+          ? iso(subscription.currentPeriodEnd)
+          : null,
+        createdAt: iso(subscription.createdAt),
       })),
       goalSuggestionDismissals: goalSuggestionDismissals.map((row) => ({
         key: row.key,
