@@ -149,6 +149,9 @@ model User {
   /// MSG-09: captures of this member's reported messages, which go with the
   /// account.
   reportedMessageCaptures           ReportedMessageCapture[]
+  // BILL-01
+  entitlementGrants                 EntitlementGrant[]
+  subscriptions                     Subscription[]
 }
 
 /// MSG-01: who may start a conversation with a member. MSG-02 adds EVERYONE:
@@ -217,12 +220,12 @@ model ConversationParticipant {
 /// MSG-01: text only, stored on the server and not end-to-end encrypted.
 /// Deleting one keeps its place ("Message deleted") with the text gone.
 model Message {
-  id                 String       @id @default(uuid())
+  id                 String                 @id @default(uuid())
   conversationId     String
   senderId           String
   /// Null once its author deleted it. VarChar counts characters, as the
   /// 2,000-character limit does.
-  body               String?      @db.VarChar(2000)
+  body               String?                @db.VarChar(2000)
   deletedAt          DateTime?
   /// MSG-09: hidden from the other participant by a moderator; its author
   /// still reads it. A restore writes it back to null.
@@ -232,9 +235,9 @@ model Message {
   /// reads as no longer available rather than taking the message with it.
   attachmentKind     MessageAttachmentKind?
   attachmentId       String?
-  createdAt          DateTime     @default(now())
-  conversation       Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender             User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  createdAt          DateTime               @default(now())
+  conversation       Conversation           @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender             User                   @relation(fields: [senderId], references: [id], onDelete: Cascade)
 
   @@index([conversationId, createdAt, id])
   @@index([senderId, createdAt])
@@ -1141,16 +1144,16 @@ model SessionShare {
 /// `changes` (contracts `SessionSetCorrection[]`) are the audit trail, so a
 /// second correction appends another row rather than editing this one.
 model SessionCorrection {
-  id        String         @id @default(uuid())
-  sessionId String
-  session   WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  changes   Json
+  id            String         @id @default(uuid())
+  sessionId     String
+  session       WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  changes       Json
   // LIVE-24: the end time a correction moved, as it was and as it became.
   endedAtBefore DateTime?
   endedAtAfter  DateTime?
-  createdAt DateTime       @default(now())
+  createdAt     DateTime       @default(now())
 
   @@index([sessionId, createdAt])
   @@index([userId])
@@ -1494,4 +1497,71 @@ model ActivityEntryReaction {
   @@id([userId, entryKey])
   @@index([entryKey])
   @@index([authorId, entryKey])
+}
+
+/// BILL-01: the plans a grant or a subscription can name. What each plan
+/// unlocks and its limits live in contracts (`PLANS`); this table only makes
+/// sure a grant names a plan that exists. The migration inserts FREE and PRO.
+model Plan {
+  id            String             @id @db.VarChar(20)
+  createdAt     DateTime           @default(now())
+  grants        EntitlementGrant[]
+  subscriptions Subscription[]
+}
+
+enum EntitlementSource {
+  SUBSCRIPTION
+  PROMO
+  ADMIN
+}
+
+/// BILL-01 creates the table; nothing writes it until BILL-03 and BILL-04.
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+
+model Subscription {
+  id               String             @id @default(uuid())
+  userId           String
+  planId           String             @db.VarChar(20)
+  status           SubscriptionStatus
+  provider         String             @db.VarChar(40)
+  externalId       String?            @db.VarChar(200)
+  currentPeriodEnd DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan             Plan               @relation(fields: [planId], references: [id])
+  grants           EntitlementGrant[]
+
+  @@unique([provider, externalId])
+  @@index([userId])
+}
+
+/// BILL-01: access to a plan for a while. The plan an account is on is the
+/// highest plan among its grants in force (contracts' `planFromGrants`),
+/// computed on every read and never stored. At most one unrevoked grant per
+/// (user, source): a partial unique index the migration creates and Prisma
+/// cannot declare, so a new grant from a source replaces that source's last
+/// one and two concurrent grants cannot both stand.
+model EntitlementGrant {
+  id             String            @id @default(uuid())
+  userId         String
+  planId         String            @db.VarChar(20)
+  source         EntitlementSource
+  subscriptionId String?
+  startsAt       DateTime          @default(now())
+  /// Null for a grant that never expires.
+  expiresAt      DateTime?
+  revokedAt      DateTime?
+  note           String?           @db.VarChar(200)
+  createdAt      DateTime          @default(now())
+  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan           Plan              @relation(fields: [planId], references: [id])
+  subscription   Subscription?     @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  @@index([userId, revokedAt])
 }

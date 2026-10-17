@@ -486,6 +486,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20261015100000_correction_end_time/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// BILL-01: plans and entitlements.
+				readFileSync(
+					'prisma/migrations/20261017100000_plans_and_entitlements/migration.sql',
+					'utf8',
 				),
     );
     prisma(

@@ -25,12 +25,14 @@ import {
   normalizeDashboardLayout,
   type UpdateDashboardLayoutRequest,
   apiError,
+  planFromGrants,
 } from "@sunsteel/contracts";
 import { localDate } from "../notifications/push/local-time";
 import { isAllowedEntryDate, isSameWeight } from "./body-measurement-rules";
 import { recordProfileWeight } from "./body-weight-sync";
 import { nextOnboarding } from "./onboarding";
 import { messagingStateFor } from "../messages/messaging-access";
+import { grantWindows } from "../billing/entitlement-grants";
 import {
   PREFERRED_TRAINING_STYLE_VALUES,
   ProfileDiscoverySettings,
@@ -104,6 +106,11 @@ const userProfileSelect = {
   onboardingOfferedAt: true,
   // MSG-01
   messagePermission: true,
+  // BILL-01: the open grants; the plan is decided from them on each read.
+  entitlementGrants: {
+    where: { revokedAt: null },
+    select: { planId: true, startsAt: true, expiresAt: true, revokedAt: true },
+  },
   createdAt: true,
   updatedAt: true,
   _count: {
@@ -176,6 +183,7 @@ export class UsersService {
       onboardingCompletedVersion,
       onboardingStepsDone,
       onboardingOfferedAt,
+      entitlementGrants,
       ...profile
     } = user;
     return {
@@ -198,6 +206,7 @@ export class UsersService {
         discoverableByContacts,
       },
       isModerator,
+      plan: planFromGrants(grantWindows(entitlementGrants ?? [])),
       dashboardLayout: normalizeDashboardLayout(dashboardLayout),
       locale: isAppLocale(locale) ? locale : null,
       weekStartsOn: isWeekStartsOn(weekStartsOn)
