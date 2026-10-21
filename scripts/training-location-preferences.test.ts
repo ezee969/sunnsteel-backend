@@ -6,6 +6,13 @@ import { DatabaseService } from '../src/database/database.service';
 import { normalizeTrainingLocations } from '../src/users/training-location-preferences.logic';
 import { TrainingLocationPreferencesService } from '../src/users/training-location-preferences.service';
 
+// BILL-02: these suites test what every plan keeps doing, so they run as Pro.
+const PRO_GRANTS = {
+  findMany: async () => [
+    { planId: 'PRO', startsAt: new Date(0), expiresAt: null, revokedAt: null },
+  ],
+};
+
 test('normalizes equipment and presents plates heaviest first', () => {
   const [location] = normalizeTrainingLocations([
     {
@@ -58,7 +65,9 @@ test('requires exactly one default and unique location names', () => {
 test('rejects location ids owned by another account before writing', async () => {
   let deleted = false;
   const transaction = {
+    entitlementGrant: PRO_GRANTS,
     trainingLocationPreference: {
+      findMany: async () => [],
       count: async () => 0,
       deleteMany: async () => {
         deleted = true;
@@ -66,6 +75,7 @@ test('rejects location ids owned by another account before writing', async () =>
     },
   };
   const db = {
+    entitlementGrant: PRO_GRANTS,
     $transaction: async (callback: (value: typeof transaction) => unknown) =>
       callback(transaction),
   };

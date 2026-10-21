@@ -13,6 +13,8 @@ import {
   type WeekStartsOn,
 } from "@sunsteel/contracts";
 import { DatabaseService } from "../database/database.service";
+import { limitOf, planLimitReached } from "../billing/plan-of";
+import { historyWeeks } from "../billing/pro-split";
 import { localDate } from "./analytics/analytics-contribution";
 import { readSnapshot } from "./analytics/session-snapshot";
 import type { VolumeTrendQueryDto } from "./dto/volume-trend.dto";
@@ -98,7 +100,14 @@ export class WorkoutVolumeTrendService {
     userId: string,
     query: VolumeTrendQueryDto,
   ): Promise<VolumeTrendResponse> {
-    const weeksCount = query.weeks ?? DEFAULT_VOLUME_TREND_WEEKS;
+    // BILL-02: weeks past the plan's limit need Pro; the default fits the plan.
+    const limit = await limitOf(this.db, userId, "MUSCLE_HISTORY_WEEKS");
+    const { weeks: weeksCount, overLimit } = historyWeeks(
+      query.weeks,
+      DEFAULT_VOLUME_TREND_WEEKS,
+      limit,
+    );
+    if (overLimit && limit !== null) throw planLimitReached(limit);
     const now = new Date();
     const localToday = localDate(now, query.timeZone);
 

@@ -17,6 +17,7 @@ import { ContinueLinearBlockDto } from './dto/continue-linear-block.dto';
 import { RoutineSharingService } from './routine-sharing.service';
 import { RoutineDiscoveryService } from './routine-discovery.service';
 import { SupabaseJwtGuard } from '../auth/guards/supabase-jwt.guard';
+import { RequiresEntitlement } from '../billing/requires-entitlement';
 import { CloneRoutineDto } from './dto/clone-routine.dto';
 import { DiscoverRoutinesDto } from './dto/discover-routines.dto';
 import { CreateRoutineDto } from './dto/create-routine.dto';
@@ -93,6 +94,7 @@ export class RoutinesController {
 
   /** ROUT-19: what a finished 8-week block does next. */
   @Put(':id/exercises/:routineExerciseId/linear-block')
+  @RequiresEntitlement('EIGHT_WEEK_BLOCKS')
   continueLinearBlock(
     @Req() req: RequestWithUser,
     @Param('id') routineId: string,

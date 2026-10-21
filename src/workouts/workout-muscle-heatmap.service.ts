@@ -11,6 +11,8 @@ import {
   type WeekStartsOn,
 } from "@sunsteel/contracts";
 import { DatabaseService } from "../database/database.service";
+import { limitOf, planLimitReached } from "../billing/plan-of";
+import { historyWeeks } from "../billing/pro-split";
 import { localDate } from "./analytics/analytics-contribution";
 import type { MuscleGroupHeatmapQueryDto } from "./dto/muscle-group-heatmap.dto";
 
@@ -41,7 +43,14 @@ export class WorkoutMuscleHeatmapService {
     userId: string,
     query: MuscleGroupHeatmapQueryDto,
   ): Promise<MuscleGroupHeatmapResponse> {
-    const weeksCount = query.weeks ?? DEFAULT_HEATMAP_WEEKS;
+    // BILL-02: weeks past the plan's limit need Pro; the default fits the plan.
+    const limit = await limitOf(this.db, userId, "MUSCLE_HISTORY_WEEKS");
+    const { weeks: weeksCount, overLimit } = historyWeeks(
+      query.weeks,
+      DEFAULT_HEATMAP_WEEKS,
+      limit,
+    );
+    if (overLimit && limit !== null) throw planLimitReached(limit);
     const localToday = localDate(new Date(), query.timeZone);
 
     return this.db.$transaction(

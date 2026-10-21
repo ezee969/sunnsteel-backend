@@ -12,6 +12,8 @@ import type {
   PersonalGoalsResponse,
 } from "@sunsteel/contracts";
 import { DatabaseService } from "../database/database.service";
+import { limitOf } from "../billing/plan-of";
+import { pausedGoalIds } from "../billing/pro-split";
 import {
   mapMeasurableGoal,
   measurableGoalSelect,
@@ -77,7 +79,7 @@ export class WorkoutPersonalGoalsService {
 
     return this.db.$transaction(
       async (tx) => {
-        const [[projection], goals, user] = await Promise.all([
+        const [[projection], goals, user, goalLimit] = await Promise.all([
           tx.$queryRaw<WorkoutAnalyticsProjection[]>`
             SELECT * FROM "WorkoutAnalyticsProjection"
             WHERE "userId" = ${userId} AND "active" AND "state" = 'READY'
@@ -92,7 +94,13 @@ export class WorkoutPersonalGoalsService {
             where: { id: userId },
             select: { weight: true, weekStartsOn: true },
           }),
+          limitOf(tx, userId, "GOALS"),
         ]);
+        // BILL-02: goals past the plan's limit are kept, paused, never deleted.
+        const paused = pausedGoalIds(
+          goals.map((goal) => goal.id),
+          goalLimit,
+        );
         if (!projection) {
           throw new ServiceUnavailableException(
             apiError("ANALYTICS_NOT_READY"),
@@ -147,6 +155,16 @@ export class WorkoutPersonalGoalsService {
           asOf: now.toISOString(),
           goals: goals.map((goal): PersonalGoalProgress => {
             const stored = mapMeasurableGoal(goal);
+            if (paused.has(goal.id)) {
+              return {
+                ...stored,
+                currentValue: null,
+                remainingValue: null,
+                progressPercent: null,
+                achieved: null,
+                paused: true,
+              };
+            }
             const currentValue =
               goal.type === "WEEKLY_SESSIONS"
                 ? (weekSum._sum.sessions ?? 0)

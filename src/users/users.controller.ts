@@ -178,7 +178,11 @@ export class UsersController {
     @Request() req: RequestWithUser,
     @Body() dto: UpdateDashboardLayoutDto,
   ) {
-    return this.usersService.updateDashboardLayout(req.user.email, dto.sections);
+    return this.usersService.updateDashboardLayout(
+      req.user.id,
+      req.user.email,
+      dto.sections,
+    );
   }
 
   /** I18N-02: the account's language, or null to follow each device. */

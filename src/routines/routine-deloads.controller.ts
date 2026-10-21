@@ -10,6 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { SupabaseJwtGuard } from '../auth/guards/supabase-jwt.guard';
+import { RequiresEntitlement } from '../billing/requires-entitlement';
 import type { RequestWithUser } from '../common/types/request-with-user';
 import { CreateDeloadDto } from './dto/create-deload.dto';
 import { RoutineDeloadsService } from './routine-deloads.service';
@@ -26,6 +27,7 @@ export class RoutineDeloadsController {
   }
 
   @Post()
+  @RequiresEntitlement('PLANNED_DELOADS')
   create(
     @Req() req: RequestWithUser,
     @Param('id') routineId: string,

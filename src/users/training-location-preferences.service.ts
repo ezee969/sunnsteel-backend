@@ -7,6 +7,7 @@ import type {
 import { Prisma } from '@prisma/client';
 
 import { DatabaseService } from '../database/database.service';
+import { assertListWithinLimit, limitOf } from '../billing/plan-of';
 import { normalizeTrainingLocations } from './training-location-preferences.logic';
 
 const trainingLocationSelect = {
@@ -57,6 +58,17 @@ export class TrainingLocationPreferencesService {
     );
 
     return this.db.$transaction(async transaction => {
+      // BILL-02: past the plan's limit a write may keep, edit or drop the
+      // locations it holds but add none; the default is the one in use.
+      const stored = await transaction.trainingLocationPreference.findMany({
+        where: { userId },
+        select: { id: true },
+      });
+      assertListWithinLimit(
+        await limitOf(transaction, userId, 'TRAINING_LOCATIONS'),
+        locations.map(location => location.id),
+        stored.map(location => location.id),
+      );
       if (incomingIds.length > 0) {
         const ownedCount = await transaction.trainingLocationPreference.count({
           where: { userId, id: { in: incomingIds } },

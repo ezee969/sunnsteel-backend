@@ -12,6 +12,13 @@ import {
   WorkoutMuscleHeatmapService,
 } from "../src/workouts/workout-muscle-heatmap.service";
 
+// BILL-02: these suites test what every plan keeps doing, so they run as Pro.
+const PRO_GRANTS = {
+  findMany: async () => [
+    { planId: 'PRO', startsAt: new Date(0), expiresAt: null, revokedAt: null },
+  ],
+};
+
 test("heatmap week starts are chronological Mondays across year boundaries", () => {
   assert.deepEqual(getHeatmapWeekStarts("2026-01-05", 4), [
     "2025-12-15",
@@ -33,6 +40,7 @@ const heatmapDb = (
   queries: any[],
 ) =>
   ({
+    entitlementGrant: PRO_GRANTS,
     $transaction: async (read: any, options: any) => {
       assert.deepEqual(options, { isolationLevel: "RepeatableRead" });
       return read({
@@ -117,6 +125,7 @@ test("muscle heatmap follows a Sunday week (PREF-04)", async () => {
 
 test("muscle heatmap refuses a stale or missing analytics projection", async () => {
   const db = {
+    entitlementGrant: PRO_GRANTS,
     $transaction: async (read: any) =>
       read({
         user: { findUnique: async () => null },

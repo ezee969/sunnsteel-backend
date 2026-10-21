@@ -11,6 +11,8 @@ import type {
   ExerciseStrengthTrendResponse,
 } from "@sunsteel/contracts";
 import { DatabaseService } from "../database/database.service";
+import { strengthRangeNeedsPro } from "@sunsteel/contracts";
+import { assertFeature } from "../billing/plan-of";
 import { ExerciseStrengthTrendQueryDto } from "./dto/exercise-strength-trend.dto";
 
 const MAX_TREND_POINTS = 500;
@@ -70,6 +72,11 @@ export class WorkoutStrengthTrendService {
     const from = query.from ? parseDate(query.from, to) : null;
     if (from && from > to) {
       throw new BadRequestException("from must be before or equal to to");
+    }
+    // BILL-02: Free reads up to 90 days; the current bests below are answered
+    // whatever the range, so a downgrade hides no fact.
+    if (strengthRangeNeedsPro({ from, to })) {
+      await assertFeature(this.db, userId, "STRENGTH_TRENDS_LONG_RANGES");
     }
 
     return this.db.$transaction(

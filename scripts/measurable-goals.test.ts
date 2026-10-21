@@ -13,6 +13,13 @@ import {
   WorkoutPersonalGoalsService,
 } from "../src/workouts/workout-personal-goals.service";
 
+// BILL-02: these suites test what every plan keeps doing, so they run as Pro.
+const PRO_GRANTS = {
+  findMany: async () => [
+    { planId: 'PRO', startsAt: new Date(0), expiresAt: null, revokedAt: null },
+  ],
+};
+
 const timestamp = new Date("2026-09-13T18:00:00.000Z");
 
 test("measurable goals normalize directions and exercise scope", () => {
@@ -96,6 +103,7 @@ test("replacing goals is owner-scoped and preserves supplied ids", async () => {
     updatedAt: timestamp,
   };
   const tx = {
+    entitlementGrant: PRO_GRANTS,
     measurableGoal: {
       findMany: async () => {
         findCount += 1;
@@ -112,6 +120,7 @@ test("replacing goals is owner-scoped and preserves supplied ids", async () => {
     exercise: { count: async () => 0 },
   };
   const db = {
+    entitlementGrant: PRO_GRANTS,
     $transaction: async (read: (client: typeof tx) => unknown) => read(tx),
   } as unknown as DatabaseService;
   const result = await new MeasurableGoalsService(db).replace("user-1", [
@@ -161,6 +170,7 @@ test("personal goals compose weekly, streak, strength and body values", async ()
     makeGoal("body", "BODY_WEIGHT", 80),
   ];
   const tx = {
+    entitlementGrant: PRO_GRANTS,
     $queryRaw: async () => [
       {
         id: "projection",
@@ -183,6 +193,7 @@ test("personal goals compose weekly, streak, strength and body values", async ()
     },
   };
   const db = {
+    entitlementGrant: PRO_GRANTS,
     $transaction: async (
       read: (client: typeof tx) => unknown,
       options: unknown,

@@ -11,6 +11,7 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { SupabaseJwtGuard } from "../auth/guards/supabase-jwt.guard";
+import { RequiresEntitlement } from "../billing/requires-entitlement";
 import type { RequestWithUser } from "../common/types/request-with-user";
 import { UpsertRoutineTrainingBlockDto } from "./dto/upsert-routine-training-block.dto";
 import { RoutineTrainingBlocksService } from "./routine-training-blocks.service";
@@ -27,6 +28,7 @@ export class RoutineTrainingBlocksController {
   }
 
   @Post()
+  @RequiresEntitlement("TRAINING_BLOCKS")
   create(
     @Req() req: RequestWithUser,
     @Param("id") routineId: string,
@@ -36,6 +38,7 @@ export class RoutineTrainingBlocksController {
   }
 
   @Put(":blockId")
+  @RequiresEntitlement("TRAINING_BLOCKS")
   update(
     @Req() req: RequestWithUser,
     @Param("id") routineId: string,

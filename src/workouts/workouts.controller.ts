@@ -14,6 +14,7 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { SupabaseJwtGuard } from "../auth/guards/supabase-jwt.guard";
+import { RequiresEntitlement } from "../billing/requires-entitlement";
 import { WorkoutsService } from "./workouts.service";
 import { StartWorkoutDto } from "./dto/start-workout.dto";
 import { StartWorkoutResponseDto } from "./dto/start-workout-response.dto";
@@ -193,6 +194,7 @@ export class WorkoutsController {
   }
 
   @Get("progress/session-comparison")
+  @RequiresEntitlement("TRAINING_COMPARISON")
   async sessionComparison(
     @Req() req: RequestWithUser,
     @Query() query: SessionComparisonQueryDto,
@@ -218,6 +220,7 @@ export class WorkoutsController {
 
   /** ACH-06: goals the member might add, from their own data. */
   @Get("progress/goal-suggestions")
+  @RequiresEntitlement("GOAL_SUGGESTIONS")
   async goalSuggestionsRead(
     @Req() req: RequestWithUser,
     @Query() query: WorkoutProgressQueryDto,
@@ -226,6 +229,7 @@ export class WorkoutsController {
   }
 
   @Post("progress/goal-suggestions/dismissals")
+  @RequiresEntitlement("GOAL_SUGGESTIONS")
   async dismissGoalSuggestion(
     @Req() req: RequestWithUser,
     @Body() dto: DismissGoalSuggestionDto,
@@ -239,11 +243,13 @@ export class WorkoutsController {
   }
 
   @Get("progress/signals")
+  @RequiresEntitlement("TRAINING_SIGNALS")
   async trainingSignals(@Req() req: RequestWithUser) {
     return this.workoutsService.getTrainingSignals(req.user.id);
   }
 
   @Get("progress/deload-suggestion")
+  @RequiresEntitlement("TRAINING_SIGNALS")
   async deloadSuggestion(@Req() req: RequestWithUser) {
     return this.workoutsService.getDeloadSuggestion(req.user.id);
   }

@@ -7,6 +7,13 @@ import {
   WorkoutStrengthTrendService,
 } from "../src/workouts/workout-strength-trend.service";
 
+// BILL-02: these suites test what every plan keeps doing, so they run as Pro.
+const PRO_GRANTS = {
+  findMany: async () => [
+    { planId: 'PRO', startsAt: new Date(0), expiresAt: null, revokedAt: null },
+  ],
+};
+
 const event = (index: number) => ({
   id: `event-${index}`,
   sessionId: `session-${index}`,
@@ -24,6 +31,7 @@ const event = (index: number) => ({
 test("strength trend maps summaries, a pre-range baseline and chronological points", async () => {
   const rawCalls: string[] = [];
   const tx = {
+    entitlementGrant: PRO_GRANTS,
     personalRecord: {
       findMany: async () => [
         {
@@ -43,6 +51,7 @@ test("strength trend maps summaries, a pre-range baseline and chronological poin
     },
   };
   const db = {
+    entitlementGrant: PRO_GRANTS,
     $transaction: async (read: any, options: any) => {
       assert.deepEqual(options, { isolationLevel: "RepeatableRead" });
       return read(tx);
@@ -73,6 +82,7 @@ test("strength trend maps summaries, a pre-range baseline and chronological poin
 test("strength trend is bounded to the latest 500 record events", async () => {
   const rows = Array.from({ length: 501 }, (_, index) => event(index));
   const db = {
+    entitlementGrant: PRO_GRANTS,
     $transaction: async (read: any) =>
       read({
         personalRecord: {

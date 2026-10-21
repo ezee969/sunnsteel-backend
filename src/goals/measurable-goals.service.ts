@@ -8,6 +8,7 @@ import type {
 } from "@sunsteel/contracts";
 import { MEASURABLE_GOALS_MAX, apiError } from "@sunsteel/contracts";
 import { DatabaseService } from "../database/database.service";
+import { assertListWithinLimit, limitOf } from "../billing/plan-of";
 import { usableExerciseWhere } from "../exercises/exercise-access";
 
 export const measurableGoalSelect = {
@@ -153,6 +154,13 @@ export class MeasurableGoalsService {
       if (goals.some((goal) => goal.id && !ownedIds.has(goal.id))) {
         throw new BadRequestException("Invalid measurable goal id");
       }
+      // BILL-02: past the plan's limit a write may keep, edit or drop the
+      // goals it holds but add none.
+      assertListWithinLimit(
+        await limitOf(tx, userId, "GOALS"),
+        goals.map((goal) => goal.id),
+        [...ownedIds],
+      );
 
       const exerciseIds = goals.flatMap((goal) =>
         goal.exerciseId ? [goal.exerciseId] : [],

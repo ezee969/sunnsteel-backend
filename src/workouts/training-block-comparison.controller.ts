@@ -1,5 +1,6 @@
 import { Controller, Get, Param, Req, UseGuards } from "@nestjs/common";
 import { SupabaseJwtGuard } from "../auth/guards/supabase-jwt.guard";
+import { RequiresEntitlement } from "../billing/requires-entitlement";
 import type { RequestWithUser } from "../common/types/request-with-user";
 import { WorkoutBlockComparisonService } from "./workout-block-comparison.service";
 
@@ -13,6 +14,7 @@ export class TrainingBlockComparisonController {
   constructor(private readonly comparisons: WorkoutBlockComparisonService) {}
 
   @Get(":id/training-blocks/:seriesId/comparison")
+  @RequiresEntitlement("TRAINING_COMPARISON")
   async compare(
     @Req() req: RequestWithUser,
     @Param("id") routineId: string,

@@ -13,6 +13,13 @@ import {
   WorkoutVolumeTrendService,
 } from "../src/workouts/workout-volume-trend.service";
 
+// BILL-02: these suites test what every plan keeps doing, so they run as Pro.
+const PRO_GRANTS = {
+  findMany: async () => [
+    { planId: 'PRO', startsAt: new Date(0), expiresAt: null, revokedAt: null },
+  ],
+};
+
 const snapshot: WorkoutSessionSnapshotV1 = {
   schemaVersion: 1,
   sessionId: "session-1",
@@ -44,6 +51,7 @@ test("volume trends fill weeks and compare rollups, routines and exercises", asy
   const endedAt = new Date(`${previousWeek}T12:00:00.000Z`);
   const received: Record<string, any> = {};
   const tx = {
+    entitlementGrant: PRO_GRANTS,
     user: { findUnique: async () => ({ weekStartsOn: 1 }) },
     $queryRaw: async () => [{ id: "projection-1" }],
     workoutRollup: {
@@ -103,6 +111,7 @@ test("volume trends fill weeks and compare rollups, routines and exercises", asy
     },
   };
   const db = {
+    entitlementGrant: PRO_GRANTS,
     $transaction: async (read: any, options: any) => {
       assert.deepEqual(options, { isolationLevel: "RepeatableRead" });
       return read(tx);
@@ -156,6 +165,7 @@ test("volume trends fill weeks and compare rollups, routines and exercises", asy
 
 test("volume trends refuse a stale or missing analytics projection", async () => {
   const db = {
+    entitlementGrant: PRO_GRANTS,
     $transaction: async (read: any) =>
       read({
         user: { findUnique: async () => null },

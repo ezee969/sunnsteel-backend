@@ -34,9 +34,10 @@ import { WorkoutGoalSuggestionsService } from "./workout-goal-suggestions.servic
 import { WorkoutBlockComparisonService } from "./workout-block-comparison.service";
 import { TrainingBlockComparisonController } from "./training-block-comparison.controller";
 import { PushModule } from "../notifications/push/push.module";
+import { BillingModule } from "../billing/billing.module";
 
 @Module({
-  imports: [DatabaseModule, GoalsModule, PushModule],
+  imports: [DatabaseModule, GoalsModule, PushModule, BillingModule],
   controllers: [
     WorkoutsController,
     SessionSharesController,

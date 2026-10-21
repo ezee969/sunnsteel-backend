@@ -51,11 +51,14 @@ const stored = {
   updatedAt: new Date('2026-01-02T00:00:00.000Z'),
   _count: { followers: 0, following: 0 },
   favoriteExercises: [],
+  // BILL-02: customization is Pro's, so these accounts hold a Pro grant.
+  entitlementGrants: [{ planId: 'PRO', startsAt: new Date('2026-01-01T00:00:00.000Z'), expiresAt: null, revokedAt: null }],
 };
 
 function setup() {
   const writes: unknown[] = [];
   const db = {
+    entitlementGrant: { findMany: async () => [{ planId: 'PRO', startsAt: new Date('2026-01-01T00:00:00.000Z'), expiresAt: null, revokedAt: null }] },
     user: {
       update: async (args: { data: { dashboardLayout: unknown } }) => {
         writes.push(args.data.dashboardLayout);
@@ -75,7 +78,7 @@ function setup() {
 describe('DASH-05 / PREF-03 dashboard layout', () => {
   it('stores the normalized layout and answers it on the profile', async () => {
     const { service, writes } = setup();
-    const profile = await service.updateDashboardLayout('owner@example.test', [
+    const profile = await service.updateDashboardLayout('owner-id', 'owner@example.test', [
       { id: 'following', hidden: false },
       { id: 'stats', hidden: true },
       { id: 'following', hidden: true },
@@ -100,6 +103,7 @@ describe('DASH-05 / PREF-03 dashboard layout', () => {
   it('stores null for the default layout, so the default keeps applying', async () => {
     const { service, writes } = setup();
     const profile = await service.updateDashboardLayout(
+      'owner-id',
       'owner@example.test',
       DEFAULT_DASHBOARD_LAYOUT,
     );

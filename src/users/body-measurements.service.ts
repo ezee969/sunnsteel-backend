@@ -12,6 +12,8 @@ import {
   apiError,
 } from "@sunsteel/contracts";
 import { DatabaseService } from "../database/database.service";
+import { assertFeature } from "../billing/plan-of";
+import { keepsProBodyFields } from "../billing/pro-split";
 import { localDate } from "../notifications/push/local-time";
 import {
   BODY_MEASUREMENT_SELECT,
@@ -105,6 +107,22 @@ export class BodyMeasurementsService {
     }
     const values = entryValues(input);
     return this.db.$transaction(async (tx) => {
+      // BILL-02: measurements beyond weight need Pro; without it a write
+      // leaves the stored ones exactly as they are (kept, read-only).
+      const stored = await tx.bodyMeasurement.findUnique({
+        where: { userId_date: { userId, date: columnDate(date) } },
+        select: {
+          waistCm: true,
+          hipsCm: true,
+          chestCm: true,
+          armCm: true,
+          thighCm: true,
+          bodyFatPercent: true,
+        },
+      });
+      if (!keepsProBodyFields(values, stored)) {
+        await assertFeature(tx, userId, "BODY_MEASUREMENTS");
+      }
       const row = await tx.bodyMeasurement.upsert({
         where: { userId_date: { userId, date: columnDate(date) } },
         create: { userId, date: columnDate(date), ...values },

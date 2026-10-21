@@ -32,10 +32,16 @@ import {
 import { assertUsableExercises } from "../exercises/exercise-access";
 import { assertExerciseLinks, dayExerciseLinks } from "./exercise-links";
 import { linearStateJson, normalizeLinearExercise } from "./linear-periodization";
+import { assertFeature } from "../billing/plan-of";
+import { startsLinearBlock } from "../billing/pro-split";
 
 const dayExerciseIds = (
   days: ReadonlyArray<{ exercises: ReadonlyArray<{ exerciseId: string }> }>,
 ) => days.flatMap((day) => day.exercises.map((e) => e.exerciseId));
+
+const dayExercises = <E extends { exerciseId: string }>(
+  days: ReadonlyArray<{ exercises: ReadonlyArray<E> }>,
+) => days.flatMap((day) => [...day.exercises]);
 
 type RoutineSetInput = {
   setNumber: number;
@@ -300,6 +306,10 @@ export class RoutinesService {
     // EXER-06: the catalog and the owner's own exercises only.
     await assertUsableExercises(this.db, userId, dayExerciseIds(days));
     assertExerciseLinks(days);
+    // BILL-02: an 8-week block starts only under Pro.
+    if (startsLinearBlock(dayExercises(days), [])) {
+      await assertFeature(this.db, userId, "EIGHT_WEEK_BLOCKS");
+    }
     const routine = await this.db.routine.create({
       data: {
         user: {
@@ -408,6 +418,20 @@ export class RoutinesService {
     if (days) {
       await assertUsableExercises(tx, userId, dayExerciseIds(days));
       assertExerciseLinks(days);
+      // BILL-02: a running block travels with the edit; a new one needs Pro.
+      const stored = await tx.routineExercise.findMany({
+        where: {
+          routineDay: {
+            routineId: id,
+            trainingBlockId: null,
+            temporaryOverrideId: null,
+          },
+        },
+        select: { exerciseId: true, linearPeriodization: true },
+      });
+      if (startsLinearBlock(dayExercises(days), stored)) {
+        await assertFeature(tx, userId, "EIGHT_WEEK_BLOCKS");
+      }
     }
     // SCHED-07: omitted rest days are kept, minus new training weekdays.
     const restDays = normalizeRestDays(
