@@ -498,6 +498,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20261021100000_founding_member_grants/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// PLAT-01: the outbox.
+				readFileSync(
+					'prisma/migrations/20261022120000_outbox/migration.sql',
+					'utf8',
 				),
     );
     prisma(

@@ -1565,3 +1565,31 @@ model EntitlementGrant {
 
   @@index([userId, revokedAt])
 }
+
+/// PLAT-01: a message about a domain change, written in the same transaction
+/// as that change, so it exists exactly when the change committed. The
+/// dispatcher hands it to pg-boss (job id = this id) and stamps
+/// `dispatchedAt`; a partial index the migration creates keeps the waiting
+/// ones cheap to find, and Prisma cannot declare it.
+model OutboxMessage {
+  id           String    @id @default(uuid())
+  topic        String    @db.VarChar(100)
+  payload      Json
+  /// Announcing the same thing twice is a no-op when a key is given.
+  dedupeKey    String?   @unique @db.VarChar(200)
+  createdAt    DateTime  @default(now())
+  dispatchedAt DateTime?
+  attempts     Int       @default(0)
+  lastError    String?   @db.VarChar(500)
+}
+
+/// PLAT-01: a consumer's receipt for a message, inserted in the same
+/// transaction as the consumer's effect, so a redelivered message changes
+/// nothing a second time.
+model ProcessedMessage {
+  consumer    String   @db.VarChar(100)
+  messageId   String
+  processedAt DateTime @default(now())
+
+  @@id([consumer, messageId])
+}
