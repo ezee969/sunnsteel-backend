@@ -26,6 +26,7 @@ import {
   type UpdateDashboardLayoutRequest,
   apiError,
   planFromGrants,
+  planIncludes,
 } from "@sunsteel/contracts";
 import { localDate } from "../notifications/push/local-time";
 import { isAllowedEntryDate, isSameWeight } from "./body-measurement-rules";
@@ -33,6 +34,7 @@ import { recordProfileWeight } from "./body-weight-sync";
 import { nextOnboarding } from "./onboarding";
 import { messagingStateFor } from "../messages/messaging-access";
 import { grantWindows } from "../billing/entitlement-grants";
+import { assertFeature } from "../billing/plan-of";
 import {
   PREFERRED_TRAINING_STYLE_VALUES,
   ProfileDiscoverySettings,
@@ -186,6 +188,7 @@ export class UsersService {
       entitlementGrants,
       ...profile
     } = user;
+    const plan = planFromGrants(grantWindows(entitlementGrants ?? []));
     return {
       ...profile,
       privacySettings: mapProfilePrivacy({
@@ -206,8 +209,11 @@ export class UsersService {
         discoverableByContacts,
       },
       isModerator,
-      plan: planFromGrants(grantWindows(entitlementGrants ?? [])),
-      dashboardLayout: normalizeDashboardLayout(dashboardLayout),
+      plan,
+      // BILL-02: a customized layout is kept but only Pro reads it.
+      dashboardLayout: normalizeDashboardLayout(
+        planIncludes(plan, "DASHBOARD_CUSTOMIZATION") ? dashboardLayout : null,
+      ),
       locale: isAppLocale(locale) ? locale : null,
       weekStartsOn: isWeekStartsOn(weekStartsOn)
         ? weekStartsOn
@@ -375,10 +381,16 @@ export class UsersService {
    * never changed it follows the default as sections are added.
    */
   async updateDashboardLayout(
+    userId: string,
     email: string,
     sections: UpdateDashboardLayoutRequest["sections"],
   ): Promise<UserProfile> {
     const layout = normalizeDashboardLayout(sections);
+    // BILL-02: going back to the default is always allowed; anything else is
+    // customization.
+    if (!isDefaultDashboardLayout(layout)) {
+      await assertFeature(this.db, userId, "DASHBOARD_CUSTOMIZATION");
+    }
     const user = await this.db.user.update({
       where: { email },
       data: {

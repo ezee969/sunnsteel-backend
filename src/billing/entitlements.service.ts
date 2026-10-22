@@ -17,6 +17,7 @@ import {
   revokePlan,
   type GrantPlanRequest,
 } from './entitlement-grants';
+import { planOf } from './plan-of';
 
 /**
  * BILL-01: the one place that decides what an account may do. Nothing is
@@ -40,8 +41,8 @@ export class EntitlementsService {
     });
   }
 
-  async planFor(userId: string, now: Date = new Date()): Promise<PlanId> {
-    return planFromGrants(grantWindows(await this.grantsInForce(userId, now)), now);
+  planFor(userId: string, now: Date = new Date()): Promise<PlanId> {
+    return planOf(this.db, userId, now);
   }
 
   /** Whether the account's plan unlocks a capability now. */

@@ -492,6 +492,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20261017100000_plans_and_entitlements/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// BILL-02: the founding-member grants.
+				readFileSync(
+					'prisma/migrations/20261021100000_founding_member_grants/migration.sql',
+					'utf8',
 				),
     );
     prisma(

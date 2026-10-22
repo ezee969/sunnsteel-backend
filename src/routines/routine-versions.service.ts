@@ -12,6 +12,7 @@ import {
   apiError,
 } from "@sunsteel/contracts";
 import { DatabaseService } from "../database/database.service";
+import { assertBelowLimit, limitOf } from "../billing/plan-of";
 import { lockTrainingAccount } from "../workouts/analytics/analytics-lock";
 import { UpdateRoutineDto } from "./dto/update-routine.dto";
 import { ROUTINE_WITH_DAYS_SELECT } from "./routine.selects";
@@ -77,7 +78,15 @@ export class RoutineVersionsService {
       orderBy: { number: "desc" },
       take: ROUTINE_VERSIONS_MAX,
     });
-    return { versions: rows.map(toRoutineVersion), max: ROUTINE_VERSIONS_MAX };
+    // BILL-02: the plan's limit when it is lower than the capability's own.
+    const limit = await limitOf(this.db, userId, "ROUTINE_VERSIONS");
+    return {
+      versions: rows.map(toRoutineVersion),
+      max:
+        limit === null
+          ? ROUTINE_VERSIONS_MAX
+          : Math.min(limit, ROUTINE_VERSIONS_MAX),
+    };
   }
 
   create(
@@ -163,6 +172,8 @@ export class RoutineVersionsService {
       throw new ConflictException(
         apiError("ROUTINE_VERSIONS_MAX", { max: ROUTINE_VERSIONS_MAX }),
       );
+    // BILL-02: past the plan's limit every version is kept; none is added.
+    assertBelowLimit(await limitOf(tx, userId, "ROUTINE_VERSIONS"), count);
     // A per-routine counter, so a deleted version's number is never reused.
     const { lastVersionNumber } = await tx.routine.update({
       where: { id: routineId },

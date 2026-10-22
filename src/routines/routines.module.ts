@@ -16,9 +16,10 @@ import { RoutineDeloadsService } from './routine-deloads.service';
 import { RoutineTrainingBlocksController } from './routine-training-blocks.controller';
 import { RoutineTrainingBlocksService } from './routine-training-blocks.service';
 import { ExercisesModule } from '../exercises/exercises.module';
+import { BillingModule } from '../billing/billing.module';
 
 @Module({
-  imports: [DatabaseModule, ExercisesModule],
+  imports: [DatabaseModule, ExercisesModule, BillingModule],
   controllers: [
     RoutinesController,
     RoutineVersionsController,

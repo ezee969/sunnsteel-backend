@@ -21,6 +21,13 @@ import {
 import { RoutineVersionsService } from '../src/routines/routine-versions.service';
 import { RoutinesService } from '../src/routines/routines.service';
 
+// BILL-02: these suites test what every plan keeps doing, so they run as Pro.
+const PRO_GRANTS = {
+  findMany: async () => [
+    { planId: 'PRO', startsAt: new Date(0), expiresAt: null, revokedAt: null },
+  ],
+};
+
 const created = new Date('2026-09-01T10:00:00Z');
 
 function routineEntity(
@@ -181,6 +188,7 @@ function fakeDb(rows: VersionRow[], catalog = new Set(['bench'])) {
   const updates: unknown[] = [];
   let lastVersionNumber = 0;
   const tx = {
+    entitlementGrant: PRO_GRANTS,
     $queryRaw: async () => [],
     routine: {
       findFirst: async (query: any) =>
