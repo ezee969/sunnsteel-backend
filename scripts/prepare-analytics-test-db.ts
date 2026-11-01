@@ -504,6 +504,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20261022120000_outbox/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// BILL-03: checkout attempts.
+				readFileSync(
+					'prisma/migrations/20261023100000_checkout_attempts/migration.sql',
+					'utf8',
 				),
     );
     prisma(

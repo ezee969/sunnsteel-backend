@@ -103,6 +103,7 @@ export class AccountExportService {
       messagesSent,
       entitlementGrants,
       subscriptions,
+      checkoutAttempts,
     ] = await Promise.all([
       this.db.routine.findMany({
         where: { userId },
@@ -296,6 +297,10 @@ export class AccountExportService {
         where: { userId },
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       }),
+      this.db.checkoutAttempt.findMany({
+        where: { userId },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      }),
     ]);
     // Another member is named by username, never by id, as everywhere in the
     // file; one whose account is gone has nothing left to name.
@@ -438,6 +443,14 @@ export class AccountExportService {
           ? iso(subscription.currentPeriodEnd)
           : null,
         createdAt: iso(subscription.createdAt),
+      })),
+      // BILL-03: never the provider's page or id, which are its to keep.
+      checkoutAttempts: checkoutAttempts.map((attempt) => ({
+        planId: attempt.planId,
+        status: attempt.status,
+        provider: attempt.provider,
+        createdAt: iso(attempt.createdAt),
+        completedAt: attempt.completedAt ? iso(attempt.completedAt) : null,
       })),
       goalSuggestionDismissals: goalSuggestionDismissals.map((row) => ({
         key: row.key,
