@@ -7,6 +7,7 @@ import {
   ServiceUnavailableException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { GUARDS_METADATA } from '@nestjs/common/constants';
 import {
   ROUTINE_DRAFT_SETS_PER_DAY_MAX,
   ROUTINE_DRAFT_WEEKLY_MUSCLE_SETS_MAX,
@@ -18,7 +19,8 @@ import {
   monthRange,
   usageRefusal,
 } from '../src/ai/ai-usage';
-import { REQUIRED_ENTITLEMENT } from '../src/billing/requires-entitlement';
+import { SupabaseJwtGuard } from '../src/auth/guards/supabase-jwt.guard';
+import { EntitlementGuard, REQUIRED_ENTITLEMENT } from '../src/billing/requires-entitlement';
 import type { DatabaseService } from '../src/database/database.service';
 import {
   AnthropicRoutineDraftModel,
@@ -388,11 +390,16 @@ describe('INTEL-03 drafting', () => {
     assert.equal((await drafts.usageOf('u')).state, 'UNAVAILABLE');
   });
 
-  it('every route needs the entitlement', () => {
-    assert.equal(
-      Reflect.getMetadata(REQUIRED_ENTITLEMENT, RoutineDraftsController),
-      'ROUTINE_DRAFTS',
-    );
+  it('every route needs the entitlement, asked after the sign-in', () => {
+    const { prototype } = RoutineDraftsController;
+    for (const route of [prototype.usage, prototype.create]) {
+      assert.equal(Reflect.getMetadata(REQUIRED_ENTITLEMENT, route), 'ROUTINE_DRAFTS');
+      assert.deepEqual(Reflect.getMetadata(GUARDS_METADATA, route), [EntitlementGuard]);
+    }
+    // On the class it would run first, find no member and answer 404.
+    assert.deepEqual(Reflect.getMetadata(GUARDS_METADATA, RoutineDraftsController), [
+      SupabaseJwtGuard,
+    ]);
   });
 });
 
