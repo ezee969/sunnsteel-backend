@@ -99,7 +99,8 @@ export const OUTBOX_RETENTION_DAYS = 7;
 
 /** A failed dispatch's error, cut to the column. */
 export function dispatchError(error: unknown): string {
-  const text = error instanceof Error ? error.message : String(error);
+  const message = (error as { message?: unknown } | null)?.message;
+  const text = typeof message === 'string' ? message : JSON.stringify(error) ?? String(error);
   return text.slice(0, 500);
 }
 

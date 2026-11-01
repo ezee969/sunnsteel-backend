@@ -135,7 +135,10 @@ describe('outbox writes (PLAT-01)', () => {
   it('names the dead-letter queue after its topic and cuts an error to the column', () => {
     assert.equal(deadLetterQueue('billing.subscription'), 'billing.subscription.dead');
     assert.equal(dispatchError(new Error('x'.repeat(600))).length, 500);
-    assert.equal(dispatchError('plain'), 'plain');
+    assert.equal(dispatchError('plain'), '"plain"');
+    assert.equal(dispatchError({ message: 'not an Error' }), 'not an Error');
+    assert.equal(dispatchError({ code: 57 }), '{"code":57}');
+    assert.equal(dispatchError(undefined), 'undefined');
   });
 
   it('writes with the client it is given, deduplicated by key', async () => {

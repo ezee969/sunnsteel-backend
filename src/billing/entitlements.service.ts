@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import type { EntitlementGrant } from '@prisma/client';
 import {
   PLANS,
@@ -17,6 +17,8 @@ import {
   revokePlan,
   type GrantPlanRequest,
 } from './entitlement-grants';
+import { checkoutOffer, latestSubscription } from './checkout.service';
+import { PAYMENT_PROVIDER, type PaymentProvider } from './payment-provider';
 import { planOf } from './plan-of';
 
 /**
@@ -28,7 +30,10 @@ import { planOf } from './plan-of';
  */
 @Injectable()
 export class EntitlementsService {
-  constructor(private readonly db: DatabaseService) {}
+  constructor(
+    private readonly db: DatabaseService,
+    @Optional() @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider | null = null,
+  ) {}
 
   private grantsInForce(userId: string, now: Date): Promise<EntitlementGrant[]> {
     return this.db.entitlementGrant.findMany({
@@ -58,13 +63,19 @@ export class EntitlementsService {
   /** `GET /billing/me`. */
   async status(userId: string): Promise<BillingStatus> {
     const now = new Date();
-    const grants = await this.grantsInForce(userId, now);
+    const [grants, checkout, subscription] = await Promise.all([
+      this.grantsInForce(userId, now),
+      checkoutOffer(this.db, this.provider, userId, now),
+      latestSubscription(this.db, userId),
+    ]);
     const plan = planFromGrants(grantWindows(grants), now);
     return {
       plan,
       features: [...PLANS[plan].features],
       limits: { ...PLANS[plan].limits },
       grants: grantSummaries(grants),
+      checkout,
+      subscription,
     };
   }
 
