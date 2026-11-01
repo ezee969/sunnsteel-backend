@@ -26,6 +26,7 @@ import { RealtimeModule } from './realtime/realtime.module';
 import { MessagesModule } from './messages/messages.module';
 import { BillingModule } from './billing/billing.module';
 import { JobsModule } from './jobs/jobs.module';
+import { RoutineDraftsModule } from './routine-drafts/routine-drafts.module';
 
 @Module({
   imports: [
@@ -72,6 +73,7 @@ import { JobsModule } from './jobs/jobs.module';
     MessagesModule,
     BillingModule,
     JobsModule,
+    RoutineDraftsModule,
   ],
   providers: [
     {

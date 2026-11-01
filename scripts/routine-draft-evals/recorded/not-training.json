@@ -1,0 +1,8 @@
+{
+  "source": "hand-written seed until the first --record",
+  "model": null,
+  "answer": {
+    "status": "NOT_TRAINING",
+    "draft": null
+  }
+}

@@ -1,0 +1,150 @@
+{
+  "source": "hand-written seed until the first --record",
+  "model": null,
+  "answer": {
+    "status": "DRAFT",
+    "draft": {
+      "name": "Torso y pierna",
+      "description": "Cuatro días alternando torso y pierna.",
+      "scheduleMode": "WEEKLY",
+      "days": [
+        {
+          "weekday": 1,
+          "name": "Torso A",
+          "exercises": [
+            {
+              "exercise": "Bench Press",
+              "sets": 4,
+              "minReps": 6,
+              "maxReps": 10,
+              "restSeconds": 120
+            },
+            {
+              "exercise": "Cable Row",
+              "sets": 4,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 90
+            },
+            {
+              "exercise": "Overhead Press",
+              "sets": 3,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 90
+            },
+            {
+              "exercise": "Lat Pulldown",
+              "sets": 3,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 90
+            }
+          ]
+        },
+        {
+          "weekday": 2,
+          "name": "Pierna A",
+          "exercises": [
+            {
+              "exercise": "Squat",
+              "sets": 4,
+              "minReps": 6,
+              "maxReps": 10,
+              "restSeconds": 150
+            },
+            {
+              "exercise": "Romanian Deadlift",
+              "sets": 3,
+              "minReps": 8,
+              "maxReps": 10,
+              "restSeconds": 120
+            },
+            {
+              "exercise": "Leg Curl",
+              "sets": 3,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 90
+            },
+            {
+              "exercise": "Standing Calf Raise",
+              "sets": 3,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 90
+            }
+          ]
+        },
+        {
+          "weekday": 4,
+          "name": "Torso B",
+          "exercises": [
+            {
+              "exercise": "Incline Dumbbell Press",
+              "sets": 4,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 90
+            },
+            {
+              "exercise": "Dumbbell Row",
+              "sets": 4,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 90
+            },
+            {
+              "exercise": "Lateral Raises",
+              "sets": 3,
+              "minReps": 12,
+              "maxReps": 15,
+              "restSeconds": 60
+            },
+            {
+              "exercise": "Dumbbell Curl",
+              "sets": 3,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 90
+            }
+          ]
+        },
+        {
+          "weekday": 5,
+          "name": "Pierna B",
+          "exercises": [
+            {
+              "exercise": "Leg Press",
+              "sets": 4,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 90
+            },
+            {
+              "exercise": "Hip Thrust",
+              "sets": 3,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 90
+            },
+            {
+              "exercise": "Seated Leg Curl",
+              "sets": 3,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 90
+            },
+            {
+              "exercise": "Seated Calf Raise",
+              "sets": 3,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 90
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

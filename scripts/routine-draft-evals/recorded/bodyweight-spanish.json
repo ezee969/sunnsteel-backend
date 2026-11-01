@@ -1,0 +1,68 @@
+{
+  "source": "hand-written seed until the first --record",
+  "model": null,
+  "answer": {
+    "status": "DRAFT",
+    "draft": {
+      "name": "Cuerpo completo en casa",
+      "description": "Dos días con tu peso corporal.",
+      "scheduleMode": "WEEKLY",
+      "days": [
+        {
+          "weekday": 2,
+          "name": "Día A",
+          "exercises": [
+            {
+              "exercise": "Push-ups",
+              "sets": 3,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 90
+            },
+            {
+              "exercise": "Lunges",
+              "sets": 3,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 90
+            },
+            {
+              "exercise": "Plank",
+              "sets": 3,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 60
+            }
+          ]
+        },
+        {
+          "weekday": 5,
+          "name": "Día B",
+          "exercises": [
+            {
+              "exercise": "Diamond Push-ups",
+              "sets": 3,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 90
+            },
+            {
+              "exercise": "Glute Bridge",
+              "sets": 3,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 90
+            },
+            {
+              "exercise": "Crunches",
+              "sets": 3,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 90
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

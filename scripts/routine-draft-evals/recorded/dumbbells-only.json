@@ -1,0 +1,88 @@
+{
+  "source": "hand-written seed until the first --record",
+  "model": null,
+  "answer": {
+    "status": "DRAFT",
+    "draft": {
+      "name": "Dumbbell Hypertrophy",
+      "description": "Three dumbbell days for a home gym.",
+      "scheduleMode": "WEEKLY",
+      "days": [
+        {
+          "weekday": 1,
+          "name": "Push",
+          "exercises": [
+            {
+              "exercise": "Dumbbell Bench Press",
+              "sets": 4,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 90
+            },
+            {
+              "exercise": "Incline Dumbbell Press",
+              "sets": 3,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 90
+            },
+            {
+              "exercise": "Lateral Raises",
+              "sets": 3,
+              "minReps": 12,
+              "maxReps": 15,
+              "restSeconds": 60
+            }
+          ]
+        },
+        {
+          "weekday": 3,
+          "name": "Pull",
+          "exercises": [
+            {
+              "exercise": "Dumbbell Row",
+              "sets": 4,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 90
+            },
+            {
+              "exercise": "Dumbbell Curl",
+              "sets": 3,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 90
+            },
+            {
+              "exercise": "Hammer Curl",
+              "sets": 3,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 90
+            }
+          ]
+        },
+        {
+          "weekday": 5,
+          "name": "Legs",
+          "exercises": [
+            {
+              "exercise": "Bulgarian Split Squat",
+              "sets": 3,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 90
+            },
+            {
+              "exercise": "Stiff Leg Deadlift",
+              "sets": 3,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 90
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
