@@ -504,6 +504,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20261022120000_outbox/migration.sql',
 					'utf8',
+				) +
+				'\n' +
+				// INTEL-03: the model usage ledger.
+				readFileSync(
+					'prisma/migrations/20261101120000_ai_usage/migration.sql',
+					'utf8',
 				),
     );
     prisma(

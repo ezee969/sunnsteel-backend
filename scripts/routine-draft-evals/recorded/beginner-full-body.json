@@ -1,0 +1,116 @@
+{
+  "source": "hand-written seed until the first --record",
+  "model": null,
+  "answer": {
+    "status": "DRAFT",
+    "draft": {
+      "name": "Full Body Start",
+      "description": "Three full-body days with the main lifts.",
+      "scheduleMode": "WEEKLY",
+      "days": [
+        {
+          "weekday": 1,
+          "name": "Full Body A",
+          "exercises": [
+            {
+              "exercise": "Squat",
+              "sets": 3,
+              "minReps": 6,
+              "maxReps": 10,
+              "restSeconds": 120
+            },
+            {
+              "exercise": "Bench Press",
+              "sets": 3,
+              "minReps": 6,
+              "maxReps": 10,
+              "restSeconds": 120
+            },
+            {
+              "exercise": "Cable Row",
+              "sets": 3,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 90
+            },
+            {
+              "exercise": "Plank",
+              "sets": 3,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 60
+            }
+          ]
+        },
+        {
+          "weekday": 3,
+          "name": "Full Body B",
+          "exercises": [
+            {
+              "exercise": "Squat",
+              "sets": 3,
+              "minReps": 6,
+              "maxReps": 10,
+              "restSeconds": 120
+            },
+            {
+              "exercise": "Bench Press",
+              "sets": 3,
+              "minReps": 6,
+              "maxReps": 10,
+              "restSeconds": 120
+            },
+            {
+              "exercise": "Cable Row",
+              "sets": 3,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 90
+            },
+            {
+              "exercise": "Plank",
+              "sets": 3,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 60
+            }
+          ]
+        },
+        {
+          "weekday": 5,
+          "name": "Full Body C",
+          "exercises": [
+            {
+              "exercise": "Squat",
+              "sets": 3,
+              "minReps": 6,
+              "maxReps": 10,
+              "restSeconds": 120
+            },
+            {
+              "exercise": "Bench Press",
+              "sets": 3,
+              "minReps": 6,
+              "maxReps": 10,
+              "restSeconds": 120
+            },
+            {
+              "exercise": "Cable Row",
+              "sets": 3,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 90
+            },
+            {
+              "exercise": "Plank",
+              "sets": 3,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 60
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

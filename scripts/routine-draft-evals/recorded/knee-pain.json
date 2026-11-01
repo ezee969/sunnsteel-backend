@@ -1,0 +1,68 @@
+{
+  "source": "hand-written seed until the first --record",
+  "model": null,
+  "answer": {
+    "status": "DRAFT",
+    "draft": {
+      "name": "Upper Body Focus",
+      "description": "Two days that keep the knee out of the work.",
+      "scheduleMode": "WEEKLY",
+      "days": [
+        {
+          "weekday": 2,
+          "name": "Push",
+          "exercises": [
+            {
+              "exercise": "Bench Press",
+              "sets": 3,
+              "minReps": 6,
+              "maxReps": 10,
+              "restSeconds": 120
+            },
+            {
+              "exercise": "Overhead Press",
+              "sets": 3,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 90
+            },
+            {
+              "exercise": "Tricep Pushdown",
+              "sets": 3,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 90
+            }
+          ]
+        },
+        {
+          "weekday": 4,
+          "name": "Pull",
+          "exercises": [
+            {
+              "exercise": "Lat Pulldown",
+              "sets": 3,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 90
+            },
+            {
+              "exercise": "Cable Row",
+              "sets": 3,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 90
+            },
+            {
+              "exercise": "Dumbbell Curl",
+              "sets": 3,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 90
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

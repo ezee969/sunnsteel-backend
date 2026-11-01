@@ -103,6 +103,7 @@ export class AccountExportService {
       messagesSent,
       entitlementGrants,
       subscriptions,
+      aiUsageRecords,
     ] = await Promise.all([
       this.db.routine.findMany({
         where: { userId },
@@ -296,6 +297,11 @@ export class AccountExportService {
         where: { userId },
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       }),
+      // INTEL-03: each model call; what the member typed is never stored.
+      this.db.aiUsageRecord.findMany({
+        where: { userId },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      }),
     ]);
     // Another member is named by username, never by id, as everywhere in the
     // file; one whose account is gone has nothing left to name.
@@ -428,6 +434,14 @@ export class AccountExportService {
         revokedAt: grant.revokedAt ? iso(grant.revokedAt) : null,
         note: grant.note,
         createdAt: iso(grant.createdAt),
+      })),
+      aiUsageRecords: aiUsageRecords.map((record) => ({
+        feature: record.feature,
+        status: record.status,
+        model: record.model,
+        inputTokens: record.inputTokens,
+        outputTokens: record.outputTokens,
+        createdAt: iso(record.createdAt),
       })),
       subscriptions: subscriptions.map((subscription) => ({
         planId: subscription.planId,
