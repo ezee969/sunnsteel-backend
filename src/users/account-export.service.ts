@@ -103,6 +103,7 @@ export class AccountExportService {
       messagesSent,
       entitlementGrants,
       subscriptions,
+      checkoutAttempts,
       aiUsageRecords,
     ] = await Promise.all([
       this.db.routine.findMany({
@@ -297,6 +298,10 @@ export class AccountExportService {
         where: { userId },
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       }),
+      this.db.checkoutAttempt.findMany({
+        where: { userId },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      }),
       // INTEL-03: each model call; what the member typed is never stored.
       this.db.aiUsageRecord.findMany({
         where: { userId },
@@ -452,6 +457,14 @@ export class AccountExportService {
           ? iso(subscription.currentPeriodEnd)
           : null,
         createdAt: iso(subscription.createdAt),
+      })),
+      // BILL-03: never the provider's page or id, which are its to keep.
+      checkoutAttempts: checkoutAttempts.map((attempt) => ({
+        planId: attempt.planId,
+        status: attempt.status,
+        provider: attempt.provider,
+        createdAt: iso(attempt.createdAt),
+        completedAt: attempt.completedAt ? iso(attempt.completedAt) : null,
       })),
       goalSuggestionDismissals: goalSuggestionDismissals.map((row) => ({
         key: row.key,

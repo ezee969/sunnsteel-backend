@@ -153,6 +153,7 @@ model User {
   entitlementGrants                 EntitlementGrant[]
   aiUsageRecords                    AiUsageRecord[]
   subscriptions                     Subscription[]
+  checkoutAttempts                  CheckoutAttempt[]
 }
 
 /// MSG-01: who may start a conversation with a member. MSG-02 adds EVERYONE:
@@ -1504,10 +1505,11 @@ model ActivityEntryReaction {
 /// unlocks and its limits live in contracts (`PLANS`); this table only makes
 /// sure a grant names a plan that exists. The migration inserts FREE and PRO.
 model Plan {
-  id            String             @id @db.VarChar(20)
-  createdAt     DateTime           @default(now())
-  grants        EntitlementGrant[]
-  subscriptions Subscription[]
+  id               String             @id @db.VarChar(20)
+  createdAt        DateTime           @default(now())
+  grants           EntitlementGrant[]
+  subscriptions    Subscription[]
+  checkoutAttempts CheckoutAttempt[]
 }
 
 enum EntitlementSource {
@@ -1537,6 +1539,7 @@ model Subscription {
   user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   plan             Plan               @relation(fields: [planId], references: [id])
   grants           EntitlementGrant[]
+  checkoutAttempts CheckoutAttempt[]
 
   @@unique([provider, externalId])
   @@index([userId])
@@ -1593,6 +1596,40 @@ model ProcessedMessage {
   processedAt DateTime @default(now())
 
   @@id([consumer, messageId])
+}
+
+/// BILL-03: one attempt to buy a plan through the payment provider. At most
+/// one PENDING per member, held by a partial unique index the migration
+/// creates and Prisma cannot declare. Returning from the provider's page
+/// changes nothing here; only a confirmed read of the provider does.
+enum CheckoutAttemptStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELED
+  EXPIRED
+}
+
+model CheckoutAttempt {
+  id             String                @id @default(uuid())
+  userId         String
+  planId         String                @db.VarChar(20)
+  provider       String                @db.VarChar(40)
+  status         CheckoutAttemptStatus @default(PENDING)
+  /// The provider's id for what it opened (a Mercado Pago preapproval).
+  externalId     String?               @db.VarChar(200)
+  checkoutUrl    String?               @db.VarChar(2000)
+  failureCode    String?               @db.VarChar(100)
+  subscriptionId String?
+  expiresAt      DateTime
+  completedAt    DateTime?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  user           User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan           Plan                  @relation(fields: [planId], references: [id])
+  subscription   Subscription?         @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
 }
 
 /// INTEL-03: one request to a model on a member's behalf. What the member typed

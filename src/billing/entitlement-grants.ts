@@ -55,6 +55,36 @@ export function grantProblem(
 }
 
 /**
+ * The write itself, inside a transaction the caller owns: revokes the
+ * source's open grant and inserts the new one. `BILL-03`'s checkout writes it
+ * with the subscription and the attempt it completes, so the three commit
+ * together.
+ */
+export async function writeGrant(
+  tx: Pick<Prisma.TransactionClient, 'entitlementGrant'>,
+  request: GrantPlanRequest,
+  now: Date,
+): Promise<EntitlementGrant> {
+  const problem = grantProblem(request, now);
+  if (problem) throw new Error(problem);
+  await tx.entitlementGrant.updateMany({
+    where: { userId: request.userId, source: request.source, revokedAt: null },
+    data: { revokedAt: now },
+  });
+  return tx.entitlementGrant.create({
+    data: {
+      userId: request.userId,
+      planId: request.planId,
+      source: request.source,
+      subscriptionId: request.subscriptionId ?? null,
+      startsAt: now,
+      expiresAt: request.expiresAt,
+      note: request.note ?? null,
+    },
+  });
+}
+
+/**
  * Grants a plan from a source, replacing that source's open grant. The grant
  * starts now; access changes with the commit, because the plan is computed
  * from the grants on every read.
@@ -69,23 +99,7 @@ export async function grantPlan(
     const problem = grantProblem(request, now);
     if (problem) throw new Error(problem);
     try {
-      return await db.$transaction(async (tx) => {
-        await tx.entitlementGrant.updateMany({
-          where: { userId: request.userId, source: request.source, revokedAt: null },
-          data: { revokedAt: now },
-        });
-        return tx.entitlementGrant.create({
-          data: {
-            userId: request.userId,
-            planId: request.planId,
-            source: request.source,
-            subscriptionId: request.subscriptionId ?? null,
-            startsAt: now,
-            expiresAt: request.expiresAt,
-            note: request.note ?? null,
-          },
-        });
-      });
+      return await db.$transaction((tx) => writeGrant(tx, request, now));
     } catch (error) {
       if (isOpenGrantConflict(error) && attempt < GRANT_CONFLICT_RETRIES) continue;
       throw error;

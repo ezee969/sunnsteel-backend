@@ -505,7 +505,13 @@ async function main() {
 					'prisma/migrations/20261022120000_outbox/migration.sql',
 					'utf8',
 				) +
-				'\n' +
+				NEWLINE +
+				// BILL-03: checkout attempts.
+				readFileSync(
+					'prisma/migrations/20261023100000_checkout_attempts/migration.sql',
+					'utf8',
+				) +
+				NEWLINE +
 				// INTEL-03: the model usage ledger.
 				readFileSync(
 					'prisma/migrations/20261101120000_ai_usage/migration.sql',
