@@ -82,14 +82,21 @@ export function nextSubscriptionState(
     case 'CANCELLED':
     case 'PAUSED': {
       if (!stored) return { kind: 'KEEP', reason: 'NEVER_AUTHORIZED' };
-      // Past due, Pro ends with the grace period; otherwise with what was paid.
+      // Past due, Pro ends with the grace period; in a trial nothing was
+      // paid, so it ends with the trial whatever the provider says the first
+      // charge would have been; otherwise with what was paid. The end is
+      // stored as the period's, so every reader names the same day.
+      const inTrial =
+        base.status === 'TRIALING' && base.trialEndsAt !== null && now.getTime() < base.trialEndsAt.getTime();
       const end =
         base.status === 'PAST_DUE' && base.pastDueSince
           ? graceEnd(base.pastDueSince)
-          : base.currentPeriodEnd;
+          : inTrial
+            ? base.trialEndsAt
+            : base.currentPeriodEnd;
       return {
         kind: 'APPLY',
-        next: { ...base, status: 'CANCELED', cancelAtPeriodEnd: true },
+        next: { ...base, status: 'CANCELED', cancelAtPeriodEnd: true, currentPeriodEnd: end },
         grant: grantUntil(end, now),
       };
     }

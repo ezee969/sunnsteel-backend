@@ -98,6 +98,15 @@ describe('the subscription lifecycle (BILL-04)', () => {
       assert.deepEqual(paid.kind === 'APPLY' && paid.grant, { expiresAt: at(20) });
       const pastDue = nextSubscriptionState(stored({ status: 'PAST_DUE', pastDueSince: at(-2) }), view, NOW);
       assert.deepEqual(pastDue.kind === 'APPLY' && pastDue.grant, { expiresAt: graceEnd(at(-2)) });
+      assert.deepEqual(pastDue.kind === 'APPLY' && pastDue.next.currentPeriodEnd, graceEnd(at(-2)), 'the card names the same day');
+      // A trial cancelled before its first charge: Pro ends with the trial,
+      // even when the provider dates that charge later.
+      const trial = nextSubscriptionState(stored({ status: 'TRIALING', trialEndsAt: at(5), currentPeriodEnd: at(30) }), view, NOW);
+      assert.deepEqual(trial.kind === 'APPLY' && trial.grant, { expiresAt: at(5) });
+      assert.deepEqual(trial.kind === 'APPLY' && trial.next.currentPeriodEnd, at(5));
+      // Still marked TRIALING after the trial ended: charged, so what was paid.
+      const charged = nextSubscriptionState(stored({ status: 'TRIALING', trialEndsAt: at(-1), currentPeriodEnd: at(29) }), view, NOW);
+      assert.deepEqual(charged.kind === 'APPLY' && charged.grant, { expiresAt: at(29) });
       const over = nextSubscriptionState(stored({ currentPeriodEnd: at(-1) }), view, NOW);
       assert.equal(over.kind === 'APPLY' && over.grant, 'REVOKE');
     }
