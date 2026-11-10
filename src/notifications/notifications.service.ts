@@ -186,6 +186,13 @@ export function toAppNotification(
           payload.estimatedMaxKg != null && estimate > 0 ? estimate : null,
       };
     }
+    case "SUBSCRIPTION_PAYMENT_FAILED": {
+      // BILL-04: written when a renewal is first seen failing.
+      const graceEndsAt =
+        typeof payload.graceEndsAt === "string" ? payload.graceEndsAt : "";
+      if (!graceEndsAt) return null;
+      return { ...base, kind: "SUBSCRIPTION_PAYMENT_FAILED", graceEndsAt };
+    }
     default:
       return null;
   }

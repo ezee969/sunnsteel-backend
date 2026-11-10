@@ -1,3 +1,4 @@
+import { BillingModule } from '../billing/billing.module';
 import { AnalyticsModule } from '../workouts/analytics/analytics.module';
 import { Module } from '@nestjs/common';
 import { UsersService } from './users.service';
@@ -28,6 +29,8 @@ import { BodyMeasurementsController } from './body-measurements.controller';
     // ROUT-04: the member routines read applies the routine rules, which the
     // routines module owns.
     RoutinesModule,
+    // BILL-04: account deletion cancels the member's subscription first.
+    BillingModule,
   ],
   providers: [
     UsersService,

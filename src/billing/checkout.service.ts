@@ -13,20 +13,16 @@ import {
   apiError,
   isPlanId,
   PRO_PRICE,
+  SUBSCRIPTION_TRIAL_DAYS,
   type CheckoutAttemptSummary,
   type CheckoutOffer,
   type SubscriptionSummary,
 } from '@sunsteel/contracts';
 import { DatabaseService } from '../database/database.service';
-import {
-  attemptExpiry,
-  checkoutBackUrl,
-  confirmationOutcome,
-  isReusable,
-  payerEmail,
-  subscriptionGrantExpiry,
-} from './checkout-rules';
-import { writeGrant, GRANT_CONFLICT_RETRIES } from './entitlement-grants';
+import { attemptExpiry, checkoutBackUrl, isReusable, payerEmail } from './checkout-rules';
+import { GRANT_CONFLICT_RETRIES } from './entitlement-grants';
+import { graceEnd } from './subscription-lifecycle';
+import { SubscriptionSyncService } from './subscription-sync.service';
 import { PAYMENT_PROVIDER, PaymentProviderError, type PaymentProvider } from './payment-provider';
 import { planOf } from './plan-of';
 
@@ -62,10 +58,15 @@ export async function checkoutOffer(
   userId: string,
   now: Date,
 ): Promise<CheckoutOffer> {
-  const pending = await db.checkoutAttempt.findFirst({ where: { userId, status: 'PENDING' } });
+  const [pending, subscriptions] = await Promise.all([
+    db.checkoutAttempt.findFirst({ where: { userId, status: 'PENDING' } }),
+    db.subscription.count({ where: { userId } }),
+  ]);
   return {
     available: provider !== null,
     testMode: provider?.testMode ?? true,
+    // BILL-04: one free trial per account, ever.
+    trialDays: subscriptions === 0 ? SUBSCRIPTION_TRIAL_DAYS : null,
     price: PRO_PRICE,
     pending: pending && isReusable(pending, now) && pending.checkoutUrl ? toAttemptSummary(pending) : null,
   };
@@ -86,6 +87,13 @@ export async function latestSubscription(
     status: subscription.status,
     currentPeriodEnd: subscription.currentPeriodEnd?.toISOString() ?? null,
     createdAt: subscription.createdAt.toISOString(),
+    trialEndsAt:
+      subscription.status === 'TRIALING' ? (subscription.trialEndsAt?.toISOString() ?? null) : null,
+    graceEndsAt:
+      subscription.status === 'PAST_DUE' && subscription.pastDueSince
+        ? graceEnd(subscription.pastDueSince).toISOString()
+        : null,
+    cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
   };
 }
 
@@ -114,7 +122,12 @@ export class CheckoutService {
     private readonly db: DatabaseService,
     @Optional() @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider | null = null,
     @Optional() @Inject(CHECKOUT_ENV) private readonly env: Record<string, string | undefined> = process.env,
-  ) {}
+    @Optional() sync?: SubscriptionSyncService,
+  ) {
+    this.sync = sync ?? new SubscriptionSyncService(db, provider);
+  }
+
+  private readonly sync: SubscriptionSyncService;
 
   private requireProvider(): PaymentProvider {
     if (!this.provider) throw new ServiceUnavailableException(apiError('CHECKOUT_UNAVAILABLE'));
@@ -146,6 +159,7 @@ export class CheckoutService {
         amount: PRO_PRICE.amount,
         currency: PRO_PRICE.currency,
         backUrl: checkoutBackUrl(this.env.FRONTEND_URL, attempt.id),
+        trialDays: attempt.trialDays,
       });
       const updated = await this.db.checkoutAttempt.update({
         where: { id: attempt.id },
@@ -191,6 +205,7 @@ export class CheckoutService {
               planId: PRO_PRICE.planId,
               provider: provider.id,
               expiresAt: attemptExpiry(now),
+              trialDays: await this.sync.trialDaysFor(tx, userId),
             },
           });
         });
@@ -219,57 +234,13 @@ export class CheckoutService {
     } catch (error) {
       return this.providerError(error);
     }
-    const outcome = confirmationOutcome(attempt.id, read);
-    if (outcome === 'WAIT') return toAttemptSummary(attempt);
-    if (outcome === 'CANCEL') {
-      await this.db.checkoutAttempt.updateMany({
-        where: { id: attempt.id, status: { in: ['PENDING', 'EXPIRED'] } },
-        data: { status: 'CANCELED', failureCode: `PROVIDER_${read.status}` },
-      });
-      return toAttemptSummary(await this.db.checkoutAttempt.findUniqueOrThrow({ where: { id: attempt.id } }));
-    }
-
-    const externalId = attempt.externalId;
     for (let retry = 0; ; retry += 1) {
       try {
-        const completed = await this.db.$transaction(async (tx) => {
-          // The row lock makes two confirmations of one attempt take turns,
-          // and the second finds it completed.
-          const [locked] = await tx.$queryRaw<{ status: string }[]>`
-            SELECT "status" FROM "CheckoutAttempt" WHERE "id" = ${attempt.id} FOR UPDATE`;
-          if (locked?.status === 'COMPLETED') {
-            return tx.checkoutAttempt.findUniqueOrThrow({ where: { id: attempt.id } });
-          }
-          const subscription = await tx.subscription.upsert({
-            where: { provider_externalId: { provider: attempt.provider, externalId } },
-            create: {
-              userId,
-              planId: attempt.planId,
-              status: 'ACTIVE',
-              provider: attempt.provider,
-              externalId,
-              currentPeriodEnd: read.nextPaymentAt,
-            },
-            update: { status: 'ACTIVE', currentPeriodEnd: read.nextPaymentAt },
-          });
-          await writeGrant(
-            tx,
-            {
-              userId,
-              planId: PRO_PRICE.planId,
-              source: 'SUBSCRIPTION',
-              expiresAt: subscriptionGrantExpiry(read.nextPaymentAt, now),
-              subscriptionId: subscription.id,
-              note: provider.testMode ? 'Sandbox subscription' : null,
-            },
-            now,
-          );
-          return tx.checkoutAttempt.update({
-            where: { id: attempt.id },
-            data: { status: 'COMPLETED', completedAt: now, subscriptionId: subscription.id, failureCode: null },
-          });
-        });
-        return toAttemptSummary(completed);
+        const after = await this.db.$transaction(
+          (tx) => this.sync.applyToAttempt(tx, attempt.id, read, now),
+          { timeout: 30_000 },
+        );
+        return toAttemptSummary(after);
       } catch (error) {
         if (isUniqueViolation(error) && retry < GRANT_CONFLICT_RETRIES) continue;
         throw error;
