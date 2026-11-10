@@ -1333,6 +1333,8 @@ enum NotificationKind {
   TRAINING_PARTNER_ACHIEVEMENT
   /// ROUT-18: an LP exercise finished its 8-step block.
   LINEAR_BLOCK_FINISHED
+  /// BILL-04: a renewal failed and Pro is in its grace period.
+  SUBSCRIPTION_PAYMENT_FAILED
 }
 
 /// NOTIF-08: one subscribed browser on one device. The endpoint is the
@@ -1527,22 +1529,31 @@ enum SubscriptionStatus {
 }
 
 model Subscription {
-  id               String             @id @default(uuid())
-  userId           String
-  planId           String             @db.VarChar(20)
-  status           SubscriptionStatus
-  provider         String             @db.VarChar(40)
-  externalId       String?            @db.VarChar(200)
-  currentPeriodEnd DateTime?
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
-  user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  plan             Plan               @relation(fields: [planId], references: [id])
-  grants           EntitlementGrant[]
-  checkoutAttempts CheckoutAttempt[]
+  id                String             @id @default(uuid())
+  userId            String
+  planId            String             @db.VarChar(20)
+  status            SubscriptionStatus
+  provider          String             @db.VarChar(40)
+  externalId        String?            @db.VarChar(200)
+  currentPeriodEnd  DateTime?
+  /// BILL-04: the free trial's end while TRIALING.
+  trialEndsAt       DateTime?
+  /// BILL-04: when a renewal was first seen failing; Pro lasts the grace period from here.
+  pastDueSince      DateTime?
+  /// BILL-04: cancelled by the member, so nothing renews and Pro ends at currentPeriodEnd.
+  cancelAtPeriodEnd Boolean            @default(false)
+  /// BILL-04: the last confirmed read of the provider.
+  lastSyncedAt      DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan              Plan               @relation(fields: [planId], references: [id])
+  grants            EntitlementGrant[]
+  checkoutAttempts  CheckoutAttempt[]
 
   @@unique([provider, externalId])
   @@index([userId])
+  @@index([status, lastSyncedAt])
 }
 
 /// BILL-01: access to a plan for a while. The plan an account is on is the
@@ -1620,6 +1631,8 @@ model CheckoutAttempt {
   externalId     String?               @db.VarChar(200)
   checkoutUrl    String?               @db.VarChar(2000)
   failureCode    String?               @db.VarChar(100)
+  /// BILL-04: the free trial this attempt opened, or null for none.
+  trialDays      Int?
   subscriptionId String?
   expiresAt      DateTime
   completedAt    DateTime?
@@ -1658,4 +1671,22 @@ model AiUsageRecord {
 
   @@index([userId, feature, createdAt])
   @@index([createdAt])
+}
+
+/// BILL-04: a notification from the payment provider, stored before anything
+/// acts on it and handled through the outbox (PLAT-01). Unique per provider
+/// event, so one delivered twice is handled once. It names a provider resource
+/// rather than a member, because a member is found through the subscription.
+model ProviderNotification {
+  id              String    @id @default(uuid())
+  provider        String    @db.VarChar(40)
+  externalEventId String    @db.VarChar(200)
+  topic           String    @db.VarChar(100)
+  resourceId      String?   @db.VarChar(200)
+  payload         Json
+  receivedAt      DateTime  @default(now())
+  processedAt     DateTime?
+  outcome         String?   @db.VarChar(100)
+
+  @@unique([provider, externalEventId])
 }

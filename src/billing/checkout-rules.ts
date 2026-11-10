@@ -1,6 +1,6 @@
 import { CHECKOUT_ATTEMPT_TTL_MINUTES } from '@sunsteel/contracts';
 import { FakePaymentProvider } from './fake-payment-provider';
-import { MercadoPagoAdapter } from './mercado-pago.adapter';
+import { MERCADO_PAGO_API, MercadoPagoAdapter } from './mercado-pago.adapter';
 import type { PaymentProvider, ProviderSubscription } from './payment-provider';
 
 /**
@@ -29,7 +29,10 @@ export function providerFromEnv(env: Env): PaymentProvider | null {
     case 'mercadopago': {
       const token = env.MERCADO_PAGO_ACCESS_TOKEN?.trim();
       if (!token || env.MERCADO_PAGO_SANDBOX !== 'true') return null;
-      return new MercadoPagoAdapter(token, true);
+      // BILL-04: without the webhook secret no notification is accepted, and
+      // the daily reconciliation still keeps every subscription current.
+      const webhookSecret = env.MERCADO_PAGO_WEBHOOK_SECRET?.trim() || null;
+      return new MercadoPagoAdapter(token, true, fetch, MERCADO_PAGO_API, webhookSecret);
     }
     case 'fake':
       return isDeployed(env) ? null : new FakePaymentProvider();

@@ -1,9 +1,7 @@
 import 'reflect-metadata';
 import * as assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { randomUUID } from 'node:crypto';
 import { HttpException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { PRO_PRICE } from '@sunsteel/contracts';
 import {
   checkoutBackUrl,
@@ -18,8 +16,8 @@ import { FakePaymentProvider } from '../src/billing/fake-payment-provider';
 import { MercadoPagoAdapter, preapprovalStatus } from '../src/billing/mercado-pago.adapter';
 import { PaymentProviderError } from '../src/billing/payment-provider';
 import type { DatabaseService } from '../src/database/database.service';
+import { memoryDb, NOW, type Row } from './billing-memory-db';
 
-const NOW = new Date('2026-11-01T12:00:00.000Z');
 const DAY = 24 * 60 * 60 * 1000;
 const USER = { id: 'member-1', email: 'member@example.com' };
 
@@ -29,116 +27,6 @@ function codeOf(error: unknown): string | undefined {
 
 function statusOf(error: unknown): number {
   return (error as HttpException).getStatus();
-}
-
-interface Row {
-  [key: string]: unknown;
-}
-
-function matches(row: Row, where: Row): boolean {
-  return Object.entries(where).every(([key, value]) => {
-    if (key === 'OR') return (value as Row[]).some((branch) => matches(row, branch));
-    if (value && typeof value === 'object' && !(value instanceof Date)) {
-      const filter = value as { in?: unknown[]; lte?: Date; gt?: Date };
-      if (filter.in) return filter.in.includes(row[key]);
-      if (filter.lte) return (row[key] as Date) <= filter.lte;
-      if (filter.gt) return (row[key] as Date) > filter.gt;
-    }
-    return row[key] === value;
-  });
-}
-
-/**
- * The tables checkout touches, with the partial unique index that holds one
- * waiting attempt per member, and a transaction that rolls back when it throws.
- */
-function memoryDb(grants: Row[] = []) {
-  const state = { attempts: [] as Row[], subscriptions: [] as Row[], grants };
-  const unique = () =>
-    new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
-      code: 'P2002',
-      clientVersion: 'test',
-    });
-  const attempts = {
-    findFirst: async ({ where }: { where: Row }) => state.attempts.find((r) => matches(r, where)) ?? null,
-    findUniqueOrThrow: async ({ where }: { where: Row }) => state.attempts.find((r) => matches(r, where))!,
-    create: async ({ data }: { data: Row }) => {
-      if (state.attempts.some((r) => r.userId === data.userId && r.status === 'PENDING')) throw unique();
-      const row = {
-        id: randomUUID(),
-        status: 'PENDING',
-        externalId: null,
-        checkoutUrl: null,
-        failureCode: null,
-        subscriptionId: null,
-        completedAt: null,
-        createdAt: NOW,
-        ...data,
-      };
-      state.attempts.push(row);
-      return row;
-    },
-    update: async ({ where, data }: { where: Row; data: Row }) =>
-      Object.assign(state.attempts.find((r) => matches(r, where))!, data),
-    updateMany: async ({ where, data }: { where: Row; data: Row }) => {
-      const rows = state.attempts.filter((r) => matches(r, where));
-      rows.forEach((row) => Object.assign(row, data));
-      return { count: rows.length };
-    },
-  };
-  const subscription = {
-    findFirst: async ({ where }: { where: Row }) => state.subscriptions.find((r) => matches(r, where)) ?? null,
-    upsert: async ({
-      where,
-      create,
-      update,
-    }: {
-      where: { provider_externalId: Row };
-      create: Row;
-      update: Row;
-    }) => {
-      const found = state.subscriptions.find((r) => matches(r, where.provider_externalId));
-      if (found) return Object.assign(found, update);
-      const row = { id: randomUUID(), createdAt: NOW, ...create };
-      state.subscriptions.push(row);
-      return row;
-    },
-  };
-  const entitlementGrant = {
-    findMany: async ({ where }: { where: Row }) => state.grants.filter((r) => matches(r, where)),
-    updateMany: async ({ where, data }: { where: Row; data: Row }) => {
-      const rows = state.grants.filter((r) => matches(r, where));
-      rows.forEach((row) => Object.assign(row, data));
-      return { count: rows.length };
-    },
-    create: async ({ data }: { data: Row }) => {
-      const row = { id: randomUUID(), revokedAt: null, ...data };
-      state.grants.push(row);
-      return row;
-    },
-  };
-  const client = {
-    checkoutAttempt: attempts,
-    subscription,
-    entitlementGrant,
-    $queryRaw: async (_sql: TemplateStringsArray, id: string) =>
-      state.attempts.filter((r) => r.id === id).map(({ status }) => ({ status })),
-  };
-  return {
-    ...client,
-    state,
-    $transaction: async <T>(work: (tx: typeof client) => Promise<T>): Promise<T> => {
-      const snapshot = structuredClone({ a: state.attempts, s: state.subscriptions, g: state.grants });
-      try {
-        return await work(client);
-      } catch (error) {
-        state.attempts.splice(0, state.attempts.length, ...snapshot.a);
-        state.subscriptions.splice(0, state.subscriptions.length, ...snapshot.s);
-        state.grants.splice(0, state.grants.length, ...snapshot.g);
-        throw error;
-      }
-    },
-  };
 }
 
 const ENV = { FRONTEND_URL: 'https://app.example.com' };
@@ -249,6 +137,7 @@ describe('the Mercado Pago adapter (BILL-03)', () => {
     amount: 4999,
     currency: 'ARS',
     backUrl: 'https://app.example.com/plans?checkout=attempt-1',
+    trialDays: null,
   };
 
   it('opens a pending monthly preapproval, idempotent on the attempt', async () => {
@@ -293,6 +182,7 @@ describe('the Mercado Pago adapter (BILL-03)', () => {
       status: 'AUTHORIZED',
       externalReference: 'attempt-1',
       nextPaymentAt: new Date('2026-12-01T15:00:00.000Z'),
+      paymentState: 'UNKNOWN',
     });
     assert.equal(calls[0].url, 'https://mp.test/preapproval/pre%2F1');
     assert.equal(preapprovalStatus('something_new'), 'UNKNOWN');
@@ -303,6 +193,7 @@ describe('the Mercado Pago adapter (BILL-03)', () => {
       status: 'PAUSED',
       externalReference: null,
       nextPaymentAt: null,
+      paymentState: 'UNKNOWN',
     });
   });
 
@@ -428,7 +319,9 @@ describe('confirming checkout (BILL-03)', () => {
     assert.equal(done.status, 'COMPLETED');
     assert.equal(done.checkoutUrl, null);
     const [subscription] = db.state.subscriptions;
-    assert.equal(subscription.status, 'ACTIVE');
+    // BILL-04: a first subscription starts in its free trial, which ends with the first charge.
+    assert.equal(subscription.status, 'TRIALING');
+    assert.deepEqual(subscription.trialEndsAt, new Date(NOW.getTime() + 7 * DAY));
     assert.equal(subscription.userId, USER.id);
     assert.equal(subscription.currentPeriodEnd, next);
     const [grant] = db.state.grants;

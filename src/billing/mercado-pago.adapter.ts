@@ -1,5 +1,9 @@
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import {
   PaymentProviderError,
+  type IncomingNotification,
+  type ProviderNotificationEvent,
+  type ProviderPaymentState,
   type OpenCheckoutRequest,
   type OpenedCheckout,
   type PaymentProvider,
@@ -31,6 +35,54 @@ const STATUSES: Record<string, ProviderSubscriptionStatus> = {
   cancelled: 'CANCELLED',
 };
 
+/**
+ * BILL-04: whether the latest charge went through, from the preapproval's
+ * `summarized.semaphore`: green is paid up, yellow and red are a renewal the
+ * provider is retrying. Anything else says nothing.
+ */
+export function preapprovalPaymentState(summarized: unknown): ProviderPaymentState {
+  const semaphore = (summarized as { semaphore?: unknown } | null)?.semaphore;
+  if (semaphore === 'green') return 'OK';
+  if (semaphore === 'yellow' || semaphore === 'red') return 'FAILING';
+  return 'UNKNOWN';
+}
+
+function header(headers: IncomingNotification['headers'], name: string): string | null {
+  const value = headers[name] ?? headers[name.toLowerCase()];
+  return typeof value === 'string' ? value : Array.isArray(value) ? (value[0] ?? null) : null;
+}
+
+/**
+ * BILL-04: Mercado Pago signs a notification with `x-signature`
+ * (`ts=<seconds>,v1=<hex>`): an HMAC-SHA256, under the application's webhook
+ * secret, of `id:<data.id>;request-id:<x-request-id>;ts:<ts>;`, leaving out
+ * any part it did not send; an alphanumeric `data.id` is lowercased.
+ */
+export function mercadoPagoSignatureValid(
+  incoming: IncomingNotification,
+  secret: string,
+): boolean {
+  const signature = header(incoming.headers, 'x-signature');
+  if (!signature) return false;
+  const parts = Object.fromEntries(
+    signature.split(',').map((part) => {
+      const [key, ...rest] = part.split('=');
+      return [key.trim(), rest.join('=').trim()];
+    }),
+  );
+  const ts = parts.ts;
+  const v1 = parts.v1;
+  if (!ts || !v1 || !/^[0-9a-f]+$/i.test(v1)) return false;
+  const rawId = incoming.query['data.id'];
+  const dataId = typeof rawId === 'string' ? (/^[a-z0-9]+$/i.test(rawId) ? rawId.toLowerCase() : rawId) : null;
+  const requestId = header(incoming.headers, 'x-request-id');
+  const manifest =
+    (dataId ? `id:${dataId};` : '') + (requestId ? `request-id:${requestId};` : '') + `ts:${ts};`;
+  const expected = createHmac('sha256', secret).update(manifest).digest();
+  const given = Buffer.from(v1, 'hex');
+  return given.length === expected.length && timingSafeEqual(given, expected);
+}
+
 /** A preapproval's status in Mercado Pago's words, read tolerantly. */
 export function preapprovalStatus(value: unknown): ProviderSubscriptionStatus {
   return typeof value === 'string' ? (STATUSES[value] ?? 'UNKNOWN') : 'UNKNOWN';
@@ -51,11 +103,13 @@ export class MercadoPagoAdapter implements PaymentProvider {
     readonly testMode: boolean,
     private readonly fetchImpl: Fetch = fetch,
     private readonly baseUrl: string = MERCADO_PAGO_API,
+    /** BILL-04: without it no notification is ever accepted. */
+    private readonly webhookSecret: string | null = null,
   ) {}
 
   private async request(
     path: string,
-    init: { method: 'GET' | 'POST'; body?: unknown; idempotencyKey?: string },
+    init: { method: 'GET' | 'POST' | 'PUT'; body?: unknown; idempotencyKey?: string },
   ): Promise<Record<string, unknown>> {
     let response: Response;
     try {
@@ -106,6 +160,9 @@ export class MercadoPagoAdapter implements PaymentProvider {
           frequency_type: 'months',
           transaction_amount: request.amount,
           currency_id: request.currency,
+          ...(request.trialDays
+            ? { free_trial: { frequency: request.trialDays, frequency_type: 'days' } }
+            : {}),
         },
       },
     });
@@ -128,6 +185,43 @@ export class MercadoPagoAdapter implements PaymentProvider {
       status: preapprovalStatus(body.status),
       externalReference: typeof body.external_reference === 'string' ? body.external_reference : null,
       nextPaymentAt: dateOrNull(body.next_payment_date),
+      paymentState: preapprovalPaymentState(body.summarized),
     };
+  }
+
+  async cancelSubscription(externalId: string): Promise<void> {
+    await this.request(`/preapproval/${encodeURIComponent(externalId)}`, {
+      method: 'PUT',
+      body: { status: 'cancelled' },
+    });
+  }
+
+  parseNotification(incoming: IncomingNotification): ProviderNotificationEvent | null {
+    if (!this.webhookSecret || !mercadoPagoSignatureValid(incoming, this.webhookSecret)) return null;
+    const body = (incoming.body ?? {}) as { id?: unknown; type?: unknown; data?: { id?: unknown } };
+    const queryType = incoming.query.type;
+    const topic = typeof body.type === 'string' ? body.type : typeof queryType === 'string' ? queryType : null;
+    const eventId = typeof body.id === 'string' || typeof body.id === 'number' ? String(body.id) : null;
+    const dataId = body.data?.id ?? incoming.query['data.id'];
+    if (!topic || !eventId) return null;
+    return {
+      externalEventId: eventId.slice(0, 200),
+      topic: topic.slice(0, 100),
+      resourceId: typeof dataId === 'string' || typeof dataId === 'number' ? String(dataId).slice(0, 200) : null,
+    };
+  }
+
+  async subscriptionIdFor(event: ProviderNotificationEvent): Promise<string | null> {
+    if (!event.resourceId) return null;
+    if (event.topic === 'subscription_preapproval' || event.topic === 'preapproval') {
+      return event.resourceId;
+    }
+    if (event.topic === 'subscription_authorized_payment') {
+      const payment = await this.request(`/authorized_payments/${encodeURIComponent(event.resourceId)}`, {
+        method: 'GET',
+      });
+      return typeof payment.preapproval_id === 'string' ? payment.preapproval_id : null;
+    }
+    return null;
   }
 }

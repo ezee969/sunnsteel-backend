@@ -516,6 +516,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20261101120000_ai_usage/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// BILL-04: the subscription lifecycle.
+				readFileSync(
+					'prisma/migrations/20261110100000_subscription_lifecycle/migration.sql',
+					'utf8',
 				),
     );
     prisma(

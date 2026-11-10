@@ -28,6 +28,32 @@ export interface ProviderSubscription {
   externalReference: string | null;
   /** The next charge, when the provider reports one. */
   nextPaymentAt: Date | null;
+  /**
+   * BILL-04: whether the latest charge went through. FAILING while the
+   * provider is retrying a renewal; UNKNOWN when it does not say, which never
+   * moves a subscription into or out of its grace period.
+   */
+  paymentState: ProviderPaymentState;
+}
+
+export type ProviderPaymentState = 'OK' | 'FAILING' | 'UNKNOWN';
+
+/**
+ * BILL-04: a notification the provider sent, once its signature checked out.
+ * `resourceId` names what changed, in the provider's terms; the subscription
+ * it belongs to is found with `subscriptionIdFor`.
+ */
+export interface ProviderNotificationEvent {
+  externalEventId: string;
+  topic: string;
+  resourceId: string | null;
+}
+
+/** What arrived over HTTP, for the provider to authenticate. */
+export interface IncomingNotification {
+  headers: Record<string, string | string[] | undefined>;
+  query: Record<string, unknown>;
+  body: unknown;
 }
 
 export interface OpenCheckoutRequest {
@@ -40,6 +66,8 @@ export interface OpenCheckoutRequest {
   currency: string;
   /** Where the provider sends the member back. */
   backUrl: string;
+  /** BILL-04: a free trial before the first charge, or null for none. */
+  trialDays: number | null;
 }
 
 export interface OpenedCheckout {
@@ -54,6 +82,15 @@ export interface PaymentProvider {
   readonly testMode: boolean;
   openSubscriptionCheckout(request: OpenCheckoutRequest): Promise<OpenedCheckout>;
   readSubscription(externalId: string): Promise<ProviderSubscription>;
+  /** BILL-04: stops every future charge. Cancelling one already cancelled succeeds. */
+  cancelSubscription(externalId: string): Promise<void>;
+  /**
+   * BILL-04: the notification, when it is authentically the provider's;
+   * null otherwise -- an unsigned or forged one is never stored.
+   */
+  parseNotification(incoming: IncomingNotification): ProviderNotificationEvent | null;
+  /** BILL-04: the subscription a notification is about, or null for one that is about none. */
+  subscriptionIdFor(event: ProviderNotificationEvent): Promise<string | null>;
 }
 
 /**

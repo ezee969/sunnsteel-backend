@@ -1,10 +1,10 @@
+import { SubscriptionSyncService } from "../billing/subscription-sync.service";
 import {
   BadRequestException,
   ConflictException,
   Injectable,
   Logger,
-  NotFoundException,
-} from "@nestjs/common";
+  NotFoundException, Optional } from "@nestjs/common";
 import {
   matchesDeletionConfirmation,
   type DeleteAccountResponse,
@@ -47,6 +47,7 @@ export class AccountDeletionService {
   constructor(
     private readonly db: DatabaseService,
     private readonly supabase: SupabaseService,
+    @Optional() private readonly subscriptions?: SubscriptionSyncService,
   ) {}
 
   async deleteAccount(
@@ -74,6 +75,9 @@ export class AccountDeletionService {
       throw new ConflictException(apiError("ACCOUNT_DELETE_MODERATOR"));
     }
 
+    // BILL-04: stop the provider charging an account about to stop existing.
+    // Best effort, so a provider that cannot be reached never blocks this.
+    await this.subscriptions?.cancelForDeletion(account.id);
     await this.supabase.removeStoredAvatars(account.supabaseUserId);
 
     await this.db.$transaction(
