@@ -1335,6 +1335,8 @@ enum NotificationKind {
   LINEAR_BLOCK_FINISHED
   /// BILL-04: a renewal failed and Pro is in its grace period.
   SUBSCRIPTION_PAYMENT_FAILED
+  /// BILL-07: a revocation or cancellation request arrived; moderators only.
+  CONSUMER_REQUEST
 }
 
 /// NOTIF-08: one subscribed browser on one device. The endpoint is the
@@ -1689,4 +1691,33 @@ model ProviderNotification {
   outcome         String?   @db.VarChar(100)
 
   @@unique([provider, externalEventId])
+}
+
+/// BILL-07: a revocation (botón de arrepentimiento) or a cancellation (botón
+/// de baja) anyone may ask for without an account, answered at once with
+/// `code`. It names an email rather than a member, so deleting an account
+/// leaves it: it is the consumer's record that they asked.
+model ConsumerRequest {
+  id        String                @id @default(uuid())
+  code      String                @unique @db.VarChar(16)
+  kind      ConsumerRequestKind
+  status    ConsumerRequestStatus @default(OPEN)
+  name      String                @db.VarChar(120)
+  email     String                @db.VarChar(254)
+  reference String?               @db.VarChar(100)
+  details   String?               @db.VarChar(500)
+  createdAt DateTime              @default(now())
+  handledAt DateTime?
+
+  @@index([status, createdAt])
+}
+
+enum ConsumerRequestKind {
+  REVOCATION
+  CANCELLATION
+}
+
+enum ConsumerRequestStatus {
+  OPEN
+  DONE
 }

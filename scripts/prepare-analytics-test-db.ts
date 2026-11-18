@@ -522,6 +522,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20261110100000_subscription_lifecycle/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// BILL-07: consumer-law requests.
+				readFileSync(
+					'prisma/migrations/20261118120000_consumer_requests/migration.sql',
+					'utf8',
 				),
     );
     prisma(

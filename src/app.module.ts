@@ -25,6 +25,7 @@ import { SearchModule } from './search/search.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { MessagesModule } from './messages/messages.module';
 import { BillingModule } from './billing/billing.module';
+import { ConsumerRequestsModule } from './consumer-requests/consumer-requests.module';
 import { JobsModule } from './jobs/jobs.module';
 import { RoutineDraftsModule } from './routine-drafts/routine-drafts.module';
 
@@ -72,6 +73,7 @@ import { RoutineDraftsModule } from './routine-drafts/routine-drafts.module';
     RealtimeModule,
     MessagesModule,
     BillingModule,
+    ConsumerRequestsModule,
     JobsModule,
     RoutineDraftsModule,
   ],
