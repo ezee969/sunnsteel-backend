@@ -75,6 +75,23 @@ export interface OpenedCheckout {
   checkoutUrl: string;
 }
 
+/**
+ * BILL-06: one charge the provider made, as the owner invoices it. The payer's
+ * email is there so a member who asks for an invoice in their name can be
+ * found; nothing else of the payer is read.
+ */
+export interface ProviderCharge {
+  id: string;
+  createdAt: Date;
+  approvedAt: Date | null;
+  amount: number;
+  currency: string;
+  /** The provider's word for it: `approved`, `refunded`, `rejected`... */
+  status: string;
+  description: string | null;
+  payerEmail: string | null;
+}
+
 export interface PaymentProvider {
   /** Stored on every attempt and subscription. */
   readonly id: string;
@@ -91,6 +108,8 @@ export interface PaymentProvider {
   parseNotification(incoming: IncomingNotification): ProviderNotificationEvent | null;
   /** BILL-04: the subscription a notification is about, or null for one that is about none. */
   subscriptionIdFor(event: ProviderNotificationEvent): Promise<string | null>;
+  /** BILL-06: every charge created in `[from, to)`, oldest first. */
+  listCharges(from: Date, to: Date): Promise<ProviderCharge[]>;
 }
 
 /**

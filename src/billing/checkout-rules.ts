@@ -18,9 +18,12 @@ export function isDeployed(env: Env): boolean {
 /**
  * The configured provider, or null when checkout is unavailable:
  *
- * - `BILLING_PROVIDER=mercadopago` needs `MERCADO_PAGO_ACCESS_TOKEN` **and**
- *   `MERCADO_PAGO_SANDBOX=true`. Charging real money waits on the owner's tax
- *   and provider situation, so a token without the sandbox flag opens nothing.
+ * - `BILLING_PROVIDER=mercadopago` needs `MERCADO_PAGO_ACCESS_TOKEN` and
+ *   exactly one of `MERCADO_PAGO_SANDBOX=true` (the provider's sandbox) or
+ *   `MERCADO_PAGO_LIVE=true` (BILL-06: real charges on the owner's account).
+ *   A token with neither, or with both, opens nothing, so real money is never
+ *   a default; live also needs `MERCADO_PAGO_WEBHOOK_SECRET`, because a real
+ *   charge must not wait for the daily reconciliation to be seen.
  * - `BILLING_PROVIDER=fake` is refused on any deployment, because it grants
  *   Pro without a payment.
  */
@@ -28,11 +31,14 @@ export function providerFromEnv(env: Env): PaymentProvider | null {
   switch (env.BILLING_PROVIDER?.trim().toLowerCase()) {
     case 'mercadopago': {
       const token = env.MERCADO_PAGO_ACCESS_TOKEN?.trim();
-      if (!token || env.MERCADO_PAGO_SANDBOX !== 'true') return null;
+      const sandbox = env.MERCADO_PAGO_SANDBOX === 'true';
+      const live = env.MERCADO_PAGO_LIVE === 'true';
+      if (!token || sandbox === live) return null;
       // BILL-04: without the webhook secret no notification is accepted, and
       // the daily reconciliation still keeps every subscription current.
       const webhookSecret = env.MERCADO_PAGO_WEBHOOK_SECRET?.trim() || null;
-      return new MercadoPagoAdapter(token, true, fetch, MERCADO_PAGO_API, webhookSecret);
+      if (live && !webhookSecret) return null;
+      return new MercadoPagoAdapter(token, sandbox, fetch, MERCADO_PAGO_API, webhookSecret);
     }
     case 'fake':
       return isDeployed(env) ? null : new FakePaymentProvider();
