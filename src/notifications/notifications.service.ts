@@ -193,6 +193,21 @@ export function toAppNotification(
       if (!graceEndsAt) return null;
       return { ...base, kind: "SUBSCRIPTION_PAYMENT_FAILED", graceEndsAt };
     }
+    case "CONSUMER_REQUEST": {
+      // BILL-07: written to every moderator when a request arrives.
+      const requestKind = payload.requestKind;
+      const code = typeof payload.code === "string" ? payload.code : "";
+      if (
+        (requestKind !== "REVOCATION" && requestKind !== "CANCELLATION") ||
+        !code
+      )
+        return null;
+      return {
+        ...base,
+        kind: "CONSUMER_REQUEST",
+        request: { kind: requestKind, code },
+      };
+    }
     default:
       return null;
   }
