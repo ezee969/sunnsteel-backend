@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
-import { BillingController, BillingWebhooksController } from './billing.controller';
+import { BillingChargesController, BillingController, BillingWebhooksController } from './billing.controller';
 import { providerFromEnv } from './checkout-rules';
 import { CheckoutService } from './checkout.service';
 import { EntitlementsService } from './entitlements.service';
@@ -14,7 +14,8 @@ import { EntitlementGuard } from './requires-entitlement';
  * `@RequiresEntitlement()` imports this one for the guard and the service.
  * BILL-03: the payment provider the environment configures, or null, which
  * leaves checkout unavailable. BILL-04: the subscription lifecycle -- the
- * provider's notifications, the daily reconciliation and cancelling.
+ * provider's notifications, the daily reconciliation and cancelling. BILL-06:
+ * the month's charges for a moderator to invoice from.
  */
 @Module({
   providers: [
@@ -26,7 +27,7 @@ import { EntitlementGuard } from './requires-entitlement';
     ProviderNotificationsService,
     { provide: PAYMENT_PROVIDER, useFactory: () => providerFromEnv(process.env) },
   ],
-  controllers: [BillingController, BillingWebhooksController],
+  controllers: [BillingController, BillingWebhooksController, BillingChargesController],
   exports: [EntitlementsService, EntitlementGuard, SubscriptionSyncService],
 })
 export class BillingModule {}

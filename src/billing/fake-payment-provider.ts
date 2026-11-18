@@ -5,6 +5,7 @@ import {
   type OpenCheckoutRequest,
   type OpenedCheckout,
   type PaymentProvider,
+  type ProviderCharge,
   type ProviderNotificationEvent,
   type ProviderPaymentState,
   type ProviderSubscription,
@@ -28,6 +29,8 @@ export class FakePaymentProvider implements PaymentProvider {
   readonly testMode = true;
   readonly opened: OpenCheckoutRequest[] = [];
   readonly cancelled = new Set<string>();
+  /** BILL-06: the charges `listCharges` answers from. */
+  readonly charges: ProviderCharge[] = [];
   private readonly subscriptions = new Map<string, ProviderSubscription>();
 
   constructor(
@@ -99,6 +102,13 @@ export class FakePaymentProvider implements PaymentProvider {
 
   async subscriptionIdFor(event: ProviderNotificationEvent): Promise<string | null> {
     return event.topic === 'subscription_preapproval' ? event.resourceId : null;
+  }
+
+  async listCharges(from: Date, to: Date): Promise<ProviderCharge[]> {
+    this.maybeFail();
+    return this.charges
+      .filter((charge) => charge.createdAt >= from && charge.createdAt < to)
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   }
 
   /** Tests: a subscription that exists only at the provider. */

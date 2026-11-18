@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import {
   PaymentProviderError,
   type IncomingNotification,
+  type ProviderCharge,
   type ProviderNotificationEvent,
   type ProviderPaymentState,
   type OpenCheckoutRequest,
@@ -22,6 +23,10 @@ import {
  * retried open never makes a second preapproval.
  */
 export const MERCADO_PAGO_API = 'https://api.mercadopago.com';
+
+/** BILL-06: a page of the payments search, and the most pages read for one month. */
+const CHARGES_PAGE_SIZE = 100;
+const CHARGES_MAX_PAGES = 50;
 
 /** A request that has not answered in this long is a provider error. */
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -92,6 +97,34 @@ function dateOrNull(value: unknown): Date | null {
   if (typeof value !== 'string') return null;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/**
+ * BILL-06: one result of `/v1/payments/search` as a subscription charge, or
+ * null. The search answers everything the account received -- a transfer, a
+ * sale of something else, the $0 card validation that starts a trial -- and
+ * only a subscription's charge is the owner's to invoice here, which Mercado
+ * Pago marks with `point_of_interaction.type` `SUBSCRIPTIONS`.
+ */
+export function chargeFromPayment(payment: unknown): ProviderCharge | null {
+  const p = (payment ?? {}) as Record<string, unknown>;
+  const pointOfInteraction = p.point_of_interaction as { type?: unknown } | undefined;
+  if (pointOfInteraction?.type !== 'SUBSCRIPTIONS') return null;
+  const id = typeof p.id === 'number' || typeof p.id === 'string' ? String(p.id) : null;
+  const createdAt = dateOrNull(p.date_created);
+  const amount = typeof p.transaction_amount === 'number' ? p.transaction_amount : null;
+  if (!id || !createdAt || amount === null) return null;
+  const payer = (p.payer ?? {}) as { email?: unknown };
+  return {
+    id,
+    createdAt,
+    approvedAt: dateOrNull(p.date_approved),
+    amount,
+    currency: typeof p.currency_id === 'string' ? p.currency_id : '',
+    status: typeof p.status === 'string' ? p.status : 'unknown',
+    description: typeof p.description === 'string' ? p.description : null,
+    payerEmail: typeof payer.email === 'string' && payer.email ? payer.email : null,
+  };
 }
 
 export class MercadoPagoAdapter implements PaymentProvider {
@@ -209,6 +242,38 @@ export class MercadoPagoAdapter implements PaymentProvider {
       topic: topic.slice(0, 100),
       resourceId: typeof dataId === 'string' || typeof dataId === 'number' ? String(dataId).slice(0, 200) : null,
     };
+  }
+
+  /**
+   * BILL-06: every payment created in `[from, to)` on this account, read page
+   * by page from the payments search. A subscription's charges are payments
+   * like any other, so this is what the owner invoices.
+   */
+  async listCharges(from: Date, to: Date): Promise<ProviderCharge[]> {
+    const charges: ProviderCharge[] = [];
+    // The search's end is inclusive; a millisecond before `to` keeps it half-open.
+    const end = new Date(to.getTime() - 1).toISOString();
+    for (let page = 0; page < CHARGES_MAX_PAGES; page += 1) {
+      const query = new URLSearchParams({
+        sort: 'date_created',
+        criteria: 'asc',
+        range: 'date_created',
+        begin_date: from.toISOString(),
+        end_date: end,
+        limit: String(CHARGES_PAGE_SIZE),
+        offset: String(page * CHARGES_PAGE_SIZE),
+      });
+      const body = await this.request(`/v1/payments/search?${query.toString()}`, { method: 'GET' });
+      const results: unknown[] = Array.isArray(body.results) ? body.results : [];
+      for (const result of results) {
+        const charge = chargeFromPayment(result);
+        if (charge) charges.push(charge);
+      }
+      const paging = body.paging as { total?: unknown } | undefined;
+      const total = typeof paging?.total === 'number' ? paging.total : 0;
+      if (results.length < CHARGES_PAGE_SIZE || (page + 1) * CHARGES_PAGE_SIZE >= total) break;
+    }
+    return charges;
   }
 
   async subscriptionIdFor(event: ProviderNotificationEvent): Promise<string | null> {
