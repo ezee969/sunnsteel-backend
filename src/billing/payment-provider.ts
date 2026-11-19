@@ -120,10 +120,22 @@ export class PaymentProviderError extends Error {
   constructor(
     readonly code: string,
     message: string,
+    /**
+     * The provider's own reason for a refusal, for the server's log only and
+     * never with an email address in it (`providerRefusalReason`); null when
+     * it gave none.
+     */
+    readonly reason: string | null = null,
   ) {
     super(message);
     this.name = 'PaymentProviderError';
   }
+}
+
+/** A provider error as the server logs it: the code, and the provider's reason when it gave one. */
+export function describeProviderError(error: unknown): string {
+  if (!(error instanceof PaymentProviderError)) return 'ERROR';
+  return error.reason ? `${error.code} (${error.reason})` : error.code;
 }
 
 /** Nest's injection token for the configured provider, or null without one. */

@@ -23,7 +23,12 @@ import { attemptExpiry, checkoutBackUrl, isReusable, payerEmail } from './checko
 import { GRANT_CONFLICT_RETRIES } from './entitlement-grants';
 import { graceEnd } from './subscription-lifecycle';
 import { SubscriptionSyncService } from './subscription-sync.service';
-import { PAYMENT_PROVIDER, PaymentProviderError, type PaymentProvider } from './payment-provider';
+import {
+  describeProviderError,
+  PAYMENT_PROVIDER,
+  PaymentProviderError,
+  type PaymentProvider,
+} from './payment-provider';
 import { planOf } from './plan-of';
 
 type CheckoutDb = Pick<PrismaClient, 'checkoutAttempt' | 'subscription'>;
@@ -136,7 +141,7 @@ export class CheckoutService {
 
   private providerError(error: unknown): never {
     if (error instanceof PaymentProviderError) {
-      this.logger.warn(`Payment provider: ${error.code}`);
+      this.logger.warn(`Payment provider: ${describeProviderError(error)}`);
       throw new BadGatewayException(apiError('CHECKOUT_PROVIDER_ERROR'));
     }
     throw error;

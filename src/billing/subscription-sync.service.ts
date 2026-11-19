@@ -14,6 +14,7 @@ import { confirmationOutcome } from './checkout-rules';
 import { writeGrant } from './entitlement-grants';
 import {
   PAYMENT_PROVIDER,
+  describeProviderError,
   PaymentProviderError,
   type PaymentProvider,
   type ProviderSubscription,
@@ -241,7 +242,7 @@ export class SubscriptionSyncService {
         await this.sync(row, now);
       } catch (error) {
         failed += 1;
-        const code = error instanceof PaymentProviderError ? error.code : 'ERROR';
+        const code = describeProviderError(error);
         this.logger.warn(`Reconciling subscription ${row.id} failed: ${code}`);
       }
     }
@@ -269,7 +270,7 @@ export class SubscriptionSyncService {
       await provider.cancelSubscription(subscription.externalId);
     } catch (error) {
       if (error instanceof PaymentProviderError) {
-        this.logger.warn(`Cancelling at the provider failed: ${error.code}`);
+        this.logger.warn(`Cancelling at the provider failed: ${describeProviderError(error)}`);
         throw new BadGatewayException(apiError('CHECKOUT_PROVIDER_ERROR'));
       }
       throw error;
@@ -304,7 +305,7 @@ export class SubscriptionSyncService {
       try {
         await provider.cancelSubscription(row.externalId!);
       } catch (error) {
-        const code = error instanceof PaymentProviderError ? error.code : 'ERROR';
+        const code = describeProviderError(error);
         this.logger.error(`Cancelling subscription ${row.id} before deleting its account failed: ${code}`);
       }
     }
