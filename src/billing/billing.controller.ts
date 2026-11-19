@@ -27,7 +27,12 @@ import { ModeratorGuard } from '../moderation/moderator.guard';
 import { argentinaMonthRange, chargesCsv, previousArgentinaMonth } from './charges-report';
 import { CheckoutService } from './checkout.service';
 import { EntitlementsService } from './entitlements.service';
-import { PAYMENT_PROVIDER, PaymentProviderError, type PaymentProvider } from './payment-provider';
+import {
+  describeProviderError,
+  PAYMENT_PROVIDER,
+  PaymentProviderError,
+  type PaymentProvider,
+} from './payment-provider';
 import { ProviderNotificationsService } from './provider-notifications.service';
 import { SubscriptionSyncService } from './subscription-sync.service';
 
@@ -134,7 +139,7 @@ export class BillingChargesController {
       csv = chargesCsv(await this.provider.listCharges(range.from, range.to));
     } catch (error) {
       if (error instanceof PaymentProviderError) {
-        this.logger.warn(`Listing charges failed: ${error.code}`);
+        this.logger.warn(`Listing charges failed: ${describeProviderError(error)}`);
         throw new BadGatewayException(apiError('CHECKOUT_PROVIDER_ERROR'));
       }
       throw error;

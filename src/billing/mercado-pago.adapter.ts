@@ -31,6 +31,39 @@ const CHARGES_MAX_PAGES = 50;
 /** A request that has not answered in this long is a provider error. */
 const REQUEST_TIMEOUT_MS = 10_000;
 
+/** Anything shaped like an email address, taken out of a refusal before it is logged. */
+const EMAIL_LIKE = /[^\s@"'<>,;:()]+@[^\s@"'<>,;:()]+/g;
+
+/** The longest refusal reason kept. */
+const REASON_MAX_LENGTH = 300;
+
+/**
+ * Mercado Pago's own words for a refusal -- its `error`, each `cause`'s code
+ * and description, and its `message` -- with every email address replaced,
+ * because a refusal can repeat the payer's. Without it a 400 says nothing
+ * about why; the member is still told only that the provider refused.
+ */
+export function providerRefusalReason(body: unknown): string | null {
+  if (body === null || typeof body !== 'object') return null;
+  const { error, cause, message } = body as { error?: unknown; cause?: unknown; message?: unknown };
+  const parts: string[] = [];
+  if (typeof error === 'string') parts.push(error);
+  for (const item of Array.isArray(cause) ? cause : []) {
+    if (item === null || typeof item !== 'object') continue;
+    const { code, description } = item as { code?: unknown; description?: unknown };
+    const label = typeof code === 'string' || typeof code === 'number' ? `cause ${code}` : 'cause';
+    parts.push(typeof description === 'string' && description ? `${label}: ${description}` : label);
+  }
+  if (typeof message === 'string') parts.push(message);
+  const reason = parts
+    .join('; ')
+    .replace(EMAIL_LIKE, '<email>')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, REASON_MAX_LENGTH);
+  return reason || null;
+}
+
 type Fetch = typeof fetch;
 
 const STATUSES: Record<string, ProviderSubscriptionStatus> = {
@@ -166,10 +199,11 @@ export class MercadoPagoAdapter implements PaymentProvider {
       body = null;
     }
     if (!response.ok) {
-      // Never the response body: it can echo the payer's email.
+      // Never the response body as it came: it can echo the payer's email.
       throw new PaymentProviderError(
         `PROVIDER_HTTP_${response.status}`,
         `Mercado Pago answered ${response.status}`,
+        providerRefusalReason(body),
       );
     }
     if (body === null || typeof body !== 'object') {

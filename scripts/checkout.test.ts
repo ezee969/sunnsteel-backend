@@ -13,8 +13,12 @@ import {
 } from '../src/billing/checkout-rules';
 import { checkoutOffer, CheckoutService } from '../src/billing/checkout.service';
 import { FakePaymentProvider } from '../src/billing/fake-payment-provider';
-import { MercadoPagoAdapter, preapprovalStatus } from '../src/billing/mercado-pago.adapter';
-import { PaymentProviderError } from '../src/billing/payment-provider';
+import {
+  MercadoPagoAdapter,
+  preapprovalStatus,
+  providerRefusalReason,
+} from '../src/billing/mercado-pago.adapter';
+import { describeProviderError, PaymentProviderError } from '../src/billing/payment-provider';
 import type { DatabaseService } from '../src/database/database.service';
 import { memoryDb, NOW, type Row } from './billing-memory-db';
 
@@ -202,8 +206,28 @@ describe('the Mercado Pago adapter (BILL-03)', () => {
     await assert.rejects(adapter.openSubscriptionCheckout(request), (error: PaymentProviderError) => {
       assert.equal(error.code, 'PROVIDER_HTTP_400');
       assert.doesNotMatch(error.message, /buyer/);
+      // Its reason is logged, so the email is taken out of it too.
+      assert.equal(error.reason, 'payer_email <email> is invalid');
+      assert.equal(describeProviderError(error), 'PROVIDER_HTTP_400 (payer_email <email> is invalid)');
       return true;
     });
+  });
+
+  it("keeps Mercado Pago's reason for a refusal without any email address", () => {
+    assert.equal(
+      providerRefusalReason({
+        message: 'Cannot operate between payer someone.else+sub@mail.co and collector',
+        error: 'bad_request',
+        status: 400,
+        cause: [{ code: 3003, description: 'invalid payer <buyer@x.ar>' }, { code: 'X' }, 'noise'],
+      }),
+      'bad_request; cause 3003: invalid payer <<email>>; cause X; Cannot operate between payer <email> and collector',
+    );
+    assert.equal(providerRefusalReason({ status: 400 }), null);
+    assert.equal(providerRefusalReason(null), null);
+    assert.equal(providerRefusalReason({ message: 'x'.repeat(500) })?.length, 300);
+    assert.equal(describeProviderError(new Error('other')), 'ERROR');
+    assert.equal(describeProviderError(new PaymentProviderError('PROVIDER_UNREACHABLE', 'down')), 'PROVIDER_UNREACHABLE');
   });
 
   it('reports an unreachable provider and a page it did not get', async () => {
