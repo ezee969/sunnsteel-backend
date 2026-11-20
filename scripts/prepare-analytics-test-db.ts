@@ -528,6 +528,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20261118120000_consumer_requests/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// INTEL-04: the ledger's NOT_ENOUGH status.
+				readFileSync(
+					'prisma/migrations/20261120100000_training_review_ledger/migration.sql',
+					'utf8',
 				),
     );
     prisma(

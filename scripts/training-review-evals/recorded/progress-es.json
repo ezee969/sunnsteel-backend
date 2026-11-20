@@ -1,0 +1,71 @@
+{
+  "source": "hand-written seed until the first --record",
+  "model": null,
+  "answer": {
+    "status": "REVIEW",
+    "findings": [
+      {
+        "segments": [
+          {
+            "fact": "F1"
+          },
+          {
+            "text": " subió de "
+          },
+          {
+            "fact": "F7"
+          },
+          {
+            "text": " a "
+          },
+          {
+            "fact": "F27"
+          },
+          {
+            "text": ", con un nuevo mejor registro de "
+          },
+          {
+            "fact": "F29"
+          },
+          {
+            "text": "."
+          }
+        ]
+      },
+      {
+        "segments": [
+          {
+            "fact": "F2"
+          },
+          {
+            "text": " se mantuvo igual: "
+          },
+          {
+            "fact": "F10"
+          },
+          {
+            "text": " en "
+          },
+          {
+            "fact": "F4"
+          },
+          {
+            "text": " y "
+          },
+          {
+            "fact": "F31"
+          },
+          {
+            "text": " en "
+          },
+          {
+            "fact": "F24"
+          },
+          {
+            "text": "."
+          }
+        ]
+      }
+    ]
+  }
+}

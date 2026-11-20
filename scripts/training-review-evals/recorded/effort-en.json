@@ -1,0 +1,49 @@
+{
+  "source": "hand-written seed until the first --record",
+  "model": null,
+  "answer": {
+    "status": "REVIEW",
+    "findings": [
+      {
+        "segments": [
+          {
+            "fact": "F3"
+          },
+          {
+            "text": " averaged "
+          },
+          {
+            "fact": "F12"
+          },
+          {
+            "text": " and then "
+          },
+          {
+            "fact": "F30"
+          },
+          {
+            "text": ", with "
+          },
+          {
+            "fact": "F32"
+          },
+          {
+            "text": " of its "
+          },
+          {
+            "fact": "F31"
+          },
+          {
+            "text": " sets short of their target on "
+          },
+          {
+            "fact": "F22"
+          },
+          {
+            "text": "."
+          }
+        ]
+      }
+    ]
+  }
+}

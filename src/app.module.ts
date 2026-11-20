@@ -28,6 +28,7 @@ import { BillingModule } from './billing/billing.module';
 import { ConsumerRequestsModule } from './consumer-requests/consumer-requests.module';
 import { JobsModule } from './jobs/jobs.module';
 import { RoutineDraftsModule } from './routine-drafts/routine-drafts.module';
+import { TrainingReviewModule } from './training-review/training-review.module';
 
 @Module({
   imports: [
@@ -76,6 +77,7 @@ import { RoutineDraftsModule } from './routine-drafts/routine-drafts.module';
     ConsumerRequestsModule,
     JobsModule,
     RoutineDraftsModule,
+    TrainingReviewModule,
   ],
   providers: [
     {

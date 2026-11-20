@@ -1,0 +1,56 @@
+{
+  "source": "hand-written seed until the first --record",
+  "model": null,
+  "answer": {
+    "status": "REVIEW",
+    "findings": [
+      {
+        "segments": [
+          {
+            "text": "El volumen del entrenamiento pasó de "
+          },
+          {
+            "fact": "F6"
+          },
+          {
+            "text": " a "
+          },
+          {
+            "fact": "F29"
+          },
+          {
+            "text": "."
+          }
+        ]
+      },
+      {
+        "segments": [
+          {
+            "fact": "F3"
+          },
+          {
+            "text": " estuvo en "
+          },
+          {
+            "fact": "F4"
+          },
+          {
+            "text": " y en "
+          },
+          {
+            "fact": "F27"
+          },
+          {
+            "text": ", pero no en "
+          },
+          {
+            "fact": "F17"
+          },
+          {
+            "text": "."
+          }
+        ]
+      }
+    ]
+  }
+}
