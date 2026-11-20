@@ -3,8 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { DatabaseService } from '../database/database.service';
 
 /**
- * INTEL-03: what a model call costs, a member's monthly use and the month's
- * cost ceiling. `INTEL-04` reuses all of it under its own feature key. The
+ * INTEL-03: what a model call costs, a member's monthly use (every request the
+ * model answered) and the month's cost ceiling. `INTEL-04` reuses all of it under its own feature key. The
  * month is a UTC calendar month and the ceiling covers every feature.
  */
 
@@ -46,6 +46,35 @@ export function monthRange(now: Date): { from: Date; to: Date } {
     from: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)),
     to: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)),
   };
+}
+
+export interface LedgerRow {
+  status: 'PENDING' | 'DELIVERED' | 'NOT_TRAINING' | 'FAILED';
+  inputTokens: number;
+  outputTokens: number;
+  createdAt: Date;
+}
+
+/**
+ * Whether a record uses one of the member's requests this month: every
+ * request the model answered -- a delivered result, one about something else,
+ * or an answer that failed its check -- because each of those cost a call; a
+ * request asking for anything but training used to count for nothing, so one
+ * member could spend the ceiling for everyone. A failure that answered
+ * nothing (no tokens) is the provider's and is not counted. A reservation
+ * still being written counts, so two tabs cannot both take the last one,
+ * until it is old enough to be one a crash left behind.
+ */
+export function countsAgainstMonth(row: LedgerRow, now: Date): boolean {
+  switch (row.status) {
+    case 'DELIVERED':
+    case 'NOT_TRAINING':
+      return true;
+    case 'FAILED':
+      return row.inputTokens + row.outputTokens > 0;
+    case 'PENDING':
+      return row.createdAt.getTime() >= now.getTime() - AI_PENDING_MINUTES * 60_000;
+  }
 }
 
 export type ReservationRefusal = 'QUOTA_REACHED' | 'PAUSED';
@@ -100,29 +129,23 @@ export class AiUsageService {
   }
 
   /**
-   * A member's month: every delivered result, plus any still being written so
-   * two tabs cannot both take the last one. A reservation a crash left behind
-   * stops counting here, and its cost stays held against the ceiling.
+   * A member's month, by `countsAgainstMonth`. A reservation a crash left
+   * behind stops counting here, and its cost stays held against the ceiling.
+   * The rows are one member's month of one feature, which the quota keeps
+   * small.
    */
-  private used(
+  private async used(
     db: LedgerDb,
     userId: string,
     feature: string,
     now: Date,
   ): Promise<number> {
     const { from, to } = monthRange(now);
-    const pendingFrom = new Date(now.getTime() - AI_PENDING_MINUTES * 60_000);
-    return db.aiUsageRecord.count({
-      where: {
-        userId,
-        feature,
-        createdAt: { gte: from, lt: to },
-        OR: [
-          { status: 'DELIVERED' },
-          { status: 'PENDING', createdAt: { gte: pendingFrom } },
-        ],
-      },
+    const rows = await db.aiUsageRecord.findMany({
+      where: { userId, feature, createdAt: { gte: from, lt: to } },
+      select: { status: true, inputTokens: true, outputTokens: true, createdAt: true },
     });
+    return rows.filter((row) => countsAgainstMonth(row, now)).length;
   }
 
   private async spent(db: LedgerDb, now: Date): Promise<number> {
