@@ -16,6 +16,7 @@ import {
   AI_MONTHLY_CEILING_USD_DEFAULT,
   AiUsageService,
   costMicros,
+  countsAgainstMonth,
   monthRange,
   usageRefusal,
 } from '../src/ai/ai-usage';
@@ -229,11 +230,32 @@ describe('INTEL-03 usage', () => {
     assert.equal(usageRefusal({ ...base, used: 10, spentMicros: 901 }), 'QUOTA_REACHED');
   });
 
+  it('counts every request the model answered, never a failure that answered nothing', () => {
+    const now = new Date('2026-11-19T12:00:00.000Z');
+    const row = (
+      status: 'PENDING' | 'DELIVERED' | 'NOT_TRAINING' | 'FAILED',
+      tokens = 1000,
+      minutesAgo = 1,
+    ) => ({
+      status,
+      inputTokens: tokens,
+      outputTokens: 0,
+      createdAt: new Date(now.getTime() - minutesAgo * 60_000),
+    });
+    assert.equal(countsAgainstMonth(row('DELIVERED'), now), true);
+    assert.equal(countsAgainstMonth(row('NOT_TRAINING'), now), true, 'asking for something else');
+    assert.equal(countsAgainstMonth(row('NOT_TRAINING', 0), now), true);
+    assert.equal(countsAgainstMonth(row('FAILED'), now), true, 'an answer that failed its check');
+    assert.equal(countsAgainstMonth(row('FAILED', 0), now), false, 'the provider answered nothing');
+    assert.equal(countsAgainstMonth(row('PENDING', 0, 9), now), true);
+    assert.equal(countsAgainstMonth(row('PENDING', 0, 11), now), false, 'left behind by a crash');
+  });
+
   it('takes the ceiling from the environment, else the owner decision', async () => {
     const seen: number[] = [];
     const db = {
       aiUsageRecord: {
-        count: () => Promise.resolve(0),
+        findMany: () => Promise.resolve([]),
         aggregate: () => Promise.resolve({ _sum: { costMicros: 19_000_000 } }),
       },
     } as unknown as DatabaseService;
@@ -328,7 +350,7 @@ describe('INTEL-03 drafting', () => {
     assert.equal(settled[0].costMicros, 48_000);
   });
 
-  it('gives up after the one repair, and the member month does not count it', async () => {
+  it('gives up after the one repair, settled as an answered failure', async () => {
     const bad = { answer: answer({ name: '' }) };
     const { model, prompts } = scriptedModel([bad, bad, bad]);
     const { drafts, settled } = service(model);

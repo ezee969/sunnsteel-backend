@@ -52,7 +52,28 @@ test(
       });
       assert.equal(
         (await usage.read({ userId: member.id, feature: 'TEST', reserveMicros: 0, limit: 2, now })).used,
-        1,
+        2,
+        'an answer that failed its check still counts',
+      );
+
+      const unanswered = await usage.reserve({
+        userId: member.id,
+        feature: 'UNANSWERED',
+        model: 'm',
+        reserveMicros: 1000,
+        limit: 2,
+        now,
+      });
+      await usage.settle(unanswered.id!, {
+        status: 'FAILED',
+        model: 'm',
+        usage: { inputTokens: 0, outputTokens: 0 },
+        costMicros: 0,
+      });
+      assert.equal(
+        (await usage.read({ userId: member.id, feature: 'UNANSWERED', reserveMicros: 0, limit: 2, now })).used,
+        0,
+        'a provider failure that answered nothing is not counted',
       );
 
       const crashed = await db.aiUsageRecord.create({
