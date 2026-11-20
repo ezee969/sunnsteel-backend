@@ -16,6 +16,7 @@ const PRICES: Record<string, { input: number; output: number }> = {
   // What a declined request may fall back to.
   'claude-opus-5': { input: 5, output: 25 },
   'claude-opus-4-8': { input: 5, output: 25 },
+  'claude-sonnet-5': { input: 2, output: 10 },
 };
 
 export const AI_MONTHLY_CEILING_USD_DEFAULT = 20;
@@ -49,7 +50,7 @@ export function monthRange(now: Date): { from: Date; to: Date } {
 }
 
 export interface LedgerRow {
-  status: 'PENDING' | 'DELIVERED' | 'NOT_TRAINING' | 'FAILED';
+  status: 'PENDING' | 'DELIVERED' | 'NOT_TRAINING' | 'NOT_ENOUGH' | 'FAILED';
   inputTokens: number;
   outputTokens: number;
   createdAt: Date;
@@ -57,8 +58,9 @@ export interface LedgerRow {
 
 /**
  * Whether a record uses one of the member's requests this month: every
- * request the model answered -- a delivered result, one about something else,
- * or an answer that failed its check -- because each of those cost a call; a
+ * request the model answered -- a delivered result, one about something else
+ * (`NOT_TRAINING`), a review the evidence could not answer (`NOT_ENOUGH`), or
+ * an answer that failed its check -- because each of those cost a call; a
  * request asking for anything but training used to count for nothing, so one
  * member could spend the ceiling for everyone. A failure that answered
  * nothing (no tokens) is the provider's and is not counted. A reservation
@@ -69,6 +71,7 @@ export function countsAgainstMonth(row: LedgerRow, now: Date): boolean {
   switch (row.status) {
     case 'DELIVERED':
     case 'NOT_TRAINING':
+    case 'NOT_ENOUGH':
       return true;
     case 'FAILED':
       return row.inputTokens + row.outputTokens > 0;
@@ -203,7 +206,7 @@ export class AiUsageService {
   async settle(
     id: string,
     result: {
-      status: 'DELIVERED' | 'NOT_TRAINING' | 'FAILED';
+      status: 'DELIVERED' | 'NOT_TRAINING' | 'NOT_ENOUGH' | 'FAILED';
       model: string;
       usage: TokenUsage;
       costMicros: number;

@@ -1,0 +1,49 @@
+{
+  "source": "hand-written seed until the first --record",
+  "model": null,
+  "answer": {
+    "status": "REVIEW",
+    "findings": [
+      {
+        "segments": [
+          {
+            "fact": "F3"
+          },
+          {
+            "text": " promedió "
+          },
+          {
+            "fact": "F12"
+          },
+          {
+            "text": " y luego "
+          },
+          {
+            "fact": "F30"
+          },
+          {
+            "text": ", con "
+          },
+          {
+            "fact": "F32"
+          },
+          {
+            "text": " de "
+          },
+          {
+            "fact": "F31"
+          },
+          {
+            "text": " series por debajo del objetivo en "
+          },
+          {
+            "fact": "F22"
+          },
+          {
+            "text": "."
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "source": "hand-written seed until the first --record",
+  "model": null,
+  "answer": {
+    "status": "REVIEW",
+    "findings": [
+      {
+        "segments": [
+          {
+            "fact": "F1"
+          },
+          {
+            "text": " rose from "
+          },
+          {
+            "fact": "F7"
+          },
+          {
+            "text": " to "
+          },
+          {
+            "fact": "F27"
+          },
+          {
+            "text": ", with a new personal best of "
+          },
+          {
+            "fact": "F29"
+          },
+          {
+            "text": "."
+          }
+        ]
+      },
+      {
+        "segments": [
+          {
+            "fact": "F2"
+          },
+          {
+            "text": " held steady: "
+          },
+          {
+            "fact": "F10"
+          },
+          {
+            "text": " on "
+          },
+          {
+            "fact": "F4"
+          },
+          {
+            "text": " and "
+          },
+          {
+            "fact": "F31"
+          },
+          {
+            "text": " on "
+          },
+          {
+            "fact": "F24"
+          },
+          {
+            "text": "."
+          }
+        ]
+      }
+    ]
+  }
+}

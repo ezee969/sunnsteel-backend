@@ -1656,6 +1656,8 @@ enum AiUsageStatus {
   DELIVERED
   NOT_TRAINING
   FAILED
+  /// INTEL-04: a review the model answered with "not enough evidence".
+  NOT_ENOUGH
 }
 
 model AiUsageRecord {

@@ -1,0 +1,56 @@
+{
+  "source": "hand-written seed until the first --record",
+  "model": null,
+  "answer": {
+    "status": "REVIEW",
+    "findings": [
+      {
+        "segments": [
+          {
+            "text": "Workout volume went from "
+          },
+          {
+            "fact": "F6"
+          },
+          {
+            "text": " to "
+          },
+          {
+            "fact": "F29"
+          },
+          {
+            "text": "."
+          }
+        ]
+      },
+      {
+        "segments": [
+          {
+            "fact": "F3"
+          },
+          {
+            "text": " was in "
+          },
+          {
+            "fact": "F4"
+          },
+          {
+            "text": " and "
+          },
+          {
+            "fact": "F27"
+          },
+          {
+            "text": ", but not in "
+          },
+          {
+            "fact": "F17"
+          },
+          {
+            "text": "."
+          }
+        ]
+      }
+    ]
+  }
+}
