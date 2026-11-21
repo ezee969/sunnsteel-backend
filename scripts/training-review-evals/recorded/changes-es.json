@@ -1,22 +1,28 @@
 {
-  "source": "hand-written seed until the first --record",
-  "model": null,
+  "source": "live",
+  "model": "claude-sonnet-5-5",
   "answer": {
     "status": "REVIEW",
     "findings": [
       {
         "segments": [
           {
-            "text": "El volumen del entrenamiento pasó de "
+            "text": "La duración fue la misma en todos los entrenamientos: "
           },
           {
-            "fact": "F6"
+            "fact": "F5"
           },
           {
-            "text": " a "
+            "text": ", "
           },
           {
-            "fact": "F29"
+            "fact": "F18"
+          },
+          {
+            "text": " y "
+          },
+          {
+            "fact": "F28"
           },
           {
             "text": "."
@@ -26,25 +32,115 @@
       {
         "segments": [
           {
+            "text": "El volumen total fue de "
+          },
+          {
+            "fact": "F6"
+          },
+          {
+            "text": " en el primero, bajó a "
+          },
+          {
+            "fact": "F19"
+          },
+          {
+            "text": " en el segundo y subió a "
+          },
+          {
+            "fact": "F29"
+          },
+          {
+            "text": " en el tercero."
+          }
+        ]
+      },
+      {
+        "segments": [
+          {
+            "text": "Las series completadas pasaron de "
+          },
+          {
+            "fact": "F7"
+          },
+          {
+            "text": " a "
+          },
+          {
+            "fact": "F20"
+          },
+          {
+            "text": " en el segundo entrenamiento y volvieron a "
+          },
+          {
+            "fact": "F30"
+          },
+          {
+            "text": " en el tercero; en el segundo no aparece "
+          },
+          {
             "fact": "F3"
           },
           {
-            "text": " estuvo en "
+            "text": "."
+          }
+        ]
+      },
+      {
+        "segments": [
+          {
+            "text": "En "
           },
           {
-            "fact": "F4"
+            "fact": "F1"
           },
           {
-            "text": " y en "
+            "text": " la mejor serie subió de "
           },
           {
-            "fact": "F27"
+            "fact": "F10"
           },
           {
-            "text": ", pero no en "
+            "text": " a "
           },
           {
-            "fact": "F17"
+            "fact": "F23"
+          },
+          {
+            "text": " y luego a "
+          },
+          {
+            "fact": "F33"
+          },
+          {
+            "text": "."
+          }
+        ]
+      },
+      {
+        "segments": [
+          {
+            "text": "En "
+          },
+          {
+            "fact": "F2"
+          },
+          {
+            "text": " la mejor serie fue la misma en todos los entrenamientos: "
+          },
+          {
+            "fact": "F13"
+          },
+          {
+            "text": ", "
+          },
+          {
+            "fact": "F26"
+          },
+          {
+            "text": " y "
+          },
+          {
+            "fact": "F36"
           },
           {
             "text": "."

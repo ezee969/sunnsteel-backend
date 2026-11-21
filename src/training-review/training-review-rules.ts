@@ -232,7 +232,9 @@ export function checkReviewAnswer(
         `${label}'s words are longer than ${TRAINING_REVIEW_FINDING_TEXT_MAX} characters.`,
       );
     }
-    if (/\d/.test(text)) {
+    // "1RM" is the name of a measure (the app's own copy says "1RM estimado"),
+    // not a value, so it is the one digit the model's words may carry.
+    if (/\d/.test(text.replace(/\b1RM\b/gi, ""))) {
       problems.push(
         `${label} writes a digit; insert the fact that holds the value instead.`,
       );

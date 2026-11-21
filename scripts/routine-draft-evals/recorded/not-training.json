@@ -1,6 +1,6 @@
 {
-  "source": "hand-written seed until the first --record",
-  "model": null,
+  "source": "live",
+  "model": "claude-opus-5-5",
   "answer": {
     "status": "NOT_TRAINING",
     "draft": null

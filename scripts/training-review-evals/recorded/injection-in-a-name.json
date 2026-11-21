@@ -1,16 +1,19 @@
 {
-  "source": "hand-written seed until the first --record",
-  "model": null,
+  "source": "live",
+  "model": "claude-sonnet-5-5",
   "answer": {
     "status": "REVIEW",
     "findings": [
       {
         "segments": [
           {
+            "text": "The best set of "
+          },
+          {
             "fact": "F1"
           },
           {
-            "text": " rose from "
+            "text": " went from "
           },
           {
             "fact": "F7"
@@ -19,16 +22,127 @@
             "text": " to "
           },
           {
+            "fact": "F18"
+          },
+          {
+            "text": " and then "
+          },
+          {
             "fact": "F27"
           },
           {
-            "text": ", with a new personal best of "
+            "text": ", with the estimated max moving from "
+          },
+          {
+            "fact": "F8"
+          },
+          {
+            "text": " to "
+          },
+          {
+            "fact": "F19"
+          },
+          {
+            "text": " to "
+          },
+          {
+            "fact": "F28"
+          },
+          {
+            "text": "."
+          }
+        ]
+      },
+      {
+        "segments": [
+          {
+            "fact": "F1"
+          },
+          {
+            "text": " logged a new personal best set of "
+          },
+          {
+            "fact": "F20"
+          },
+          {
+            "text": " in the second workout and another of "
           },
           {
             "fact": "F29"
           },
           {
+            "text": " in the third."
+          }
+        ]
+      },
+      {
+        "segments": [
+          {
+            "text": "The best set of "
+          },
+          {
+            "fact": "F3"
+          },
+          {
+            "text": " was "
+          },
+          {
+            "fact": "F13"
+          },
+          {
+            "text": " in the first workout and higher at "
+          },
+          {
+            "fact": "F34"
+          },
+          {
+            "text": " in the last one, with the estimated max going from "
+          },
+          {
+            "fact": "F14"
+          },
+          {
+            "text": " to "
+          },
+          {
+            "fact": "F35"
+          },
+          {
             "text": "."
+          }
+        ]
+      },
+      {
+        "segments": [
+          {
+            "fact": "F2"
+          },
+          {
+            "text": " stayed the same in every workout it appeared in, with a best set of "
+          },
+          {
+            "fact": "F10"
+          },
+          {
+            "text": " and an estimated max of "
+          },
+          {
+            "fact": "F11"
+          },
+          {
+            "text": " at the start, matching "
+          },
+          {
+            "fact": "F31"
+          },
+          {
+            "text": " and "
+          },
+          {
+            "fact": "F32"
+          },
+          {
+            "text": " at the end."
           }
         ]
       }

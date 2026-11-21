@@ -1,43 +1,132 @@
 {
-  "source": "hand-written seed until the first --record",
-  "model": null,
+  "source": "live",
+  "model": "claude-sonnet-5-5",
   "answer": {
     "status": "REVIEW",
     "findings": [
       {
         "segments": [
           {
+            "text": "En "
+          },
+          {
+            "fact": "F1"
+          },
+          {
+            "text": " el RPE promedio fue de "
+          },
+          {
+            "fact": "F7"
+          },
+          {
+            "text": " el "
+          },
+          {
+            "fact": "F4"
+          },
+          {
+            "text": ", luego "
+          },
+          {
+            "fact": "F18"
+          },
+          {
+            "text": " el "
+          },
+          {
+            "fact": "F15"
+          },
+          {
+            "text": " y "
+          },
+          {
+            "fact": "F25"
+          },
+          {
+            "text": " el "
+          },
+          {
+            "fact": "F22"
+          },
+          {
+            "text": ", es decir, subió en cada registro, y ninguna serie quedó corta de su objetivo de repeticiones."
+          }
+        ]
+      },
+      {
+        "segments": [
+          {
+            "text": "En "
+          },
+          {
             "fact": "F3"
           },
           {
-            "text": " promedió "
+            "text": " el RPE promedio pasó de "
           },
           {
             "fact": "F12"
           },
           {
-            "text": " y luego "
+            "text": " el "
+          },
+          {
+            "fact": "F4"
+          },
+          {
+            "text": " a "
           },
           {
             "fact": "F30"
           },
           {
-            "text": ", con "
+            "text": " el "
+          },
+          {
+            "fact": "F22"
+          },
+          {
+            "text": ", más alto en el último registro."
+          }
+        ]
+      },
+      {
+        "segments": [
+          {
+            "text": "En "
+          },
+          {
+            "fact": "F3"
+          },
+          {
+            "text": " el "
+          },
+          {
+            "fact": "F22"
+          },
+          {
+            "text": " fue el único registro con series cortas de su objetivo de repeticiones: "
           },
           {
             "fact": "F32"
           },
           {
-            "text": " de "
+            "text": " de sus "
           },
           {
             "fact": "F31"
           },
           {
-            "text": " series por debajo del objetivo en "
+            "text": ", frente a "
           },
           {
-            "fact": "F22"
+            "fact": "F14"
+          },
+          {
+            "text": " el "
+          },
+          {
+            "fact": "F4"
           },
           {
             "text": "."

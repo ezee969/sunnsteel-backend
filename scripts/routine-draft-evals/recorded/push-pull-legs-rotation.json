@@ -1,11 +1,11 @@
 {
-  "source": "hand-written seed until the first --record",
-  "model": null,
+  "source": "live",
+  "model": "claude-opus-5-5",
   "answer": {
     "status": "DRAFT",
     "draft": {
-      "name": "Push Pull Legs",
-      "description": "A three-day rotation for an experienced lifter.",
+      "name": "Push Pull Legs Rotation",
+      "description": "A three-day push, pull and legs rotation for an experienced lifter. Run the days in order whenever you can train, with heavy compound lifts first and accessory work after.",
       "scheduleMode": "ROTATION",
       "days": [
         {
@@ -17,28 +17,49 @@
               "sets": 4,
               "minReps": 5,
               "maxReps": 8,
-              "restSeconds": 150
+              "restSeconds": 180
+            },
+            {
+              "exercise": "Incline Dumbbell Press",
+              "sets": 3,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 120
             },
             {
               "exercise": "Overhead Press",
+              "sets": 3,
+              "minReps": 6,
+              "maxReps": 10,
+              "restSeconds": 150
+            },
+            {
+              "exercise": "Cable Lateral Raises",
               "sets": 4,
-              "minReps": 8,
-              "maxReps": 12,
-              "restSeconds": 90
+              "minReps": 12,
+              "maxReps": 15,
+              "restSeconds": 60
             },
             {
               "exercise": "Cable Fly",
               "sets": 3,
-              "minReps": 8,
-              "maxReps": 12,
-              "restSeconds": 90
+              "minReps": 10,
+              "maxReps": 15,
+              "restSeconds": 60
             },
             {
               "exercise": "Tricep Pushdown",
               "sets": 3,
-              "minReps": 8,
+              "minReps": 10,
               "maxReps": 12,
-              "restSeconds": 90
+              "restSeconds": 60
+            },
+            {
+              "exercise": "Overhead Rope Triceps Extension",
+              "sets": 3,
+              "minReps": 10,
+              "maxReps": 15,
+              "restSeconds": 60
             }
           ]
         },
@@ -49,16 +70,23 @@
             {
               "exercise": "Deadlift",
               "sets": 3,
-              "minReps": 4,
-              "maxReps": 6,
-              "restSeconds": 180
+              "minReps": 3,
+              "maxReps": 5,
+              "restSeconds": 240
             },
             {
               "exercise": "Pull-ups",
               "sets": 4,
+              "minReps": 6,
+              "maxReps": 10,
+              "restSeconds": 150
+            },
+            {
+              "exercise": "Chest Supported T-Bar Row",
+              "sets": 3,
               "minReps": 8,
               "maxReps": 12,
-              "restSeconds": 90
+              "restSeconds": 120
             },
             {
               "exercise": "Cable Row",
@@ -68,11 +96,25 @@
               "restSeconds": 90
             },
             {
+              "exercise": "Rear Delt Fly",
+              "sets": 3,
+              "minReps": 12,
+              "maxReps": 15,
+              "restSeconds": 60
+            },
+            {
               "exercise": "Barbell Curl",
               "sets": 3,
               "minReps": 8,
               "maxReps": 12,
               "restSeconds": 90
+            },
+            {
+              "exercise": "Incline Dumbbell Curl",
+              "sets": 3,
+              "minReps": 10,
+              "maxReps": 12,
+              "restSeconds": 60
             }
           ]
         },
@@ -91,22 +133,43 @@
               "exercise": "Romanian Deadlift",
               "sets": 3,
               "minReps": 8,
-              "maxReps": 12,
-              "restSeconds": 90
+              "maxReps": 10,
+              "restSeconds": 150
             },
             {
-              "exercise": "Leg Curl",
+              "exercise": "Leg Press",
               "sets": 3,
-              "minReps": 8,
+              "minReps": 10,
               "maxReps": 12,
-              "restSeconds": 90
+              "restSeconds": 120
+            },
+            {
+              "exercise": "Seated Leg Curl",
+              "sets": 3,
+              "minReps": 10,
+              "maxReps": 15,
+              "restSeconds": 60
+            },
+            {
+              "exercise": "Leg Extension",
+              "sets": 3,
+              "minReps": 12,
+              "maxReps": 15,
+              "restSeconds": 60
             },
             {
               "exercise": "Standing Calf Raise",
               "sets": 4,
-              "minReps": 8,
-              "maxReps": 12,
-              "restSeconds": 90
+              "minReps": 10,
+              "maxReps": 15,
+              "restSeconds": 60
+            },
+            {
+              "exercise": "Hanging Leg Raise",
+              "sets": 3,
+              "minReps": 10,
+              "maxReps": 15,
+              "restSeconds": 60
             }
           ]
         }
