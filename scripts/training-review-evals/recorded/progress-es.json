@@ -1,16 +1,19 @@
 {
-  "source": "hand-written seed until the first --record",
-  "model": null,
+  "source": "live",
+  "model": "claude-sonnet-5-5",
   "answer": {
     "status": "REVIEW",
     "findings": [
       {
         "segments": [
           {
+            "text": "En "
+          },
+          {
             "fact": "F1"
           },
           {
-            "text": " subió de "
+            "text": " la mejor serie subió de "
           },
           {
             "fact": "F7"
@@ -19,10 +22,16 @@
             "text": " a "
           },
           {
+            "fact": "F18"
+          },
+          {
+            "text": " y luego a "
+          },
+          {
             "fact": "F27"
           },
           {
-            "text": ", con un nuevo mejor registro de "
+            "text": ", con un nuevo récord personal en el último entrenamiento: "
           },
           {
             "fact": "F29"
@@ -35,19 +44,53 @@
       {
         "segments": [
           {
+            "text": "El 1RM estimado de "
+          },
+          {
+            "fact": "F1"
+          },
+          {
+            "text": " pasó de "
+          },
+          {
+            "fact": "F8"
+          },
+          {
+            "text": " a "
+          },
+          {
+            "fact": "F19"
+          },
+          {
+            "text": " y después a "
+          },
+          {
+            "fact": "F28"
+          },
+          {
+            "text": "."
+          }
+        ]
+      },
+      {
+        "segments": [
+          {
+            "text": "En "
+          },
+          {
             "fact": "F2"
           },
           {
-            "text": " se mantuvo igual: "
+            "text": " la mejor serie quedó igual en todos los entrenamientos: "
           },
           {
             "fact": "F10"
           },
           {
-            "text": " en "
+            "text": ", "
           },
           {
-            "fact": "F4"
+            "fact": "F22"
           },
           {
             "text": " y "
@@ -56,10 +99,84 @@
             "fact": "F31"
           },
           {
-            "text": " en "
+            "text": "."
+          }
+        ]
+      },
+      {
+        "segments": [
+          {
+            "text": "El 1RM estimado de "
+          },
+          {
+            "fact": "F2"
+          },
+          {
+            "text": " no cambió: "
+          },
+          {
+            "fact": "F11"
+          },
+          {
+            "text": ", "
+          },
+          {
+            "fact": "F23"
+          },
+          {
+            "text": " y "
+          },
+          {
+            "fact": "F32"
+          },
+          {
+            "text": "."
+          }
+        ]
+      },
+      {
+        "segments": [
+          {
+            "text": "En "
+          },
+          {
+            "fact": "F3"
+          },
+          {
+            "text": ", registrado el "
+          },
+          {
+            "fact": "F4"
+          },
+          {
+            "text": " y el "
           },
           {
             "fact": "F24"
+          },
+          {
+            "text": ", la mejor serie subió de "
+          },
+          {
+            "fact": "F13"
+          },
+          {
+            "text": " a "
+          },
+          {
+            "fact": "F34"
+          },
+          {
+            "text": " y el 1RM estimado de "
+          },
+          {
+            "fact": "F14"
+          },
+          {
+            "text": " a "
+          },
+          {
+            "fact": "F35"
           },
           {
             "text": "."

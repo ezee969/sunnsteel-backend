@@ -1,22 +1,28 @@
 {
-  "source": "hand-written seed until the first --record",
-  "model": null,
+  "source": "live",
+  "model": "claude-sonnet-5-5",
   "answer": {
     "status": "REVIEW",
     "findings": [
       {
         "segments": [
           {
-            "text": "Workout volume went from "
+            "text": "Duration was the same in every workout: "
           },
           {
-            "fact": "F6"
+            "fact": "F5"
           },
           {
-            "text": " to "
+            "text": ", "
           },
           {
-            "fact": "F29"
+            "fact": "F18"
+          },
+          {
+            "text": " and "
+          },
+          {
+            "fact": "F28"
           },
           {
             "text": "."
@@ -26,25 +32,154 @@
       {
         "segments": [
           {
+            "text": "Total volume dipped in the middle workout, from "
+          },
+          {
+            "fact": "F6"
+          },
+          {
+            "text": " to "
+          },
+          {
+            "fact": "F19"
+          },
+          {
+            "text": ", then rose to "
+          },
+          {
+            "fact": "F29"
+          },
+          {
+            "text": " in the latest."
+          }
+        ]
+      },
+      {
+        "segments": [
+          {
+            "text": "Completed sets were fewer in the middle workout at "
+          },
+          {
+            "fact": "F20"
+          },
+          {
+            "text": ", against "
+          },
+          {
+            "fact": "F7"
+          },
+          {
+            "text": " before and "
+          },
+          {
+            "fact": "F30"
+          },
+          {
+            "text": " after, and "
+          },
+          {
             "fact": "F3"
           },
           {
-            "text": " was in "
+            "text": " is missing from that middle workout."
+          }
+        ]
+      },
+      {
+        "segments": [
+          {
+            "text": "The best "
           },
           {
-            "fact": "F4"
+            "fact": "F1"
+          },
+          {
+            "text": " set rose from "
+          },
+          {
+            "fact": "F10"
+          },
+          {
+            "text": " to "
+          },
+          {
+            "fact": "F23"
+          },
+          {
+            "text": " and then "
+          },
+          {
+            "fact": "F33"
+          },
+          {
+            "text": ", with volume going from "
+          },
+          {
+            "fact": "F9"
+          },
+          {
+            "text": " to "
+          },
+          {
+            "fact": "F22"
           },
           {
             "text": " and "
           },
           {
-            "fact": "F27"
+            "fact": "F32"
           },
           {
-            "text": ", but not in "
+            "text": "."
+          }
+        ]
+      },
+      {
+        "segments": [
+          {
+            "fact": "F2"
           },
           {
-            "fact": "F17"
+            "text": " stayed the same in every workout, with best set "
+          },
+          {
+            "fact": "F13"
+          },
+          {
+            "text": " and volume "
+          },
+          {
+            "fact": "F12"
+          },
+          {
+            "text": ". "
+          },
+          {
+            "fact": "F3"
+          },
+          {
+            "text": " best set went from "
+          },
+          {
+            "fact": "F16"
+          },
+          {
+            "text": " to "
+          },
+          {
+            "fact": "F39"
+          },
+          {
+            "text": ", while its volume went from "
+          },
+          {
+            "fact": "F15"
+          },
+          {
+            "text": " to "
+          },
+          {
+            "fact": "F38"
           },
           {
             "text": "."

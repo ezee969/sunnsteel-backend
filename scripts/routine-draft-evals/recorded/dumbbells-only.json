@@ -1,44 +1,24 @@
 {
-  "source": "hand-written seed until the first --record",
-  "model": null,
+  "source": "live",
+  "model": "claude-opus-5-5",
   "answer": {
     "status": "DRAFT",
     "draft": {
-      "name": "Dumbbell Hypertrophy",
-      "description": "Three dumbbell days for a home gym.",
+      "name": "Home Dumbbell Full Body Hypertrophy",
+      "description": "A three-day weekly full-body hypertrophy plan using only dumbbells, a flat bench and bodyweight. Each session trains chest, back, legs, shoulders and arms in moderate to high rep ranges.",
       "scheduleMode": "WEEKLY",
       "days": [
         {
           "weekday": 1,
-          "name": "Push",
+          "name": "Full Body A",
           "exercises": [
             {
               "exercise": "Dumbbell Bench Press",
               "sets": 4,
               "minReps": 8,
               "maxReps": 12,
-              "restSeconds": 90
+              "restSeconds": 120
             },
-            {
-              "exercise": "Incline Dumbbell Press",
-              "sets": 3,
-              "minReps": 8,
-              "maxReps": 12,
-              "restSeconds": 90
-            },
-            {
-              "exercise": "Lateral Raises",
-              "sets": 3,
-              "minReps": 12,
-              "maxReps": 15,
-              "restSeconds": 60
-            }
-          ]
-        },
-        {
-          "weekday": 3,
-          "name": "Pull",
-          "exercises": [
             {
               "exercise": "Dumbbell Row",
               "sets": 4,
@@ -46,26 +26,6 @@
               "maxReps": 12,
               "restSeconds": 90
             },
-            {
-              "exercise": "Dumbbell Curl",
-              "sets": 3,
-              "minReps": 8,
-              "maxReps": 12,
-              "restSeconds": 90
-            },
-            {
-              "exercise": "Hammer Curl",
-              "sets": 3,
-              "minReps": 8,
-              "maxReps": 12,
-              "restSeconds": 90
-            }
-          ]
-        },
-        {
-          "weekday": 5,
-          "name": "Legs",
-          "exercises": [
             {
               "exercise": "Bulgarian Split Squat",
               "sets": 3,
@@ -76,9 +36,161 @@
             {
               "exercise": "Stiff Leg Deadlift",
               "sets": 3,
+              "minReps": 10,
+              "maxReps": 12,
+              "restSeconds": 90
+            },
+            {
+              "exercise": "Lateral Raises",
+              "sets": 3,
+              "minReps": 12,
+              "maxReps": 20,
+              "restSeconds": 60
+            },
+            {
+              "exercise": "Dumbbell Curl",
+              "sets": 3,
+              "minReps": 10,
+              "maxReps": 15,
+              "restSeconds": 60
+            },
+            {
+              "exercise": "Overhead Tricep Extension",
+              "sets": 3,
+              "minReps": 10,
+              "maxReps": 15,
+              "restSeconds": 60
+            }
+          ]
+        },
+        {
+          "weekday": 3,
+          "name": "Full Body B",
+          "exercises": [
+            {
+              "exercise": "Dumbbell Shoulder Press",
+              "sets": 3,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 120
+            },
+            {
+              "exercise": "Push-ups",
+              "sets": 3,
+              "minReps": 10,
+              "maxReps": 20,
+              "restSeconds": 90
+            },
+            {
+              "exercise": "Dumbbell Row",
+              "sets": 3,
+              "minReps": 10,
+              "maxReps": 15,
+              "restSeconds": 90
+            },
+            {
+              "exercise": "Lunges",
+              "sets": 3,
+              "minReps": 10,
+              "maxReps": 15,
+              "restSeconds": 90
+            },
+            {
+              "exercise": "Glute Bridge",
+              "sets": 3,
+              "minReps": 12,
+              "maxReps": 20,
+              "restSeconds": 60
+            },
+            {
+              "exercise": "Rear Delt Fly",
+              "sets": 3,
+              "minReps": 12,
+              "maxReps": 20,
+              "restSeconds": 60
+            },
+            {
+              "exercise": "Hammer Curl",
+              "sets": 3,
+              "minReps": 10,
+              "maxReps": 15,
+              "restSeconds": 60
+            },
+            {
+              "exercise": "Calf Raise",
+              "sets": 3,
+              "minReps": 12,
+              "maxReps": 20,
+              "restSeconds": 45
+            },
+            {
+              "exercise": "Dead Bug",
+              "sets": 2,
+              "minReps": 10,
+              "maxReps": 12,
+              "restSeconds": 45
+            }
+          ]
+        },
+        {
+          "weekday": 5,
+          "name": "Full Body C",
+          "exercises": [
+            {
+              "exercise": "Dumbbell Bench Press",
+              "sets": 3,
+              "minReps": 10,
+              "maxReps": 15,
+              "restSeconds": 90
+            },
+            {
+              "exercise": "Dumbbell Row",
+              "sets": 4,
+              "minReps": 10,
+              "maxReps": 15,
+              "restSeconds": 90
+            },
+            {
+              "exercise": "Dumbbell Bulgarian Split Squat",
+              "sets": 3,
+              "minReps": 10,
+              "maxReps": 15,
+              "restSeconds": 90
+            },
+            {
+              "exercise": "Stiff Leg Deadlift",
+              "sets": 3,
               "minReps": 8,
               "maxReps": 12,
               "restSeconds": 90
+            },
+            {
+              "exercise": "Dumbbell Lateral Raises",
+              "sets": 3,
+              "minReps": 12,
+              "maxReps": 20,
+              "restSeconds": 60
+            },
+            {
+              "exercise": "One-Arm Overhead Triceps Extension",
+              "sets": 3,
+              "minReps": 10,
+              "maxReps": 15,
+              "restSeconds": 60
+            },
+            {
+              "exercise": "Diamond Push-ups",
+              "sets": 2,
+              "minReps": 8,
+              "maxReps": 15,
+              "restSeconds": 60
+            },
+            {
+              "exercise": "Calf Raise",
+              "sets": 3,
+              "minReps": 12,
+              "maxReps": 20,
+              "restSeconds": 45
             }
           ]
         }

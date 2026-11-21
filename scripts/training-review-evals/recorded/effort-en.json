@@ -1,46 +1,145 @@
 {
-  "source": "hand-written seed until the first --record",
-  "model": null,
+  "source": "live",
+  "model": "claude-sonnet-5-5",
   "answer": {
     "status": "REVIEW",
     "findings": [
       {
         "segments": [
           {
+            "text": "Logged effort on "
+          },
+          {
+            "fact": "F1"
+          },
+          {
+            "text": " went from "
+          },
+          {
+            "fact": "F7"
+          },
+          {
+            "text": " on "
+          },
+          {
+            "fact": "F4"
+          },
+          {
+            "text": " to "
+          },
+          {
+            "fact": "F18"
+          },
+          {
+            "text": " on "
+          },
+          {
+            "fact": "F15"
+          },
+          {
+            "text": " and "
+          },
+          {
+            "fact": "F25"
+          },
+          {
+            "text": " on "
+          },
+          {
+            "fact": "F22"
+          },
+          {
+            "text": ", while sets short of the rep target stayed at "
+          },
+          {
+            "fact": "F27"
+          },
+          {
+            "text": " in the latest workout."
+          }
+        ]
+      },
+      {
+        "segments": [
+          {
             "fact": "F3"
           },
           {
-            "text": " averaged "
+            "text": " average effort was "
           },
           {
             "fact": "F12"
           },
           {
-            "text": " and then "
+            "text": " on "
+          },
+          {
+            "fact": "F4"
+          },
+          {
+            "text": " and higher at "
           },
           {
             "fact": "F30"
           },
           {
-            "text": ", with "
-          },
-          {
-            "fact": "F32"
-          },
-          {
-            "text": " of its "
-          },
-          {
-            "fact": "F31"
-          },
-          {
-            "text": " sets short of their target on "
+            "text": " on "
           },
           {
             "fact": "F22"
           },
           {
             "text": "."
+          }
+        ]
+      },
+      {
+        "segments": [
+          {
+            "text": "On "
+          },
+          {
+            "fact": "F22"
+          },
+          {
+            "text": " "
+          },
+          {
+            "fact": "F32"
+          },
+          {
+            "text": " of the sets for "
+          },
+          {
+            "fact": "F3"
+          },
+          {
+            "text": " came short of the rep target, compared with "
+          },
+          {
+            "fact": "F14"
+          },
+          {
+            "text": " on "
+          },
+          {
+            "fact": "F4"
+          },
+          {
+            "text": "."
+          }
+        ]
+      },
+      {
+        "segments": [
+          {
+            "text": "In "
+          },
+          {
+            "fact": "F2"
+          },
+          {
+            "text": " no RPE or rep target was logged in any workout, so effort against plan cannot be compared there."
           }
         ]
       }

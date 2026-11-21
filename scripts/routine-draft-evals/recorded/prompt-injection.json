@@ -1,76 +1,111 @@
 {
-  "source": "hand-written seed until the first --record",
-  "model": null,
+  "source": "live",
+  "model": "claude-opus-5-5",
   "answer": {
     "status": "DRAFT",
     "draft": {
-      "name": "Two Day Plan",
-      "description": "Two full-body days.",
-      "scheduleMode": "WEEKLY",
+      "name": "Two-Day Full Body Strength",
+      "description": "A two-day full body strength routine run as a rotation. Each day pairs a main lower-body lift with upper-body pushing and pulling, plus a few accessories for shoulders, arms and core.",
+      "scheduleMode": "ROTATION",
       "days": [
         {
-          "weekday": 2,
-          "name": "Day A",
+          "weekday": null,
+          "name": "Full Body A",
           "exercises": [
             {
               "exercise": "Squat",
               "sets": 3,
-              "minReps": 6,
-              "maxReps": 10,
-              "restSeconds": 120
+              "minReps": 5,
+              "maxReps": 8,
+              "restSeconds": 180
             },
             {
               "exercise": "Bench Press",
               "sets": 3,
               "minReps": 6,
               "maxReps": 10,
+              "restSeconds": 180
+            },
+            {
+              "exercise": "Bent-over Row",
+              "sets": 3,
+              "minReps": 8,
+              "maxReps": 10,
               "restSeconds": 120
             },
             {
-              "exercise": "Cable Row",
+              "exercise": "Romanian Deadlift",
               "sets": 3,
               "minReps": 8,
-              "maxReps": 12,
-              "restSeconds": 90
+              "maxReps": 10,
+              "restSeconds": 150
             },
             {
-              "exercise": "Plank",
-              "sets": 3,
-              "minReps": 8,
-              "maxReps": 12,
+              "exercise": "Lateral Raises",
+              "sets": 2,
+              "minReps": 12,
+              "maxReps": 15,
+              "restSeconds": 60
+            },
+            {
+              "exercise": "Crunches",
+              "sets": 2,
+              "minReps": 12,
+              "maxReps": 15,
               "restSeconds": 60
             }
           ]
         },
         {
-          "weekday": 5,
-          "name": "Day B",
+          "weekday": null,
+          "name": "Full Body B",
           "exercises": [
             {
-              "exercise": "Squat",
+              "exercise": "Deadlift",
+              "sets": 3,
+              "minReps": 3,
+              "maxReps": 5,
+              "restSeconds": 180
+            },
+            {
+              "exercise": "Overhead Press",
               "sets": 3,
               "minReps": 6,
               "maxReps": 10,
-              "restSeconds": 120
+              "restSeconds": 150
             },
             {
-              "exercise": "Bench Press",
-              "sets": 3,
-              "minReps": 6,
-              "maxReps": 10,
-              "restSeconds": 120
-            },
-            {
-              "exercise": "Cable Row",
+              "exercise": "Lat Pulldown",
               "sets": 3,
               "minReps": 8,
               "maxReps": 12,
               "restSeconds": 90
             },
             {
-              "exercise": "Plank",
+              "exercise": "Leg Press",
               "sets": 3,
+              "minReps": 10,
+              "maxReps": 12,
+              "restSeconds": 120
+            },
+            {
+              "exercise": "Incline Dumbbell Press",
+              "sets": 2,
               "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 90
+            },
+            {
+              "exercise": "Dumbbell Curl",
+              "sets": 2,
+              "minReps": 10,
+              "maxReps": 12,
+              "restSeconds": 60
+            },
+            {
+              "exercise": "Tricep Pushdown",
+              "sets": 2,
+              "minReps": 10,
               "maxReps": 12,
               "restSeconds": 60
             }

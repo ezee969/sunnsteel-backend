@@ -1,33 +1,54 @@
 {
-  "source": "hand-written seed until the first --record",
-  "model": null,
+  "source": "live",
+  "model": "claude-opus-5-5",
   "answer": {
     "status": "DRAFT",
     "draft": {
-      "name": "Cuerpo completo en casa",
-      "description": "Dos días con tu peso corporal.",
-      "scheduleMode": "WEEKLY",
+      "name": "Cuerpo completo sin equipo - 2 días",
+      "description": "Rutina de cuerpo completo con peso corporal, dos sesiones por semana para mantenerte en forma. No requiere equipo. Alterna los días A y B con al menos un día de descanso entre sesiones.",
+      "scheduleMode": "ROTATION",
       "days": [
         {
-          "weekday": 2,
-          "name": "Día A",
+          "weekday": null,
+          "name": "Día A - Cuerpo completo",
           "exercises": [
             {
               "exercise": "Push-ups",
               "sets": 3,
               "minReps": 8,
-              "maxReps": 12,
+              "maxReps": 15,
               "restSeconds": 90
             },
             {
               "exercise": "Lunges",
               "sets": 3,
-              "minReps": 8,
+              "minReps": 10,
+              "maxReps": 15,
+              "restSeconds": 90
+            },
+            {
+              "exercise": "Glute Bridge",
+              "sets": 3,
+              "minReps": 12,
+              "maxReps": 20,
+              "restSeconds": 60
+            },
+            {
+              "exercise": "Diamond Push-ups",
+              "sets": 2,
+              "minReps": 6,
               "maxReps": 12,
               "restSeconds": 90
             },
             {
-              "exercise": "Plank",
+              "exercise": "Calf Raise",
+              "sets": 3,
+              "minReps": 15,
+              "maxReps": 20,
+              "restSeconds": 60
+            },
+            {
+              "exercise": "Dead Bug",
               "sets": 3,
               "minReps": 8,
               "maxReps": 12,
@@ -36,29 +57,50 @@
           ]
         },
         {
-          "weekday": 5,
-          "name": "Día B",
+          "weekday": null,
+          "name": "Día B - Cuerpo completo",
           "exercises": [
             {
-              "exercise": "Diamond Push-ups",
+              "exercise": "Lunges",
+              "sets": 3,
+              "minReps": 12,
+              "maxReps": 20,
+              "restSeconds": 90
+            },
+            {
+              "exercise": "Push-ups",
               "sets": 3,
               "minReps": 8,
-              "maxReps": 12,
+              "maxReps": 15,
               "restSeconds": 90
             },
             {
               "exercise": "Glute Bridge",
               "sets": 3,
-              "minReps": 8,
-              "maxReps": 12,
-              "restSeconds": 90
+              "minReps": 15,
+              "maxReps": 25,
+              "restSeconds": 60
+            },
+            {
+              "exercise": "Calf Raise",
+              "sets": 3,
+              "minReps": 15,
+              "maxReps": 25,
+              "restSeconds": 60
             },
             {
               "exercise": "Crunches",
               "sets": 3,
-              "minReps": 8,
-              "maxReps": 12,
-              "restSeconds": 90
+              "minReps": 12,
+              "maxReps": 20,
+              "restSeconds": 60
+            },
+            {
+              "exercise": "Mountain Climbers",
+              "sets": 3,
+              "minReps": 15,
+              "maxReps": 30,
+              "restSeconds": 60
             }
           ]
         }

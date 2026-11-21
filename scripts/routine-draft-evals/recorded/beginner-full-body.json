@@ -1,11 +1,11 @@
 {
-  "source": "hand-written seed until the first --record",
-  "model": null,
+  "source": "live",
+  "model": "claude-opus-5-5",
   "answer": {
     "status": "DRAFT",
     "draft": {
-      "name": "Full Body Start",
-      "description": "Three full-body days with the main lifts.",
+      "name": "Beginner Full Body Strength",
+      "description": "A three-day full body plan for a new lifter. Each session pairs a squat or hinge with a push and a pull, using moderate volume to build strength across the whole body.",
       "scheduleMode": "WEEKLY",
       "days": [
         {
@@ -15,29 +15,29 @@
             {
               "exercise": "Squat",
               "sets": 3,
-              "minReps": 6,
-              "maxReps": 10,
-              "restSeconds": 120
+              "minReps": 5,
+              "maxReps": 8,
+              "restSeconds": 180
             },
             {
               "exercise": "Bench Press",
               "sets": 3,
+              "minReps": 5,
+              "maxReps": 8,
+              "restSeconds": 180
+            },
+            {
+              "exercise": "Bent-over Row",
+              "sets": 3,
               "minReps": 6,
               "maxReps": 10,
               "restSeconds": 120
             },
             {
-              "exercise": "Cable Row",
-              "sets": 3,
-              "minReps": 8,
-              "maxReps": 12,
-              "restSeconds": 90
-            },
-            {
               "exercise": "Plank",
-              "sets": 3,
-              "minReps": 8,
-              "maxReps": 12,
+              "sets": 2,
+              "minReps": 1,
+              "maxReps": 1,
               "restSeconds": 60
             }
           ]
@@ -47,29 +47,36 @@
           "name": "Full Body B",
           "exercises": [
             {
-              "exercise": "Squat",
+              "exercise": "Romanian Deadlift",
               "sets": 3,
               "minReps": 6,
               "maxReps": 10,
-              "restSeconds": 120
+              "restSeconds": 150
             },
             {
-              "exercise": "Bench Press",
+              "exercise": "Overhead Press",
               "sets": 3,
-              "minReps": 6,
-              "maxReps": 10,
-              "restSeconds": 120
+              "minReps": 5,
+              "maxReps": 8,
+              "restSeconds": 150
             },
             {
-              "exercise": "Cable Row",
+              "exercise": "Lat Pulldown",
               "sets": 3,
               "minReps": 8,
               "maxReps": 12,
               "restSeconds": 90
             },
             {
-              "exercise": "Plank",
-              "sets": 3,
+              "exercise": "Lunges",
+              "sets": 2,
+              "minReps": 8,
+              "maxReps": 12,
+              "restSeconds": 90
+            },
+            {
+              "exercise": "Dead Bug",
+              "sets": 2,
               "minReps": 8,
               "maxReps": 12,
               "restSeconds": 60
@@ -81,17 +88,17 @@
           "name": "Full Body C",
           "exercises": [
             {
-              "exercise": "Squat",
+              "exercise": "Deadlift",
               "sets": 3,
-              "minReps": 6,
-              "maxReps": 10,
-              "restSeconds": 120
+              "minReps": 3,
+              "maxReps": 5,
+              "restSeconds": 180
             },
             {
-              "exercise": "Bench Press",
+              "exercise": "Dumbbell Bench Press",
               "sets": 3,
-              "minReps": 6,
-              "maxReps": 10,
+              "minReps": 8,
+              "maxReps": 12,
               "restSeconds": 120
             },
             {
@@ -102,9 +109,23 @@
               "restSeconds": 90
             },
             {
-              "exercise": "Plank",
-              "sets": 3,
-              "minReps": 8,
+              "exercise": "Leg Press",
+              "sets": 2,
+              "minReps": 10,
+              "maxReps": 12,
+              "restSeconds": 120
+            },
+            {
+              "exercise": "Dumbbell Curl",
+              "sets": 2,
+              "minReps": 10,
+              "maxReps": 12,
+              "restSeconds": 60
+            },
+            {
+              "exercise": "Tricep Pushdown",
+              "sets": 2,
+              "minReps": 10,
               "maxReps": 12,
               "restSeconds": 60
             }

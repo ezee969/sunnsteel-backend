@@ -292,6 +292,15 @@ describe("INTEL-04 answer check", () => {
     ]);
   });
 
+  it("reads 1RM as the name of a measure, and any other digit as a value", () => {
+    const named = (text: string) =>
+      problems(answer(finding({ text }, { fact: first }, { text: "." })));
+    assert.deepEqual(named("El 1RM estimado de pasó a "), []);
+    assert.deepEqual(named("The estimated 1rm was "), []);
+    assert.match(named("The 1RM rose by 5 to ")[0], /digit/);
+    assert.match(named("A 21RM set was ")[0], /digit/);
+  });
+
   it("refuses a fact that is not in the evidence, and a finding with none", () => {
     assert.match(
       problems(answer(finding({ fact: "F999" }, { text: " rose." })))[0],
