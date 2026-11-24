@@ -1012,12 +1012,14 @@ enum RepType {
 }
 
 // LIVE-12: a warm-up never counts as work; only working and optional sets
-// take part in progression; only working and drop sets are required.
+// take part in progression; only working, drop and match sets are required.
+// LIVE-26: a match set is myo-rep match against the working set before it.
 enum SetKind {
   WORKING
   WARMUP
   DROP
   OPTIONAL
+  MATCH
 }
 
 // How weight progression should be applied for an exercise
@@ -1178,6 +1180,8 @@ model SetLog {
   isCompleted             Boolean          @default(false)
   // LIVE-12: starts from the prescription's kind, changeable during the workout
   kind                    SetKind          @default(WORKING)
+  // LIVE-26: a match set's mini-sets after its first effort (reps), in order
+  matchReps               Int[]            @default([])
   completedAt             DateTime?
 
   createdAt DateTime @default(now())

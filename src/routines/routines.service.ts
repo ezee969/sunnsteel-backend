@@ -32,6 +32,8 @@ import {
 import { assertUsableExercises } from "../exercises/exercise-access";
 import { assertExerciseLinks, dayExerciseLinks } from "./exercise-links";
 import { linearStateJson, normalizeLinearExercise } from "./linear-periodization";
+import { assertMatchSets } from "./match-sets";
+import { routineSetCreateData } from "./routine-set-data";
 import { assertFeature } from "../billing/plan-of";
 import { startsLinearBlock } from "../billing/pro-split";
 
@@ -87,49 +89,7 @@ export class RoutinesService {
   constructor(private readonly db: DatabaseService) {}
 
   private mapRoutineSetForCreate(set: RoutineSetInput, openReps = false) {
-    if (set.repType === "RANGE") {
-      if (typeof set.minReps !== "number" || typeof set.maxReps !== "number") {
-        throw new BadRequestException(
-          "For RANGE repType, minReps and maxReps are required",
-        );
-      }
-      if (set.minReps > set.maxReps) {
-        throw new BadRequestException(
-          "minReps must be less than or equal to maxReps",
-        );
-      }
-    } else if (set.repType === "FIXED") {
-      // ROUT-17: an 8-week block's working sets have no rep target.
-      const open = openReps && (set.kind ?? "WORKING") !== "WARMUP";
-      if (typeof set.reps !== "number" && !open) {
-        throw new BadRequestException("For FIXED repType, reps is required");
-      }
-    }
-
-    const repTypeVal: "RANGE" | "FIXED" =
-      set.repType === "RANGE" ? "RANGE" : "FIXED";
-
-    return {
-      setNumber: set.setNumber,
-      repType: repTypeVal,
-      weight: set.weight,
-      kind: set.kind ?? "WORKING",
-      // LIVE-20: only a warm-up carries a share.
-      warmUpShare:
-        (set.kind ?? "WORKING") === "WARMUP" &&
-        typeof set.warmUpShare === "number"
-          ? set.warmUpShare
-          : null,
-      ...(typeof set.rir === "number" ? { rir: set.rir } : {}),
-      ...(repTypeVal === "FIXED" && typeof set.reps === "number"
-        ? { reps: set.reps }
-        : {}),
-      ...(repTypeVal === "RANGE" &&
-      typeof set.minReps === "number" &&
-      typeof set.maxReps === "number"
-        ? { minReps: set.minReps, maxReps: set.maxReps }
-        : {}),
-    };
+    return routineSetCreateData(set, openReps);
   }
 
   private mapRoutineExerciseForCreate(
@@ -137,6 +97,10 @@ export class RoutinesService {
     linkedToNext: boolean,
   ) {
     const lp = normalizeLinearExercise(exercise);
+    assertMatchSets(
+      exercise.sets,
+      exercise.progressionScheme === "LINEAR_PERIODIZATION",
+    );
     return {
       exercise: { connect: { id: exercise.exerciseId } },
       order: exercise.order ?? 0,

@@ -97,6 +97,8 @@ export function buildWorkoutSessionSelect(includeLogs = false) {
               rpe: true,
               isCompleted: true,
               kind: true,
+              // LIVE-26
+              matchReps: true,
               completedAt: true,
               createdAt: true,
               updatedAt: true,

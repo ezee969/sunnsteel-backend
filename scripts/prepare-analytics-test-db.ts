@@ -534,6 +534,12 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20261120100000_training_review_ledger/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// LIVE-26: myo-rep match.
+				readFileSync(
+					'prisma/migrations/20261123120000_myo_rep_match/migration.sql',
+					'utf8',
 				),
     );
     prisma(

@@ -1,5 +1,6 @@
 import {
   countsForProgression,
+  repsDone,
   type SetKind,
   type TrainingReviewFact,
   type TrainingReviewFactKind,
@@ -42,6 +43,8 @@ export interface ReviewSetRow {
   weight: number | null;
   rpe: number | null;
   kind: SetKind | null;
+  /** LIVE-26: a match set's mini-sets, counted in volume only. */
+  matchReps?: number[] | null;
 }
 
 /** A `PERSONAL_RECORD` event of one of the workouts: a new best set. */
@@ -208,7 +211,7 @@ export function buildEvidencePack(input: {
     if (question === "CHANGES") {
       if (workout.durationSec) add("DURATION", id, null, workout.durationSec);
       const volume = all.reduce(
-        (sum, set) => sum + (set.weight ?? 0) * (set.reps ?? 0),
+        (sum, set) => sum + (set.weight ?? 0) * repsDone(set),
         0,
       );
       if (volume > 0) add("VOLUME", id, null, round1(volume));
@@ -221,7 +224,7 @@ export function buildEvidencePack(input: {
       const best = bestSet(sets);
       if (question === "CHANGES") {
         const volume = sets.reduce(
-          (sum, set) => sum + (set.weight ?? 0) * (set.reps ?? 0),
+          (sum, set) => sum + (set.weight ?? 0) * repsDone(set),
           0,
         );
         if (volume > 0) add("VOLUME", id, exerciseId, round1(volume));
@@ -359,6 +362,7 @@ export async function readReviewEvidence(
       weight: true,
       rpe: true,
       kind: true,
+      matchReps: true,
       exercise: { select: { name: true } },
     },
     orderBy: [{ completedAt: "asc" }, { id: "asc" }],

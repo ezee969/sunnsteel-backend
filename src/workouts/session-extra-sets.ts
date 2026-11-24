@@ -1,4 +1,5 @@
 import {
+  MATCH_MINI_SETS_MAX,
   apiError,
   setKindOf,
   type ApiErrorBody,
@@ -89,4 +90,27 @@ export function removeSetRefusal(
   if (setNumber !== highestLogged)
     return apiError("ONLY_LAST_EXTRA_SET_REMOVABLE");
   return null;
+}
+
+/**
+ * LIVE-26: the mini-sets a set log stores after a write -- only a match set
+ * keeps any, so a set changed to another kind loses them, and an omitted list
+ * leaves a match set's own. A refusal when a non-match set is sent some, or
+ * a match set too many.
+ */
+export function matchRepsWrite(
+  kind: SetKind,
+  sent: number[] | undefined,
+  stored: number[],
+): { matchReps: number[] } | { refusal: Refusal } {
+  if (kind !== "MATCH") {
+    if (sent?.length) return { refusal: apiError("MATCH_MINI_SETS_NOT_MATCH") };
+    return { matchReps: [] };
+  }
+  const next = sent ?? stored;
+  if (next.length > MATCH_MINI_SETS_MAX)
+    return {
+      refusal: apiError("MATCH_MINI_SETS_MAX", { max: MATCH_MINI_SETS_MAX }),
+    };
+  return { matchReps: next };
 }

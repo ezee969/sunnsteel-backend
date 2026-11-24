@@ -21,6 +21,7 @@ import {
 } from "../session-substitutions";
 import {
   extraSetRefusal,
+  matchRepsWrite,
   prescribedSetCount,
   prescribedSetKind,
   removeSetRefusal,
@@ -128,6 +129,7 @@ export class WorkoutSessionLogService {
           weight: true,
           isCompleted: true,
           kind: true,
+          matchReps: true,
         },
       });
       // LIVE-12: a new set starts as its prescription's kind.
@@ -172,6 +174,13 @@ export class WorkoutSessionLogService {
           if (refusal) throw new BadRequestException(refusal);
         }
       }
+      // LIVE-26: only a match set keeps mini-sets.
+      const mini = matchRepsWrite(
+        dto.kind ?? existing?.kind ?? newKind ?? "WORKING",
+        dto.matchReps,
+        existing?.matchReps ?? [],
+      );
+      if ("refusal" in mini) throw new BadRequestException(mini.refusal);
       const priorSets = await tx.setLog.findMany({
         where: {
           exerciseId: dto.exerciseId,
@@ -195,6 +204,7 @@ export class WorkoutSessionLogService {
           completedAt: dto.isCompleted === undefined ? undefined : completedAt,
           exerciseId: dto.exerciseId,
           kind: dto.kind,
+          matchReps: mini.matchReps,
         },
         create: {
           sessionId,
@@ -208,6 +218,7 @@ export class WorkoutSessionLogService {
           isCompleted: dto.isCompleted ?? false,
           completedAt: dto.isCompleted ? new Date() : undefined,
           kind: newKind,
+          matchReps: mini.matchReps,
         },
         select: {
           id: true,
@@ -221,6 +232,7 @@ export class WorkoutSessionLogService {
           rpe: true,
           isCompleted: true,
           kind: true,
+          matchReps: true,
           completedAt: true,
           createdAt: true,
           updatedAt: true,

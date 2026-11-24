@@ -11,6 +11,7 @@ import {
   TRAINING_BLOCK_COMPARISON_MAX_DAYS,
   type TrainingBlockComparisonResponse,
   apiError,
+  repsDone,
 } from "@sunsteel/contracts";
 import { DatabaseService } from "../database/database.service";
 import { localClock } from "../notifications/push/local-time";
@@ -235,7 +236,8 @@ export function summarizePeriod(
   let volumeKg = 0;
   for (const row of rows) {
     sessions.set(row.sessionId, row);
-    if (row.weight && row.reps) volumeKg += row.weight * row.reps;
+    // LIVE-26: a match set's mini-sets count in volume.
+    if (row.weight) volumeKg += row.weight * repsDone(row);
   }
   const workouts = [...sessions.values()];
   const days = lengthOf(range.startDate, range.endDate);

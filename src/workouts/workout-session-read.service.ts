@@ -268,6 +268,8 @@ export class WorkoutSessionReadService {
             reps: true,
             weight: true,
             rpe: true,
+            // LIVE-26: "Last time" reads a match set as 13 + 3 + 2.
+            matchReps: true,
           },
         },
       },
@@ -290,6 +292,7 @@ export class WorkoutSessionReadService {
                 reps: set.reps,
                 weight: set.weight,
                 rpe: set.rpe,
+                ...(set.matchReps?.length ? { matchReps: set.matchReps } : {}),
               },
             ]
           : [];

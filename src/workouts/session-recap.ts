@@ -1,6 +1,7 @@
-import type {
-  PersonalRecordKind,
-  SessionRecapRecord,
+import {
+  repsDone,
+  type PersonalRecordKind,
+  type SessionRecapRecord,
 } from '@sunsteel/contracts';
 import {
   recordFrontier,
@@ -27,14 +28,17 @@ const RECORD_KINDS: PersonalRecordKind[] = [
   'ESTIMATED_1RM',
 ];
 
-export function summarizeRecapSets(sets: RecordSet[]) {
+export function summarizeRecapSets(
+  sets: Array<RecordSet & { matchReps?: number[] | null }>,
+) {
   return sets.reduce(
     (summary, set) => {
       if (!set.isCompleted) return summary;
       return {
         completedSets: summary.completedSets + 1,
         totalVolumeKg:
-          summary.totalVolumeKg + (set.weight ?? 0) * (set.reps ?? 0),
+          // LIVE-26: a match set's mini-sets count in volume.
+          summary.totalVolumeKg + (set.weight ?? 0) * repsDone(set),
       };
     },
     { completedSets: 0, totalVolumeKg: 0 },

@@ -9,6 +9,7 @@ import {
   type VolumeTrendResponse,
   type VolumeTrendSeries,
   apiError,
+  repsDone,
   weekStartOf,
   type WeekStartsOn,
 } from "@sunsteel/contracts";
@@ -189,6 +190,8 @@ export class WorkoutVolumeTrendService {
           select: {
             weight: true,
             reps: true,
+            // LIVE-26: a match set's mini-sets count in volume.
+            matchReps: true,
             exerciseId: true,
             exercise: { select: { name: true } },
             session: { select: { endedAt: true } },
@@ -262,7 +265,7 @@ export class WorkoutVolumeTrendService {
             log.exerciseId,
             log.exercise.name,
             weekStart,
-            (log.weight ?? 0) * (log.reps ?? 0),
+            (log.weight ?? 0) * repsDone(log),
             1,
           );
         }

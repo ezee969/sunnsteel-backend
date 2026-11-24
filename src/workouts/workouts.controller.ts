@@ -25,10 +25,15 @@ import { LogPastWorkoutDto } from "./dto/log-past-workout.dto";
 import { UpdateSessionNotesDto } from "./dto/update-session-notes.dto";
 import {
   WorkoutSessionCorrectionService,
+  WorkoutSessionDayEditService,
   WorkoutSessionLoggedService,
   WorkoutSessionNotesService,
 } from "./services";
 import { SubstituteSessionExerciseDto } from "./dto/substitute-session-exercise.dto";
+import {
+  AddSessionExerciseDto,
+  ReorderSessionExercisesDto,
+} from "./dto/session-day-edit.dto";
 import { ListSessionsDto } from "./dto/list-sessions.dto";
 import { WorkoutStatsQueryDto } from "./dto/workout-stats.dto";
 import { WorkoutProgressQueryDto } from "./dto/workout-progress.dto";
@@ -53,6 +58,7 @@ export class WorkoutsController {
     private readonly corrections: WorkoutSessionCorrectionService,
     private readonly logged: WorkoutSessionLoggedService,
     private readonly notes: WorkoutSessionNotesService,
+    private readonly dayEdit: WorkoutSessionDayEditService,
     private readonly goalSuggestions: WorkoutGoalSuggestionsService,
   ) {}
 
@@ -305,6 +311,26 @@ export class WorkoutsController {
       sessionId,
       routineExerciseId,
     );
+  }
+
+  // LIVE-25: add an exercise to the day being trained, for good.
+  @Post("sessions/:id/exercises")
+  async addSessionExercise(
+    @Req() req: RequestWithUser,
+    @Param("id") sessionId: string,
+    @Body() dto: AddSessionExerciseDto,
+  ) {
+    return this.dayEdit.addExercise(req.user.id, sessionId, dto);
+  }
+
+  // LIVE-25: reorder the day being trained; the routine follows from the next workout.
+  @Put("sessions/:id/exercise-order")
+  async reorderSessionExercises(
+    @Req() req: RequestWithUser,
+    @Param("id") sessionId: string,
+    @Body() dto: ReorderSessionExercisesDto,
+  ) {
+    return this.dayEdit.reorder(req.user.id, sessionId, dto);
   }
 
   /**

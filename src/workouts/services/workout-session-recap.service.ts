@@ -54,6 +54,7 @@ export class WorkoutSessionRecapService {
             exerciseId: true,
             setNumber: true,
             reps: true,
+            matchReps: true,
             weight: true,
             isCompleted: true,
             completedAt: true,
@@ -104,6 +105,7 @@ export class WorkoutSessionRecapService {
                   where: COUNTED_SET_LOG,
                   select: {
                     reps: true,
+                    matchReps: true,
                     weight: true,
                     isCompleted: true,
                   },

@@ -39,6 +39,8 @@ export function toSetLogResponse(
     rpe: log.rpe,
     isCompleted: log.isCompleted,
     kind: log.kind,
+    // LIVE-26: absent from selects that predate it.
+    matchReps: 'matchReps' in log ? (log.matchReps ?? []) : [],
     completedAt: log.completedAt ? log.completedAt.toISOString() : null,
     createdAt: log.createdAt.toISOString(),
     updatedAt: log.updatedAt.toISOString(),

@@ -316,6 +316,8 @@ export class WorkoutSessionCorrectionService {
               reps: log.reps,
               rpe: log.rpe,
               isCompleted: log.isCompleted,
+              // LIVE-26: a match set's corrected mini-sets.
+              ...(log.kind === "MATCH" ? { matchReps: log.matchReps ?? [] } : {}),
               completedAt: log.completedAt,
             },
           });

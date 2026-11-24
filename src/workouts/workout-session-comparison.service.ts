@@ -172,6 +172,7 @@ export class WorkoutSessionComparisonService {
                 weight: true,
                 rpe: true,
                 isCompleted: true,
+                matchReps: true,
               },
             },
           },
@@ -194,6 +195,7 @@ export class WorkoutSessionComparisonService {
               reps: set.reps,
               weightKg: set.weight,
               rpe: set.rpe,
+              ...(set.matchReps?.length ? { matchReps: set.matchReps } : {}),
             });
             setsByExercise.set(routineExerciseId, sets);
           }

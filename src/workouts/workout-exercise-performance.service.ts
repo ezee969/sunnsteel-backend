@@ -163,6 +163,7 @@ export class WorkoutExercisePerformanceService {
                 reps: true,
                 weight: true,
                 rpe: true,
+                matchReps: true,
               },
             },
           },
@@ -223,6 +224,9 @@ export class WorkoutExercisePerformanceService {
                       reps: set.reps,
                       weightKg: set.weight,
                       rpe: set.rpe,
+                      ...(set.matchReps?.length
+                        ? { matchReps: set.matchReps }
+                        : {}),
                     },
                   ]
                 : [];

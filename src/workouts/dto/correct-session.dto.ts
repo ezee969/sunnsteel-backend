@@ -7,6 +7,7 @@ import {
   ArrayMaxSize,
   IsArray,
   IsBoolean,
+  IsInt,
   IsISO8601,
   IsNumber,
   IsOptional,
@@ -36,6 +37,13 @@ class CorrectSessionSetDto implements CorrectSessionSetRequest {
 
   @IsBoolean()
   isCompleted!: boolean;
+
+  // LIVE-26: a match set's mini-sets; bounds checked by the rules.
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @IsInt({ each: true })
+  matchReps?: number[] | null;
 }
 
 export class CorrectSessionDto implements CorrectSessionRequest {

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import {
   countsAsWork,
+  repsDone,
   SessionExerciseSubstitution,
   SetKind,
   WorkoutSessionSnapshotV1,
@@ -41,6 +42,8 @@ export interface AnalyticsLog {
   completedAt: Date | null;
   /** LIVE-12: a warm-up is never counted. Absent means a working set. */
   kind?: SetKind | null;
+  /** LIVE-26: a match set's mini-sets count in volume, never in records. */
+  matchReps?: number[] | null;
 }
 
 export function sessionContribution(
@@ -76,7 +79,8 @@ export function sessionContribution(
   for (const log of ordered) {
     if (!log.isCompleted || !countsAsWork(log.kind)) continue;
     completedSets++;
-    const volume = (log.weight ?? 0) * (log.reps ?? 0);
+    // LIVE-26: volume counts every rep, a match set's mini-sets included.
+    const volume = (log.weight ?? 0) * repsDone(log);
     volumeKg += volume;
     const slot = snapshot.routineDay.exercises.find(
       (e) => e.id === (log.sourceRoutineExerciseId ?? log.routineExerciseId),

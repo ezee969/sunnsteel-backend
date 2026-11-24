@@ -6,3 +6,4 @@ export * from './workout-session-substitution.service';
 export * from './workout-session-correction.service';
 export * from './workout-session-notes.service';
 export * from './workout-session-logged.service';
+export * from './workout-session-day-edit.service';

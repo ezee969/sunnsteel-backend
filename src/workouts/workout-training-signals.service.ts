@@ -45,6 +45,8 @@ export interface TrainingSignalSetRow {
   reps: number | null;
   weight: number | null;
   rpe: number | null;
+  /** LIVE-26: a match set's mini-sets, counted in volume only. */
+  matchReps?: number[] | null;
   /** LIVE-12: warm-ups never arrive; a drop set has no rep target. */
   kind?: SetKind | null;
 }
@@ -394,6 +396,7 @@ export class WorkoutTrainingSignalsService {
         logs."reps",
         logs."weight",
         logs."rpe",
+        logs."matchReps",
         logs."kind"::text AS "kind"
       FROM "SetLog" logs
       INNER JOIN "WorkoutSession" sessions ON sessions."id" = logs."sessionId"

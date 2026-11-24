@@ -1,5 +1,7 @@
 import { BadRequestException } from "@nestjs/common";
 import {
+  MATCH_MINI_SET_REPS_MAX,
+  MATCH_MINI_SETS_MAX,
   type CorrectSessionSetRequest,
   SESSION_CORRECTION_LIMITS,
   type SessionEndTimeCorrection,
@@ -26,6 +28,8 @@ const valuesOf = (log: CorrectableLog): SetLogValues => ({
   reps: log.reps,
   rpe: log.rpe,
   isCompleted: log.isCompleted,
+  // LIVE-26: recorded only on a match set, so other corrections read as before.
+  ...(log.kind === "MATCH" ? { matchReps: log.matchReps ?? [] } : {}),
 });
 
 /** The bounds every corrected or logged-later set meets (LIVE-17, LIVE-23). */
@@ -85,15 +89,34 @@ export function planSetCorrections(
     seen.add(set.setLogId);
     // An omitted value is an empty one, never "leave it as it was": the
     // request states how each set should read.
+    const before = valuesOf(log);
     const after: SetLogValues = {
       weight: set.weight ?? null,
       reps: set.reps ?? null,
       rpe: set.rpe ?? null,
       isCompleted: set.isCompleted,
+      // LIVE-26: a match set's mini-sets; omitted, they stay as they were.
+      ...(log.kind === "MATCH"
+        ? { matchReps: set.matchReps ?? before.matchReps ?? [] }
+        : {}),
     };
-    const before = valuesOf(log);
     if (!setLogValuesDiffer(before, after)) continue;
     assertValues(after);
+    if (log.kind !== "MATCH" && set.matchReps?.length)
+      throw new BadRequestException(apiError("MATCH_MINI_SETS_NOT_MATCH"));
+    if ((after.matchReps?.length ?? 0) > MATCH_MINI_SETS_MAX)
+      throw new BadRequestException(
+        apiError("MATCH_MINI_SETS_MAX", { max: MATCH_MINI_SETS_MAX }),
+      );
+    if (
+      after.matchReps?.some(
+        (reps) =>
+          !Number.isInteger(reps) || reps < 1 || reps > MATCH_MINI_SET_REPS_MAX,
+      )
+    )
+      throw new BadRequestException(
+        apiError("CORRECTION_REPS_RANGE", { max: MATCH_MINI_SET_REPS_MAX }),
+      );
     changes.push({
       setLogId: log.id,
       exerciseId: log.exerciseId,
@@ -159,6 +182,7 @@ export function applySetCorrections<T extends CorrectableLog>(
       reps: after.reps,
       rpe: after.rpe,
       isCompleted: after.isCompleted,
+      ...(after.matchReps ? { matchReps: after.matchReps } : {}),
       completedAt: after.isCompleted ? (log.completedAt ?? endedAt) : null,
     };
   });
