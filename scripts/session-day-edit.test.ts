@@ -3,8 +3,11 @@ import { describe, it } from "node:test";
 
 import { BadRequestException } from "@nestjs/common";
 import {
+  movedDay,
+  movedGroupDay,
   reorderBreaksLinks,
   reorderExerciseLinks,
+  ungroupedDay,
   type WorkoutSessionSnapshotV1,
 } from "@sunsteel/contracts";
 
@@ -67,6 +70,53 @@ describe("LIVE-25: reordering the day", () => {
       ["a", "b", "c", "x"],
     ])
       assert.throws(() => reorderedDay(day, ids), BadRequestException);
+  });
+});
+
+describe("LIVE-29: moving with groups kept", () => {
+  // x, then superset a+b, then y.
+  const day = [slot("x", 0), slot("a", 1, true), slot("b", 2), slot("y", 3)];
+  const shape = (next: Slot[]) =>
+    next.map((e) => e.id + (e.linkedToNext ? "+" : "")).join(" ");
+  const apply = (order: { ids: string[]; linkedToNext: boolean[] } | null) => {
+    assert.ok(order);
+    return shape(reorderedDay(day, order.ids, order.linkedToNext));
+  };
+
+  it("an exercise on its own jumps the whole superset", () => {
+    assert.equal(apply(movedDay(day, "x", 1)), "a+ b x y");
+    assert.equal(apply(movedDay(day, "y", -1)), "x y a+ b");
+  });
+
+  it("a member moves inside its group and the group stays", () => {
+    assert.equal(apply(movedDay(day, "a", 1)), "x b+ a y");
+    assert.equal(movedDay(day, "a", -1), null);
+    assert.equal(movedDay(day, "b", 1), null);
+  });
+
+  it("a group moves as one", () => {
+    assert.equal(apply(movedGroupDay(day, "b", -1)), "a+ b x y");
+    assert.equal(apply(movedGroupDay(day, "a", 1)), "x y a+ b");
+    assert.equal(movedGroupDay(day, "x", 1), null);
+  });
+
+  it("an exercise taken out goes on its own right after the group", () => {
+    assert.equal(apply(ungroupedDay(day, "a")), "x b a y");
+    const circuit = [slot("a", 0, true), slot("b", 1, true), slot("c", 2), slot("d", 3)];
+    const order = ungroupedDay(circuit, "a");
+    assert.ok(order);
+    assert.equal(shape(reorderedDay(circuit, order.ids, order.linkedToNext)), "b+ c a d");
+    assert.equal(ungroupedDay(day, "x"), null);
+  });
+
+  it("never links the last and refuses links that do not fit", () => {
+    assert.equal(shape(reorderedDay(day, ["x", "a", "b", "y"], [false, true, false, true])), "x a+ b y");
+    assert.throws(() => reorderedDay(day, ["x", "a", "b", "y"], [true]), BadRequestException);
+    const seven = Array.from({ length: 7 }, (_, i) => slot(`e${i}`, i));
+    assert.throws(
+      () => reorderedDay(seven, seven.map((e) => e.id), seven.map(() => true)),
+      BadRequestException,
+    );
   });
 });
 

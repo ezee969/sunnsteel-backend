@@ -7,6 +7,7 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsNotEmpty,
@@ -68,4 +69,11 @@ export class ReorderSessionExercisesDto
   @ArrayMaxSize(100)
   @IsString({ each: true })
   routineExerciseIds!: string[];
+
+  // LIVE-29: the link at each new place, when the move keeps or leaves a group.
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @IsBoolean({ each: true })
+  linkedToNext?: boolean[];
 }

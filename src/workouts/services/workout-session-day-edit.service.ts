@@ -129,6 +129,7 @@ export class WorkoutSessionDayEditService {
       const exercises = reorderedDay(
         snapshot.routineDay.exercises,
         dto.routineExerciseIds,
+        dto.linkedToNext,
       );
       await this.writeDayOrder(tx, session.routineDayId, exercises);
       return this.save(tx, session, {

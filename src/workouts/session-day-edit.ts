@@ -1,7 +1,10 @@
 import { BadRequestException } from "@nestjs/common";
 import {
   apiError,
+  EXERCISE_GROUP_MAX,
+  hasOversizedGroup,
   matchSetRefusal,
+  normalizeExerciseLinks,
   removeExerciseLinks,
   reorderExerciseLinks,
   setKindOf,
@@ -17,22 +20,38 @@ type SnapshotExercise =
  * LIVE-25: the day's exercises in the order asked for -- every one named once
  * -- renumbered, with a superset or circuit link kept only while its pair
  * stays side by side. A reorder never changes a slot's identity.
+ *
+ * LIVE-29: with `links`, each exercise takes the link given at its new place
+ * instead -- a group kept through a move inside it, or left on purpose --
+ * the last never linking and no group passing `EXERCISE_GROUP_MAX`.
  */
 export function reorderedDay(
   exercises: readonly SnapshotExercise[],
   orderedIds: readonly string[],
+  links?: readonly boolean[],
 ): SnapshotExercise[] {
   const known = new Set(exercises.map((exercise) => exercise.id));
   if (
     orderedIds.length !== exercises.length ||
     new Set(orderedIds).size !== orderedIds.length ||
-    orderedIds.some((id) => !known.has(id))
+    orderedIds.some((id) => !known.has(id)) ||
+    (links !== undefined && links.length !== orderedIds.length)
   )
     throw new BadRequestException(apiError("DAY_EDIT_ORDER_MISMATCH"));
-  return reorderExerciseLinks(exercises, orderedIds).map((exercise, order) => ({
-    ...exercise,
-    order,
-  }));
+  const byId = new Map(exercises.map((exercise) => [exercise.id, exercise]));
+  const ordered = links
+    ? normalizeExerciseLinks(
+        orderedIds.map((id, index) => ({
+          ...byId.get(id)!,
+          linkedToNext: links[index],
+        })),
+      )
+    : reorderExerciseLinks(exercises, orderedIds);
+  if (hasOversizedGroup(ordered))
+    throw new BadRequestException(
+      apiError("EXERCISE_GROUP_TOO_LARGE", { max: EXERCISE_GROUP_MAX }),
+    );
+  return ordered.map((exercise, order) => ({ ...exercise, order }));
 }
 
 /** The plan a day change is written to: the working copy in force, if any. */
