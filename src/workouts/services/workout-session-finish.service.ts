@@ -1,6 +1,5 @@
 import {
   apiError,
-  earliestWorkoutEnd,
   finishEndTime,
 } from "@sunsteel/contracts";
 import { progressionRuns } from "../session-training-block";
@@ -83,20 +82,12 @@ export class WorkoutSessionFinishService {
           };
         }
 
-        // LIVE-24: the end the member chose, never before the start or the
-        // last completed set and never in the future; now when none is given.
-        const completedAts = dto.endedAt
-          ? (
-              await tx.setLog.findMany({
-                where: { sessionId: id, isCompleted: true },
-                select: { completedAt: true },
-              })
-            ).map((log) => log.completedAt)
-          : [];
-        const endedAt = finishEndTime(
-          dto.endedAt,
-          earliestWorkoutEnd({ startedAt: session.startedAt, completedAts }),
-        );
+        // LIVE-24: the end the member chose, never before the start and never
+        // in the future; now when none is given. A finish may end before sets
+        // ticked later (2026-11-24): a workout finished hours afterwards often
+        // has its last sets ticked then, so those sets were logged late and
+        // are recorded at the end below.
+        const endedAt = finishEndTime(dto.endedAt, session.startedAt);
         if (!endedAt)
           throw new BadRequestException(apiError("WORKOUT_END_TIME_RANGE"));
         const claimed = await tx.workoutSession.updateMany({
@@ -113,6 +104,12 @@ export class WorkoutSessionFinishService {
         });
         if (claimed.count !== 1)
           throw new BadRequestException("Session transition was not claimed");
+        // Sets ticked after the end were logged late: they happened by the
+        // end, so they are recorded at it, before anything reads their times.
+        await tx.setLog.updateMany({
+          where: { sessionId: id, isCompleted: true, completedAt: { gt: endedAt } },
+          data: { completedAt: endedAt },
+        });
 
         const snapshot = await ensureSessionSnapshot(tx, id);
         let progressionChanges: ProgressionChange[] = [];
