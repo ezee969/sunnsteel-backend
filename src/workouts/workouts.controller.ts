@@ -323,6 +323,20 @@ export class WorkoutsController {
     return this.dayEdit.addExercise(req.user.id, sessionId, dto);
   }
 
+  // LIVE-28: remove an exercise with all its sets, for good.
+  @Delete("sessions/:id/exercises/:routineExerciseId")
+  async removeSessionExercise(
+    @Req() req: RequestWithUser,
+    @Param("id") sessionId: string,
+    @Param("routineExerciseId") routineExerciseId: string,
+  ) {
+    return this.dayEdit.removeExercise(
+      req.user.id,
+      sessionId,
+      routineExerciseId,
+    );
+  }
+
   // LIVE-27: remove a prescribed set that is not done, for good.
   @Delete("sessions/:id/exercises/:routineExerciseId/sets/:setNumber")
   async removeSessionSet(

@@ -11,6 +11,7 @@ import {
 import {
   assertSetNumbers,
   dayEditPlan,
+  plannedExerciseRemoval,
   plannedSetRemoval,
   reorderedDay,
 } from "../src/workouts/session-day-edit";
@@ -160,5 +161,40 @@ describe("LIVE-27: removing a set during a workout", () => {
       ["WORKING", "MATCH"],
     );
     assert.ok("sets" in plannedSetRemoval([set(1), set(2, "MATCH")], 2, free));
+  });
+});
+
+describe("LIVE-28: removing an exercise during a workout", () => {
+  const ids = (plan: ReturnType<typeof plannedExerciseRemoval>) => {
+    assert.ok("exercises" in plan);
+    return plan.exercises.map(
+      (e) => `${e.id}${e.order}${e.linkedToNext ? "+" : ""}`,
+    );
+  };
+
+  it("drops the exercise and closes up the day", () => {
+    const day = [slot("a", 0), slot("b", 1), slot("c", 2)];
+    assert.deepEqual(ids(plannedExerciseRemoval(day, "b")), ["a0", "c1"]);
+  });
+
+  it("bridges a group a middle member leaves", () => {
+    const day = [slot("a", 0, true), slot("b", 1, true), slot("c", 2)];
+    assert.deepEqual(ids(plannedExerciseRemoval(day, "b")), ["a0+", "c1"]);
+  });
+
+  it("ends a superset whose second member goes", () => {
+    const day = [slot("a", 0, true), slot("b", 1), slot("c", 2)];
+    assert.deepEqual(ids(plannedExerciseRemoval(day, "b")), ["a0", "c1"]);
+    const last = [slot("a", 0), slot("b", 1, true), slot("c", 2)];
+    assert.deepEqual(ids(plannedExerciseRemoval(last, "c")), ["a0", "b1"]);
+  });
+
+  it("keeps the day's one exercise and refuses one not in it", () => {
+    assert.deepEqual(plannedExerciseRemoval([slot("a", 0)], "a"), {
+      refusal: "DAY_EDIT_LAST_EXERCISE",
+    });
+    assert.deepEqual(plannedExerciseRemoval([slot("a", 0), slot("b", 1)], "x"), {
+      refusal: "SESSION_EXERCISE_NOT_FOUND",
+    });
   });
 });

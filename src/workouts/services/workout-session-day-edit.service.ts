@@ -24,10 +24,15 @@ import {
 import {
   assertSetNumbers,
   dayEditPlan,
+  plannedExerciseRemoval,
   plannedSetRemoval,
   reorderedDay,
 } from "../session-day-edit";
-import { readSubstitutions } from "../session-substitutions";
+import { readExerciseNotes } from "../session-notes";
+import {
+  readSubstitutions,
+  withoutSubstitution,
+} from "../session-substitutions";
 import { toWorkoutSessionResponse } from "../workout-session.mapper";
 import { buildWorkoutSessionSelect } from "../workout-session.selects";
 
@@ -125,28 +130,7 @@ export class WorkoutSessionDayEditService {
         snapshot.routineDay.exercises,
         dto.routineExerciseIds,
       );
-      // The routine from the next workout: the same order on its rows, in
-      // place. A row the workout does not hold keeps its place after them.
-      const rows = await tx.routineExercise.findMany({
-        where: { routineDayId: session.routineDayId },
-        orderBy: { order: "asc" },
-        select: { id: true },
-      });
-      const position = new Map(exercises.map((e, index) => [e.id, index]));
-      let after = exercises.length;
-      for (const row of rows) {
-        const index = position.get(row.id);
-        await tx.routineExercise.update({
-          where: { id: row.id },
-          data:
-            index === undefined
-              ? { order: after++, linkedToNext: false }
-              : {
-                  order: index,
-                  linkedToNext: Boolean(exercises[index].linkedToNext),
-                },
-        });
-      }
+      await this.writeDayOrder(tx, session.routineDayId, exercises);
       return this.save(tx, session, {
         ...snapshot,
         routineDay: { ...snapshot.routineDay, exercises },
@@ -248,6 +232,105 @@ export class WorkoutSessionDayEditService {
         },
       });
     });
+  }
+
+  /**
+   * LIVE-28: remove an exercise from the day being trained, for good -- from
+   * today's workout with every set it holds, done or not (its work no longer
+   * counts: the exercise is gone either way), its swap and its note, and from
+   * the plan being trained, its sets and an 8-week block with its row. The
+   * day keeps at least one exercise; the rest close up in order, links
+   * bridged as the builder bridges them.
+   */
+  removeExercise(
+    userId: string,
+    sessionId: string,
+    routineExerciseId: string,
+  ): Promise<SessionDayEditResponse> {
+    return this.db.$transaction(async (tx) => {
+      const { session, snapshot } = await this.load(tx, userId, sessionId);
+      const plan = plannedExerciseRemoval(
+        snapshot.routineDay.exercises,
+        routineExerciseId,
+      );
+      if ("refusal" in plan) {
+        if (plan.refusal === "SESSION_EXERCISE_NOT_FOUND")
+          throw new NotFoundException(apiError(plan.refusal));
+        throw new ConflictException(apiError(plan.refusal));
+      }
+
+      // Today: every log of the slot goes, and the slot's swap and note.
+      await tx.setLog.deleteMany({
+        where: {
+          sessionId,
+          OR: [
+            { sourceRoutineExerciseId: routineExerciseId },
+            { sourceRoutineExerciseId: null, routineExerciseId },
+          ],
+        },
+      });
+      const facts = await tx.workoutSession.findUniqueOrThrow({
+        where: { id: sessionId },
+        select: { exerciseSubstitutions: true, exerciseNotes: true },
+      });
+      await tx.workoutSession.update({
+        where: { id: sessionId },
+        data: {
+          exerciseSubstitutions: withoutSubstitution(
+            readSubstitutions(facts.exerciseSubstitutions),
+            routineExerciseId,
+          ) as unknown as Prisma.InputJsonValue,
+          exerciseNotes: readExerciseNotes(facts.exerciseNotes).filter(
+            (note) => note.routineExerciseId !== routineExerciseId,
+          ) as unknown as Prisma.InputJsonValue,
+        },
+      });
+
+      // The plan being trained, in place: the row goes with its sets (and an
+      // 8-week block's state, which lives on it); earlier workouts' logs keep
+      // their own snapshot, as after any routine edit.
+      await tx.routineExercise.deleteMany({
+        where: { id: routineExerciseId, routineDayId: session.routineDayId },
+      });
+      await this.writeDayOrder(tx, session.routineDayId, plan.exercises);
+
+      return this.save(tx, session, {
+        ...snapshot,
+        routineDay: { ...snapshot.routineDay, exercises: plan.exercises },
+      });
+    });
+  }
+
+  /**
+   * The day's rows in the workout's order, in place, each with the link the
+   * workout's day gives it. A row the workout does not hold keeps its place
+   * after them, unlinked.
+   */
+  private async writeDayOrder(
+    tx: Prisma.TransactionClient,
+    routineDayId: string,
+    exercises: readonly SnapshotExercise[],
+  ) {
+    const rows = await tx.routineExercise.findMany({
+      where: { routineDayId },
+      orderBy: { order: "asc" },
+      select: { id: true },
+    });
+    const position = new Map(exercises.map((e, index) => [e.id, index]));
+    let after = exercises.length;
+    for (const row of rows) {
+      const index = position.get(row.id);
+      await tx.routineExercise.update({
+        where: { id: row.id },
+        data:
+          index === undefined
+            ? { order: after++, linkedToNext: false }
+            : {
+                order: index,
+                linkedToNext: Boolean(exercises[index].linkedToNext),
+              },
+      });
+    }
   }
 
   private async load(

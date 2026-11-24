@@ -2,6 +2,7 @@ import { BadRequestException } from "@nestjs/common";
 import {
   apiError,
   matchSetRefusal,
+  removeExerciseLinks,
   reorderExerciseLinks,
   setKindOf,
   type ApiErrorCode,
@@ -77,4 +78,25 @@ export function plannedSetRemoval(
   if (matchSetRefusal(remaining, false))
     return { refusal: "MATCH_SET_PLACEMENT" };
   return { sets: remaining };
+}
+
+/**
+ * LIVE-28: the day once `routineExerciseId` is removed, renumbered, its links
+ * as the builder leaves them (a member leaving the middle of a group bridges
+ * it), or why it cannot be: a day keeps at least one exercise -- the member
+ * swaps it instead (LIVE-11).
+ */
+export function plannedExerciseRemoval(
+  exercises: readonly SnapshotExercise[],
+  routineExerciseId: string,
+): { exercises: SnapshotExercise[] } | { refusal: ApiErrorCode } {
+  const ordered = [...exercises].sort((a, b) => a.order - b.order);
+  if (!ordered.some((exercise) => exercise.id === routineExerciseId))
+    return { refusal: "SESSION_EXERCISE_NOT_FOUND" };
+  if (ordered.length === 1) return { refusal: "DAY_EDIT_LAST_EXERCISE" };
+  return {
+    exercises: removeExerciseLinks(ordered, routineExerciseId).map(
+      (exercise, order) => ({ ...exercise, order }),
+    ),
+  };
 }
