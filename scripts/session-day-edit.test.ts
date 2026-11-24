@@ -11,6 +11,7 @@ import {
 import {
   assertSetNumbers,
   dayEditPlan,
+  plannedSetRemoval,
   reorderedDay,
 } from "../src/workouts/session-day-edit";
 
@@ -43,7 +44,10 @@ describe("LIVE-25: reordering the day", () => {
 
   it("drops the link when the pair is split, and says so", () => {
     const next = reorderedDay(day, ["b", "a", "c", "d"]);
-    assert.equal(next.some((e) => e.linkedToNext), false);
+    assert.equal(
+      next.some((e) => e.linkedToNext),
+      false,
+    );
     assert.equal(reorderBreaksLinks(day, ["b", "a", "c", "d"]), true);
   });
 
@@ -89,5 +93,72 @@ describe("LIVE-25: adding an exercise", () => {
       () => assertSetNumbers([{ setNumber: 1 }, { setNumber: 3 }]),
       BadRequestException,
     );
+  });
+});
+
+describe("LIVE-27: removing a set during a workout", () => {
+  type Set = Slot["sets"][number];
+  const set = (setNumber: number, kind: Set["kind"] = "WORKING") =>
+    ({ setNumber, kind, repType: "FIXED", reps: 10 }) as Set;
+  const free = { done: false, linearBlock: false };
+
+  it("drops the set and renumbers the ones after it", () => {
+    const plan = plannedSetRemoval(
+      [set(1, "WARMUP"), set(2), set(3), set(4)],
+      2,
+      free,
+    );
+    assert.ok("sets" in plan);
+    assert.deepEqual(
+      plan.sets.map((s) => [s.setNumber, s.kind]),
+      [
+        [1, "WARMUP"],
+        [2, "WORKING"],
+        [3, "WORKING"],
+      ],
+    );
+  });
+
+  it("refuses a done set, the last set and a set not prescribed", () => {
+    assert.deepEqual(
+      plannedSetRemoval([set(1), set(2)], 2, { ...free, done: true }),
+      { refusal: "SET_REMOVE_DONE" },
+    );
+    assert.deepEqual(plannedSetRemoval([set(1)], 1, free), {
+      refusal: "SET_REMOVE_LAST",
+    });
+    assert.deepEqual(plannedSetRemoval([set(1), set(2)], 3, free), {
+      refusal: "SET_REMOVE_NOT_PRESCRIBED",
+    });
+  });
+
+  it("keeps an 8-week block's working sets and lets its warm-ups go", () => {
+    const block = { ...free, linearBlock: true };
+    assert.deepEqual(
+      plannedSetRemoval([set(1, "WARMUP"), set(2), set(3)], 2, block),
+      { refusal: "SET_REMOVE_LINEAR_BLOCK" },
+    );
+    assert.ok(
+      "sets" in plannedSetRemoval([set(1, "WARMUP"), set(2)], 1, block),
+    );
+  });
+
+  it("never leaves a match set without the working set it follows", () => {
+    // With no working set left before it, the match set has nothing to match.
+    assert.deepEqual(
+      plannedSetRemoval([set(1, "WARMUP"), set(2), set(3, "MATCH")], 2, free),
+      { refusal: "MATCH_SET_PLACEMENT" },
+    );
+    // With another working set before it, it matches that one instead.
+    assert.ok(
+      "sets" in plannedSetRemoval([set(1), set(2), set(3, "MATCH")], 2, free),
+    );
+    const plan = plannedSetRemoval([set(1), set(2), set(3, "MATCH")], 1, free);
+    assert.ok("sets" in plan);
+    assert.deepEqual(
+      plan.sets.map((s) => s.kind),
+      ["WORKING", "MATCH"],
+    );
+    assert.ok("sets" in plannedSetRemoval([set(1), set(2, "MATCH")], 2, free));
   });
 });

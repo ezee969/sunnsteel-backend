@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
@@ -23,8 +24,10 @@ import {
 import {
   assertSetNumbers,
   dayEditPlan,
+  plannedSetRemoval,
   reorderedDay,
 } from "../session-day-edit";
+import { readSubstitutions } from "../session-substitutions";
 import { toWorkoutSessionResponse } from "../workout-session.mapper";
 import { buildWorkoutSessionSelect } from "../workout-session.selects";
 
@@ -147,6 +150,102 @@ export class WorkoutSessionDayEditService {
       return this.save(tx, session, {
         ...snapshot,
         routineDay: { ...snapshot.routineDay, exercises },
+      });
+    });
+  }
+
+  /**
+   * LIVE-27: remove a prescribed set that is not done, for good -- from the
+   * plan being trained and from today's snapshot -- renumbering the sets
+   * after it, their routine rows and their logs (extras included), lowest
+   * first so no two ever hold one number.
+   */
+  removeSet(
+    userId: string,
+    sessionId: string,
+    routineExerciseId: string,
+    setNumber: number,
+  ): Promise<SessionDayEditResponse> {
+    return this.db.$transaction(async (tx) => {
+      const { session, snapshot } = await this.load(tx, userId, sessionId);
+      const slot = snapshot.routineDay.exercises.find(
+        (exercise) => exercise.id === routineExerciseId,
+      );
+      if (!slot)
+        throw new NotFoundException(apiError("SESSION_EXERCISE_NOT_FOUND"));
+      const logs = await tx.setLog.findMany({
+        where: {
+          sessionId,
+          OR: [
+            { sourceRoutineExerciseId: routineExerciseId },
+            { sourceRoutineExerciseId: null, routineExerciseId },
+          ],
+        },
+        orderBy: { setNumber: "asc" },
+        select: { id: true, setNumber: true, isCompleted: true },
+      });
+      const swapped = readSubstitutions(
+        (
+          await tx.workoutSession.findUniqueOrThrow({
+            where: { id: sessionId },
+            select: { exerciseSubstitutions: true },
+          })
+        ).exerciseSubstitutions,
+      ).some((swap) => swap.routineExerciseId === routineExerciseId);
+      const plan = plannedSetRemoval(slot.sets, setNumber, {
+        done: logs.some(
+          (log) => log.setNumber === setNumber && log.isCompleted,
+        ),
+        // ROUT-17: a block's working sets are its own, unless swapped today.
+        linearBlock: !swapped && Boolean(slot.linearPeriodization),
+      });
+      if ("refusal" in plan) {
+        const code = plan.refusal;
+        if (code === "SET_REMOVE_NOT_PRESCRIBED")
+          throw new BadRequestException(apiError(code));
+        throw new ConflictException(apiError(code));
+      }
+
+      // Today's logs: the removed set's draft goes, those after it move down.
+      for (const log of logs) {
+        if (log.setNumber === setNumber)
+          await tx.setLog.delete({ where: { id: log.id } });
+        else if (log.setNumber > setNumber)
+          await tx.setLog.update({
+            where: { id: log.id },
+            data: { setNumber: log.setNumber - 1 },
+          });
+      }
+
+      // The plan being trained, in place.
+      const rows = await tx.routineExerciseSet.findMany({
+        where: {
+          routineExerciseId,
+          routineExercise: { routineDayId: session.routineDayId },
+        },
+        orderBy: { setNumber: "asc" },
+        select: { id: true, setNumber: true },
+      });
+      for (const row of rows) {
+        if (row.setNumber === setNumber)
+          await tx.routineExerciseSet.delete({ where: { id: row.id } });
+        else if (row.setNumber > setNumber)
+          await tx.routineExerciseSet.update({
+            where: { id: row.id },
+            data: { setNumber: row.setNumber - 1 },
+          });
+      }
+
+      return this.save(tx, session, {
+        ...snapshot,
+        routineDay: {
+          ...snapshot.routineDay,
+          exercises: snapshot.routineDay.exercises.map((exercise) =>
+            exercise.id === routineExerciseId
+              ? { ...exercise, sets: plan.sets }
+              : exercise,
+          ),
+        },
       });
     });
   }

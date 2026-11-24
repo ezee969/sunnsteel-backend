@@ -1,7 +1,10 @@
 import { BadRequestException } from "@nestjs/common";
 import {
   apiError,
+  matchSetRefusal,
   reorderExerciseLinks,
+  setKindOf,
+  type ApiErrorCode,
   type SessionDayEditResponse,
   type WorkoutSessionSnapshotV1,
 } from "@sunsteel/contracts";
@@ -46,4 +49,32 @@ export function assertSetNumbers(sets: ReadonlyArray<{ setNumber: number }>) {
   const numbers = sets.map((set) => set.setNumber).sort((a, b) => a - b);
   if (numbers.some((number, index) => number !== index + 1))
     throw new BadRequestException("Set numbers must run 1, 2, 3 with no gap");
+}
+
+type PrescribedSet = SnapshotExercise["sets"][number];
+
+/**
+ * LIVE-27: the slot's prescription once `setNumber` is removed, renumbered
+ * 1, 2, 3..., or why it cannot be. A done set is never removed (its work
+ * counts), an exercise keeps one set, an 8-week block's working sets are its
+ * block's, and a match set never loses the working set it follows.
+ */
+export function plannedSetRemoval(
+  sets: readonly PrescribedSet[],
+  setNumber: number,
+  facts: { done: boolean; linearBlock: boolean },
+): { sets: PrescribedSet[] } | { refusal: ApiErrorCode } {
+  const ordered = [...sets].sort((a, b) => a.setNumber - b.setNumber);
+  const target = ordered.find((set) => set.setNumber === setNumber);
+  if (!target) return { refusal: "SET_REMOVE_NOT_PRESCRIBED" };
+  if (facts.done) return { refusal: "SET_REMOVE_DONE" };
+  if (ordered.length === 1) return { refusal: "SET_REMOVE_LAST" };
+  if (facts.linearBlock && setKindOf(target) !== "WARMUP")
+    return { refusal: "SET_REMOVE_LINEAR_BLOCK" };
+  const remaining = ordered
+    .filter((set) => set !== target)
+    .map((set, index) => ({ ...set, setNumber: index + 1 }));
+  if (matchSetRefusal(remaining, false))
+    return { refusal: "MATCH_SET_PLACEMENT" };
+  return { sets: remaining };
 }

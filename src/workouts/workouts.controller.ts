@@ -323,6 +323,22 @@ export class WorkoutsController {
     return this.dayEdit.addExercise(req.user.id, sessionId, dto);
   }
 
+  // LIVE-27: remove a prescribed set that is not done, for good.
+  @Delete("sessions/:id/exercises/:routineExerciseId/sets/:setNumber")
+  async removeSessionSet(
+    @Req() req: RequestWithUser,
+    @Param("id") sessionId: string,
+    @Param("routineExerciseId") routineExerciseId: string,
+    @Param("setNumber", ParseIntPipe) setNumber: number,
+  ) {
+    return this.dayEdit.removeSet(
+      req.user.id,
+      sessionId,
+      routineExerciseId,
+      setNumber,
+    );
+  }
+
   // LIVE-25: reorder the day being trained; the routine follows from the next workout.
   @Put("sessions/:id/exercise-order")
   async reorderSessionExercises(
