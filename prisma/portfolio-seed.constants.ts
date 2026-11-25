@@ -37,8 +37,15 @@ export const ROUTINE_IDS = {
 /** The seed's analytics generation on an account, deleted on teardown. */
 export const projectionIdFor = (userId: string) => seedId('projection', userId)
 
+/**
+ * The account the portfolio data is attached to: the one the local stack
+ * signs in with, which the frontend's `npm run ui:login` saves and its capture
+ * photographs. Its display name shows on the dashboard frame. The old Gmail
+ * row is a local account nobody can sign in with, so seeding it produced
+ * frames of an empty account. `SEED_OWNER_EMAIL` still overrides it.
+ */
 export const OWNER_EMAIL =
-	process.env.SEED_OWNER_EMAIL ?? 'eze.olivero96@gmail.com'
+	process.env.SEED_OWNER_EMAIL ?? 'eze.olivero96@outlook.com'
 
 export const MANIFEST_PATH = 'prisma/.portfolio-seed-manifest.json'
 
