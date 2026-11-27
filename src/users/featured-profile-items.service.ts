@@ -9,14 +9,14 @@ import {
   PersonalRecordEntry,
   ProfileViewerAccess,
   ProfileVisibility,
-  RENAISSANCE_RANK_DEFINITIONS,
+  renaissanceRanksThrough,
   RenaissanceRankDefinition,
   RoutineVisibility,
   SharedRoutineSummary,
   apiError,
 } from "@sunsteel/contracts";
 import { parseAchievementEvent } from "../achievements/achievements.service";
-import { renaissanceRankProgress } from "../achievements/renaissance-ranks";
+import { readRankProgress } from "../achievements/rank-ledger";
 import { DatabaseService } from "../database/database.service";
 import {
   ROUTINE_SUMMARY_SELECT,
@@ -252,7 +252,7 @@ export class FeaturedProfileItemsService {
         requested.ranks
           ? this.db.workoutAnalyticsProjection.findFirst({
               where: { userId, active: true, state: "READY" },
-              select: { id: true, completedSessions: true },
+              select: { id: true, countedSessions: true, completedSets: true },
             })
           : null,
         requested.routines
@@ -275,20 +275,10 @@ export class FeaturedProfileItemsService {
     );
     const ranks = new Map<string, RenaissanceRankDefinition>();
     if (projection) {
-      const activeWeeks = await this.db.workoutRollup.count({
-        where: {
-          projectionId: projection.id,
-          period: "WEEK",
-          sessions: { gt: 0 },
-        },
-      });
-      const current = renaissanceRankProgress(
-        projection.completedSessions,
-        activeWeeks,
-      ).currentRank;
-      for (const definition of RENAISSANCE_RANK_DEFINITIONS) {
+      const current = (await readRankProgress(this.db, userId, projection))
+        .currentRank;
+      for (const definition of renaissanceRanksThrough(current.id)) {
         ranks.set(definition.id, definition);
-        if (definition.id === current.id) break;
       }
     }
     return { records, achievements, ranks, routines };

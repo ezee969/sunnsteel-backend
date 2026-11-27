@@ -540,6 +540,17 @@ async function main() {
 				readFileSync(
 					'prisma/migrations/20261123120000_myo_rep_match/migration.sql',
 					'utf8',
+				) +
+				NEWLINE +
+				// ACH-12: the rank's counted sessions and its ledger.
+				readFileSync(
+					'prisma/migrations/20261127100000_rank_reached_event/migration.sql',
+					'utf8',
+				) +
+				NEWLINE +
+				readFileSync(
+					'prisma/migrations/20261127100100_rank_evidence/migration.sql',
+					'utf8',
 				),
     );
     prisma(

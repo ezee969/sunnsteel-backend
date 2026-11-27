@@ -3,6 +3,10 @@ import {
   achievementTotals,
   awardMilestoneAchievements,
 } from '../../achievements/achievement-events';
+import {
+  readRankInputs,
+  recordReachedRanks,
+} from '../../achievements/rank-ledger';
 import { readSubstitutions } from '../session-substitutions';
 import { ensureSessionSnapshot } from './session-snapshot';
 import {
@@ -81,6 +85,8 @@ export async function applyContribution(
   replay = false,
 ) {
   const { session, contribution } = summary;
+  // ACH-12: only a session holding a completed work set counts for the rank.
+  const counted = contribution.completedSets > 0 ? 1 : 0;
   const date = localDate(session.endedAt!, projection.timeZone);
   const dayKey = { projectionId: projection.id, period: 'DAY', date };
   const day = await tx.workoutRollup.findUnique({
@@ -95,6 +101,7 @@ export async function applyContribution(
       volumeKg: contribution.volumeKg,
       completedSets: contribution.completedSets,
       sessions: 1,
+      countedSessions: counted,
       activeDays: day ? 0 : 1,
     };
     await tx.workoutRollup.upsert({
@@ -104,6 +111,7 @@ export async function applyContribution(
         volumeKg: { increment: values.volumeKg },
         completedSets: { increment: values.completedSets },
         sessions: { increment: 1 },
+        countedSessions: { increment: counted },
         activeDays: { increment: values.activeDays },
       },
     });
@@ -179,6 +187,7 @@ export async function applyContribution(
       totalVolumeKg: { increment: contribution.volumeKg },
       completedSets: { increment: contribution.completedSets },
       completedSessions: { increment: 1 },
+      countedSessions: { increment: counted },
       ...nextStreak(projection, date),
       checksum: contributionChecksum(
         projection.checksum,
@@ -200,6 +209,12 @@ export async function applyContribution(
     sourceSessionId: session.id,
     occurredAt: session.endedAt!,
     totals: achievementTotals(updatedProjection, recordCount),
+    backfilled: replay,
+  });
+  await recordReachedRanks(tx, {
+    userId: session.userId,
+    inputs: await readRankInputs(tx, updatedProjection),
+    occurredAt: session.endedAt!,
     backfilled: replay,
   });
   return updatedProjection;

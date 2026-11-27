@@ -262,6 +262,21 @@ test(
       const first = await db.workoutAnalyticsProjection.findFirstOrThrow({
         where: { userId: user.id, active: true },
       });
+      // ACH-12: the workout whose only set was never ticked is a completed
+      // session but not one the rank counts, in the total or in its week.
+      assert.equal(first.completedSessions, 5);
+      assert.equal(first.countedSessions, 4);
+      const weekRows = await db.workoutRollup.findMany({
+        where: { projectionId: first.id, period: 'WEEK' },
+      });
+      assert.equal(
+        weekRows.reduce((sum, row) => sum + row.countedSessions, 0),
+        4,
+      );
+      assert.equal(
+        weekRows.reduce((sum, row) => sum + row.sessions, 0),
+        5,
+      );
       const events = await db.trainingEvent.count({
         where: { userId: user.id },
       });

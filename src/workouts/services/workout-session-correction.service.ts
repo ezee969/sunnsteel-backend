@@ -1,3 +1,7 @@
+import {
+  readRankInputs,
+  recordReachedRanks,
+} from "../../achievements/rank-ledger";
 import { progressionRuns } from "../session-training-block";
 import {
   BadRequestException,
@@ -395,6 +399,14 @@ export class WorkoutSessionCorrectionService {
           updatedProjection,
           removedEntryKeys,
         );
+        // ACH-12: a rank the corrected totals reach is recorded; one reached
+        // before stays recorded even when the correction counts less.
+        await recordReachedRanks(tx, {
+          userId,
+          inputs: await readRankInputs(tx, updatedProjection),
+          occurredAt: end,
+          backfilled: false,
+        });
         // ROUT-16: a deload session had no progression to re-derive.
         const progressionKept = !progressionRuns(session)
           ? []
@@ -470,6 +482,10 @@ export class WorkoutSessionCorrectionService {
     correctionId: string,
   ) {
     const delta = contributionDelta(before, after);
+    // ACH-12: ticking a forgotten set can make a session count for the rank,
+    // and unticking the only one can stop it counting.
+    const countedDelta =
+      (after.completedSets > 0 ? 1 : 0) - (before.completedSets > 0 ? 1 : 0);
     const date = localDate(endedAt, projection.timeZone);
     if (localDate(end, projection.timeZone) !== date)
       await startHistoryRebuild(tx, projection.userId);
@@ -487,6 +503,7 @@ export class WorkoutSessionCorrectionService {
         data: {
           volumeKg: { increment: delta.volumeKg },
           completedSets: { increment: delta.completedSets },
+          countedSessions: { increment: countedDelta },
         },
       });
       for (const [muscle, values] of delta.muscles) {
@@ -508,6 +525,7 @@ export class WorkoutSessionCorrectionService {
       data: {
         totalVolumeKg: { increment: delta.volumeKg },
         completedSets: { increment: delta.completedSets },
+        countedSessions: { increment: countedDelta },
         checksum: contributionChecksum(
           projection.checksum,
           `${sessionId}:correction:${correctionId}`,

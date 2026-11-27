@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   ACHIEVEMENT_DEFINITIONS,
   COMEBACK_SESSION_LOOKBACK,
+  renaissanceRankProgress,
 } from '@sunsteel/contracts';
 import { DatabaseService } from '../src/database/database.service';
 import {
@@ -13,7 +14,10 @@ import {
 } from '../src/achievements/achievement-events';
 import { AchievementsService } from '../src/achievements/achievements.service';
 import { comebackRecognitionSummary } from '../src/achievements/comeback-recognition';
-import { renaissanceRankProgress } from '../src/achievements/renaissance-ranks';
+import {
+  readReachedRank,
+  recordReachedRanks,
+} from '../src/achievements/rank-ledger';
 
 const emptyTotals = (): AchievementTotals => ({
   sessions: 0,
@@ -127,20 +131,130 @@ test('completed categories retain verified totals without inventing another mile
   );
 });
 
-test('Renaissance ranks require both participation and active weeks', () => {
-  assert.equal(renaissanceRankProgress(100, 2).currentRank.id, 'INITIATE');
+const rankOf = (
+  completedSessions: number,
+  activeWeeks: number,
+  completedSets = 10_000,
+) => renaissanceRankProgress({ completedSessions, activeWeeks, completedSets });
 
-  const artisan = renaissanceRankProgress(18, 8);
+test('Renaissance ranks require both participation and active weeks', () => {
+  assert.equal(rankOf(100, 2).currentRank.id, 'INITIATE');
+
+  const artisan = rankOf(18, 8);
   assert.equal(artisan.currentRank.id, 'ARTISAN');
   assert.equal(artisan.nextRank?.id, 'MAESTRO');
   assert.equal(artisan.sessionsRemaining, 12);
   assert.equal(artisan.activeWeeksRemaining, 8);
+  assert.equal(artisan.setsRemaining, 0);
 
-  const laureate = renaissanceRankProgress(120, 60);
+  const laureate = rankOf(120, 60);
   assert.equal(laureate.currentRank.id, 'LAUREATE');
   assert.equal(laureate.nextRank, null);
   assert.equal(laureate.sessionsRemaining, 0);
   assert.equal(laureate.activeWeeksRemaining, 0);
+  assert.equal(laureate.setsRemaining, 0);
+});
+
+test('ACH-12: from Maestro a rank also asks for completed work sets', () => {
+  // Below Maestro no sets are asked for at all.
+  assert.equal(rankOf(15, 8, 0).currentRank.id, 'ARTISAN');
+  assert.equal(rankOf(15, 8, 0).setsRemaining, 100);
+  // Attendance met, sets short: the rank waits, and says what remains.
+  const short = rankOf(30, 16, 99);
+  assert.equal(short.currentRank.id, 'ARTISAN');
+  assert.equal(short.nextRank?.id, 'MAESTRO');
+  assert.equal(short.sessionsRemaining, 0);
+  assert.equal(short.activeWeeksRemaining, 0);
+  assert.equal(short.setsRemaining, 1);
+  assert.equal(rankOf(30, 16, 100).currentRank.id, 'MAESTRO');
+  assert.equal(rankOf(60, 32, 249).currentRank.id, 'MAESTRO');
+  assert.equal(rankOf(60, 32, 250).currentRank.id, 'VIRTUOSO');
+  assert.equal(rankOf(100, 52, 499).currentRank.id, 'VIRTUOSO');
+  assert.equal(rankOf(100, 52, 500).currentRank.id, 'LAUREATE');
+});
+
+test('ACH-12: a rank reached is kept when the totals later count less', () => {
+  const kept = renaissanceRankProgress(
+    { completedSessions: 20, activeWeeks: 7, completedSets: 40 },
+    'MAESTRO',
+  );
+  assert.equal(kept.currentRank.id, 'MAESTRO');
+  assert.equal(kept.nextRank?.id, 'VIRTUOSO');
+  assert.equal(kept.sessionsRemaining, 40);
+  assert.equal(kept.activeWeeksRemaining, 25);
+  assert.equal(kept.setsRemaining, 210);
+  // A recorded rank never lowers what the totals reach.
+  assert.equal(
+    renaissanceRankProgress(
+      { completedSessions: 60, activeWeeks: 32, completedSets: 250 },
+      'APPRENTICE',
+    ).currentRank.id,
+    'VIRTUOSO',
+  );
+});
+
+test('ACH-12: reached ranks are recorded once each, Initiate never, with no session', async () => {
+  const rows: any[] = [];
+  const tx = {
+    workoutRollup: { count: async () => 0 },
+    trainingEvent: {
+      createMany: async (query: any) => {
+        assert.equal(query.skipDuplicates, true);
+        rows.push(...query.data);
+        return { count: query.data.length };
+      },
+      findMany: async () => [],
+    },
+  } as any;
+  const at = new Date('2026-11-27T10:00:00Z');
+  await recordReachedRanks(tx, {
+    userId: 'user-1',
+    inputs: { completedSessions: 4, activeWeeks: 9, completedSets: 0 },
+    occurredAt: at,
+    backfilled: false,
+  });
+  assert.equal(rows.length, 0);
+  await recordReachedRanks(tx, {
+    userId: 'user-1',
+    inputs: { completedSessions: 16, activeWeeks: 8, completedSets: 0 },
+    occurredAt: at,
+    backfilled: true,
+  });
+  assert.deepEqual(
+    rows.map(row => [row.eventKey, row.type, row.sessionId, row.payload]),
+    [
+      [
+        'rank:user-1:APPRENTICE:v1',
+        'RANK_REACHED',
+        null,
+        { schemaVersion: 1, rankId: 'APPRENTICE', backfilled: true },
+      ],
+      [
+        'rank:user-1:ARTISAN:v1',
+        'RANK_REACHED',
+        null,
+        { schemaVersion: 1, rankId: 'ARTISAN', backfilled: true },
+      ],
+    ],
+  );
+});
+
+test('ACH-12: the reached rank is the highest valid one recorded', async () => {
+  const db = {
+    trainingEvent: {
+      findMany: async (query: any) => {
+        assert.deepEqual(query.where, { userId: 'user-1', type: 'RANK_REACHED' });
+        return [
+          { payload: { rankId: 'ARTISAN' } },
+          { payload: { rankId: 'MAESTRO' } },
+          { payload: { rankId: 'APPRENTICE' } },
+          { payload: { rankId: 'toString' } },
+          { payload: null },
+        ];
+      },
+    },
+  } as any;
+  assert.equal(await readReachedRank(db, 'user-1'), 'MAESTRO');
 });
 
 test('comeback recognition requires a full break and three distinct active days', () => {
@@ -244,7 +358,8 @@ test('achievement read reconciles existing verified history once and stays bound
     workoutAnalyticsProjection: {
       findFirst: async () => ({
         id: 'projection-1',
-        completedSessions: 10,
+        completedSessions: 12,
+        countedSessions: 10,
         completedSets: 99,
         totalVolumeKg: 10_000,
         bestRun: 3,
@@ -273,6 +388,11 @@ test('achievement read reconciles existing verified history once and stays bound
         if (query.where.type === 'SESSION_COMPLETED') {
           requestedComebackTake = query.take;
           return [];
+        }
+        if (query.where.type === 'RANK_REACHED') {
+          return [...rows.values()]
+            .filter(row => row.type === 'RANK_REACHED')
+            .map(row => ({ payload: row.payload }));
         }
         requestedTake = query.take;
         return [...rows.values()]
@@ -324,7 +444,7 @@ test('achievement read reconciles existing verified history once and stays bound
   assert.deepEqual(activeWeekWhere, {
     projectionId: 'projection-1',
     period: 'WEEK',
-    sessions: { gt: 0 },
+    countedSessions: { gt: 0 },
   });
   assert.ok(first.achievements.every(achievement => achievement.backfilled));
   assert.ok(first.achievements.every(achievement => achievement.sourceSessionId === null));
@@ -337,5 +457,7 @@ test('achievement read reconciles existing verified history once and stays bound
     comeback: first.comeback,
   });
   assert.equal('nextRank' in (profile.rank ?? {}), false);
-  assert.equal(rows.size, 11);
+  // Nine milestones, two streak events and the Apprentice rank, once each.
+  assert.equal(rows.size, 12);
+  assert.equal(rows.get('rank:user-1:APPRENTICE:v1')?.sessionId, null);
 });

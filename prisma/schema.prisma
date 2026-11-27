@@ -1225,6 +1225,8 @@ enum TrainingEventType {
   PROGRESSION_CHANGED
   STREAK_MILESTONE
   ACHIEVEMENT_UNLOCKED
+  /// A Renaissance rank reached, once per account and rank, with no session.
+  RANK_REACHED
 }
 
 model PersonalRecord {
@@ -1254,6 +1256,8 @@ model WorkoutAnalyticsProjection {
   active            Boolean                   @default(false)
   totalVolumeKg     Float                     @default(0)
   completedSessions Int                       @default(0)
+  /// Completed sessions with at least one completed work set: the rank's count.
+  countedSessions   Int                       @default(0)
   completedSets     Int                       @default(0)
   lastTrainingDate  String?
   currentRun        Int                       @default(0)
@@ -1276,6 +1280,9 @@ model WorkoutRollup {
   volumeKg      Float                      @default(0)
   completedSets Int                        @default(0)
   sessions      Int                        @default(0)
+  /// Sessions with at least one completed work set: a WEEK row above zero is
+  /// one of the rank's active weeks.
+  countedSessions Int                      @default(0)
   activeDays    Int                        @default(0)
 
   @@id([projectionId, period, date])

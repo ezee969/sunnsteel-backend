@@ -143,7 +143,11 @@ describe('FeaturedProfileItemsService', () => {
         ],
       },
       workoutAnalyticsProjection: {
-        findFirst: async () => ({ id: 'projection-1', completedSessions: 15 }),
+        findFirst: async () => ({
+          id: 'projection-1',
+          countedSessions: 15,
+          completedSets: 0,
+        }),
       },
       workoutRollup: { count: async () => 8 },
       $transaction: async (callback: (client: typeof tx) => unknown) =>
@@ -202,7 +206,11 @@ describe('FeaturedProfileItemsService', () => {
         ],
       },
       workoutAnalyticsProjection: {
-        findFirst: async () => ({ id: 'projection-1', completedSessions: 5 }),
+        findFirst: async () => ({
+          id: 'projection-1',
+          countedSessions: 5,
+          completedSets: 0,
+        }),
       },
       workoutRollup: { count: async () => 3 },
     } as unknown as DatabaseService;

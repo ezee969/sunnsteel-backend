@@ -9,6 +9,7 @@ import {
   EarnedAchievement,
   PublicProfileAchievements,
   RenaissanceRankDefinition,
+  renaissanceRankProgress,
 } from '@sunsteel/contracts';
 import { DatabaseService } from '../database/database.service';
 import { lockTrainingAccount } from '../workouts/analytics/analytics-lock';
@@ -18,7 +19,12 @@ import {
   awardMilestoneAchievements,
 } from './achievement-events';
 import { comebackRecognitionSummary } from './comeback-recognition';
-import { renaissanceRankProgress } from './renaissance-ranks';
+import {
+  readRankInputs,
+  readRankProgress,
+  readReachedRank,
+  recordReachedRanks,
+} from './rank-ledger';
 
 export function parseAchievementEvent(
   event: {
@@ -59,28 +65,21 @@ export class AchievementsService {
 
   /**
    * ACH-10: the current rank alone, for a profile the rank rule allows. It
-   * reads only what `renaissanceRankProgress` needs -- the READY projection's
-   * completed sessions and its active weeks -- so a member who hides their
-   * achievements can still show a rank without the ledger's reconcile.
-   * Null until the projection is ready.
+   * reads only what the rank needs -- the READY projection's counted
+   * sessions, active weeks and sets, and the ranks already reached (ACH-12)
+   * -- and writes nothing, so a member who hides their achievements can
+   * still show a rank without the ledger's reconcile. Null until the
+   * projection is ready.
    */
   async rankForProfile(
     userId: string,
   ): Promise<RenaissanceRankDefinition | null> {
     const projection = await this.db.workoutAnalyticsProjection.findFirst({
       where: { userId, active: true, state: 'READY' },
-      select: { id: true, completedSessions: true },
+      select: { id: true, countedSessions: true, completedSets: true },
     });
     if (!projection) return null;
-    const activeWeeks = await this.db.workoutRollup.count({
-      where: {
-        projectionId: projection.id,
-        period: 'WEEK',
-        sessions: { gt: 0 },
-      },
-    });
-    return renaissanceRankProgress(projection.completedSessions, activeWeeks)
-      .currentRank;
+    return (await readRankProgress(this.db, userId, projection)).currentRank;
   }
 
   async forProfile(userId: string): Promise<PublicProfileAchievements> {
@@ -104,16 +103,10 @@ export class AchievementsService {
         let comeback: AchievementsResponse['comeback'] = null;
 
         if (projection) {
-          const [records, activeWeeks, completedSessionEvents] =
+          const [records, rankInputs, completedSessionEvents] =
             await Promise.all([
               tx.personalRecord.count({ where: { userId } }),
-              tx.workoutRollup.count({
-                where: {
-                  projectionId: projection.id,
-                  period: 'WEEK',
-                  sessions: { gt: 0 },
-                },
-              }),
+              readRankInputs(tx, projection),
               tx.trainingEvent.findMany({
                 where: { userId, type: 'SESSION_COMPLETED' },
                 orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
@@ -133,9 +126,18 @@ export class AchievementsService {
             totals,
             backfilled: true,
           });
+          // ACH-12: a rank the totals meet that the ledger lacks (history
+          // recognized after the rule changed) is recorded, and the rank is
+          // the higher of the totals and everything ever reached.
+          await recordReachedRanks(tx, {
+            userId,
+            inputs: rankInputs,
+            occurredAt: new Date(),
+            backfilled: true,
+          });
           rank = renaissanceRankProgress(
-            projection.completedSessions,
-            activeWeeks,
+            rankInputs,
+            await readReachedRank(tx, userId),
           );
           milestoneProgress = achievementCategoryProgress(totals);
           comeback = comebackRecognitionSummary(
